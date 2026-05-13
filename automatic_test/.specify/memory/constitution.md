@@ -45,6 +45,15 @@ Start simple, apply YAGNI principles:
 - Require minimum viable complexity: if a simpler approach works, adopt it first
 - Prioritize intent-driven development: every line of code should trace back to a user or business intent.
 
+### VI. Develop Princople
+- Use SOLID principal
+- Use KISS principal
+- Use Python 3.14
+- Use Service to wrap common operations
+- Use Repository to wrap common EF Core queries (CRUD)
+- Use Typescript with Vue
+
+
 ## Additional Constraints
 
 - All libraries versioned with MAJOR.MINOR.BUILD
