@@ -13,9 +13,9 @@
 
 **Language/Version**: Python 3.14 (backend) + TypeScript (frontend)
 **Primary Dependencies**:
-- Backend: FastAPI, SQLAlchemy 2.x, Alembic, Robot Framework, Playwright (RF library), httpx, python-multipart, aiofiles
+- Backend: FastAPI, SQLAlchemy 2.x, Alembic, Robot Framework, robotframework-browser (Playwright), httpx, python-multipart, aiofiles, jinja2
 - Frontend: Vue 3 + Composition API, TypeScript, Pinia, Vue Router, Axios, VueUse
-- LLM: Anthropic SDK / OpenAI SDK (可切換，透過 provider 抽象層)
+- LLM: Anthropic SDK / OpenAI SDK（可切換，透過 provider 抽象層）
 - Testing: pytest + pytest-asyncio (backend), Vitest + Vue Test Utils (frontend)
 
 **Storage**:
@@ -57,12 +57,6 @@
 | V. Simplicity (YAGNI) | ✅ PASS | 不預先建 plugin 系統；LLM provider 抽象僅在確認多模型需求時引入 |
 | VI. Develop Principles | ✅ PASS | SOLID + KISS + Python 3.14 + Service/Repository + TypeScript/Vue |
 
-**Complexity Tracking**:
-
-| 原則 | 豁免項目 | 理由 |
-|------|---------|------|
-| II. CLI Interface | `python -m xxx` CLI 腳本 | 本專案為 Web application；FastAPI HTTP 端點等同 CLI 介面（stdin/stdout 對應 request/response），`python -m` 模式適用 library 型專案，於此架構不具實質效益 |
-
 ## Project Structure
 
 ### Documentation (this feature)
@@ -75,7 +69,7 @@ specs/001-auto-test-platform/
 ├── quickstart.md        ← Phase 1 輸出
 ├── contracts/           ← Phase 1 輸出
 │   ├── api.md           ← REST API 合約
-│   └── websocket.md     ← WebSocket 合約（即時進度）
+│   └── sse.md           ← SSE 即時進度串流合約
 └── tasks.md             ← Phase 2 輸出（/speckit-tasks 生成）
 ```
 
@@ -85,12 +79,19 @@ specs/001-auto-test-platform/
 backend/
 ├── src/
 │   ├── models/              # SQLAlchemy ORM models
+│   │   ├── base.py
 │   │   ├── test_case.py
+│   │   ├── test_data.py
+│   │   ├── media_attachment.py
+│   │   ├── automation_code.py
 │   │   ├── test_checklist.py
+│   │   ├── checklist_item.py
 │   │   ├── execution_record.py
-│   │   ├── test_report.py
+│   │   ├── case_result.py
+│   │   ├── execution_media.py
 │   │   └── db_connection.py
 │   ├── repositories/        # Repository pattern — DB CRUD 封裝
+│   │   ├── base.py
 │   │   ├── test_case_repo.py
 │   │   ├── checklist_repo.py
 │   │   └── execution_repo.py
@@ -99,19 +100,24 @@ backend/
 │   │   ├── checklist_service.py   # 測試清單管理
 │   │   ├── ai_service.py          # LLM 整合（補齊/代碼生成）
 │   │   ├── execution_service.py   # 測試執行（RF 呼叫 + 平行）
-│   │   ├── report_service.py      # 測試結果解析與儲存
+│   │   ├── report_service.py      # 測試結果解析、儲存、匯出
 │   │   ├── db_connect_service.py  # 外部 DB 串接
-│   │   └── media_service.py       # 媒體附件 + 執行截圖管理
+│   │   ├── media_service.py       # 媒體附件 + 執行截圖管理
+│   │   └── file_parser_service.py # Excel/CSV/文字檔解析
 │   ├── api/                 # FastAPI routers
 │   │   ├── cases.py
 │   │   ├── checklists.py
 │   │   ├── executions.py
-│   │   ├── reports.py
-│   │   └── db_connections.py
+│   │   ├── media.py
+│   │   ├── db_connections.py
+│   │   └── llm_models.py
 │   ├── core/
 │   │   ├── config.py        # 設定（DB path、media path、LLM keys）
-│   │   ├── database.py      # SQLAlchemy engine + session
-│   │   └── dependencies.py  # FastAPI dependency injection
+│   │   ├── database.py      # SQLAlchemy async engine + session
+│   │   ├── dependencies.py  # FastAPI dependency injection
+│   │   └── llm_provider.py  # LLMProvider Protocol + AnthropicProvider + OpenAIProvider
+│   ├── templates/
+│   │   └── report.html.j2   # 報告匯出 Jinja2 template
 │   └── main.py              # FastAPI app entry
 │
 └── tests/
@@ -127,18 +133,22 @@ frontend/
 │   │   ├── ChecklistView/
 │   │   ├── ExecutionProgress/
 │   │   ├── ResultViewer/
-│   │   └── MediaUploader/
+│   │   ├── MediaUploader/
+│   │   ├── FileImporter/
+│   │   └── LLMModelSelector/
 │   ├── pages/               # 路由頁面
 │   │   ├── CasesPage.vue
 │   │   ├── CaseDetailPage.vue
 │   │   ├── ChecklistsPage.vue
+│   │   ├── ChecklistDetailPage.vue
 │   │   ├── ExecutionPage.vue
-│   │   └── ResultPage.vue
+│   │   ├── ResultPage.vue
+│   │   └── DBConnectionPage.vue
 │   ├── services/            # API client
+│   │   ├── apiClient.ts
 │   │   ├── caseApi.ts
 │   │   ├── checklistApi.ts
-│   │   ├── executionApi.ts
-│   │   └── reportApi.ts
+│   │   └── executionApi.ts
 │   ├── stores/              # Pinia state
 │   │   ├── caseStore.ts
 │   │   └── executionStore.ts
@@ -157,4 +167,6 @@ robot_scripts/               # Robot Framework .robot 檔案（AI 生成後存�
 
 ## Complexity Tracking
 
-> 無 Constitution 違規需記錄。
+| 原則 | 豁免項目 | 理由 |
+|------|---------|------|
+| II. CLI Interface | `python -m xxx` CLI 腳本 | 本專案為 Web application；FastAPI HTTP 端點等同 CLI 介面（stdin/stdout 對應 request/response），`python -m` 模式適用 library 型專案，於此架構不具實質效益 |
