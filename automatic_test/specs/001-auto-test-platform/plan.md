@@ -40,6 +40,7 @@
 - 平行執行預設並行數 5（管理員可設定）
 - LLM API 金鑰由管理員統一設定，不暴露給個別使用者
 - 測試案例刪除採軟刪除（保留歷史報告可查閱）
+- **後端伺服器須安裝 Playwright 瀏覽器**：`pip install robotframework-browser` 後需執行 `rfbrowser init` 安裝 Chromium 二進位檔；部署環境須支援 headless 模式（建議 2 核心 / 4GB RAM，並行數 5 時）
 
 **Scale/Scope**: 10 位同時操作的測試人員，千筆案例規模，每次執行最多數十個案例
 

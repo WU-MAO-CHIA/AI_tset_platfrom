@@ -7,6 +7,9 @@
 - Python 3.14
 - Node.js 20+
 - Git
+- **後端伺服器需求**（執行自動化測試的機器）：
+  - 支援 headless 瀏覽器（Linux 建議安裝 `libnss3`, `libatk-bridge2.0-0` 等 Chromium 相依套件）
+  - 建議規格：2 核心 / 4GB RAM（預設並行數 5）
 
 ## 1. 環境設定
 
@@ -21,6 +24,9 @@ python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 pip install -r requirements-dev.txt
+
+# 安裝 Playwright 瀏覽器（後端伺服器執行一次）
+rfbrowser init
 
 # Frontend 依賴
 cd ../frontend
