@@ -22,7 +22,7 @@
 - [ ] T001 建立 backend 目錄結構：`backend/src/{models,repositories,services,api,core}/`、`backend/tests/{unit,integration,contract}/`
 - [ ] T002 [P] 建立 frontend 目錄結構：`frontend/src/{components,pages,services,stores,types}/`、`frontend/tests/{unit,e2e}/`
 - [ ] T003 [P] 建立 `robot_scripts/{generated,results}/` 目錄結構及 `.gitkeep`
-- [ ] T004 建立 `backend/requirements.txt`（fastapi, uvicorn, sqlalchemy, alembic, python-multipart, aiofiles, httpx, openpyxl, robotframework, robotframework-browser, anthropic, openai, validators, sqlalchemy-utils）及 `backend/requirements-dev.txt`（pytest, pytest-asyncio, pytest-cov, httpx）
+- [ ] T004 建立 `backend/requirements.txt`（fastapi, uvicorn, sqlalchemy, alembic, python-multipart, aiofiles, httpx, openpyxl, robotframework, robotframework-browser, anthropic, openai, validators, sqlalchemy-utils, jinja2）及 `backend/requirements-dev.txt`（pytest, pytest-asyncio, pytest-cov, httpx）
 - [ ] T005 [P] 建立 `frontend/package.json`（vue 3, typescript, pinia, vue-router 4, axios, vueuse）及 `frontend/vite.config.ts`
 - [ ] T006 建立 `backend/.env.example`（DATABASE_URL, MEDIA_ROOT, ROBOT_SCRIPTS_DIR, PARALLEL_MAX_WORKERS, ANTHROPIC_API_KEY, OPENAI_API_KEY, DEFAULT_LLM_MODEL）
 - [ ] T007 [P] 建立 `backend/pytest.ini`（asyncio_mode=auto, testpaths=tests）及 `frontend/vitest.config.ts`
@@ -134,7 +134,7 @@
 ### 實作
 
 - [ ] T056 [P] [US3] 建立 `backend/src/models/test_checklist.py`（TestChecklist ORM）及 `backend/src/models/checklist_item.py`（ChecklistItem ORM + unique constraint）
-- [ ] T057 [P] [US3] 建立 `backend/src/models/execution_record.py`（ExecutionRecord ORM：完整欄位含 status ENUM、parallel_mode、max_workers、counts）
+- [ ] T057 [P] [US3] 建立 `backend/src/models/execution_record.py`（ExecutionRecord ORM：`checklist_id` nullable FK、`source_case_id` nullable FK（trial_run 時填入）、status ENUM、parallel_mode、max_workers、counts；加入 CHECK constraint：checklist_id 與 source_case_id 恰好一個有值）
 - [ ] T058 [US3] 執行 `alembic revision --autogenerate -m "add_checklist_tables"` 並驗證
 - [ ] T059 [US3] 建立 `backend/src/repositories/checklist_repo.py`（ChecklistRepository：含 get_with_items、get_execution_history）
 - [ ] T060 [US3] 建立 `backend/src/services/checklist_service.py`（ChecklistService：create, update_items, get_with_history, validate_cases_exist）
@@ -197,6 +197,8 @@
 - [ ] T085 [US5] 建立 `backend/src/api/executions.py`（GET /executions/{id}、GET /executions/{id}/results、GET /executions/{id}/stream（SSE）、GET /media/results/...）並掛載
 - [ ] T086 [US5] 在 `backend/src/api/cases.py` 完善 `POST /cases/{id}/trial-run`（呼叫 execution_service.run_trial，回傳 202 + stream_url）
 - [ ] T087 [US5] 建立 `backend/src/api/media.py`（GET /media/attachments/{case_id}/{filename}、GET /media/results/{execution_id}/screenshots/{filename}、GET /media/results/{execution_id}/videos/{filename} with Range support）
+- [ ] T087b [US5] 在 `backend/src/services/report_service.py` 加入 `export_report(execution_id, format="html")`（使用 Jinja2 template 將 ExecutionRecord + CaseResult 聚合為 HTML 報告字串；template 位於 `backend/src/templates/report.html.j2`）
+- [ ] T087c [US5] 在 `backend/src/api/executions.py` 加入 `GET /executions/{id}/export`（呼叫 report_service.export_report，回傳 `Content-Disposition: attachment; filename=report_{id}.html` 的 HTML 報告檔；對應 FR-011）
 
 ### 實作（前端）
 
@@ -206,6 +208,7 @@
 - [ ] T091 [US5] 建立 `frontend/src/components/ResultViewer/index.vue`（案例結果卡片：status badge、elapsed time、失敗訊息、截圖縮圖列表（點擊放大）、影片串流播放）
 - [ ] T092 [US5] 建立 `frontend/src/pages/ExecutionPage.vue`（整合 ExecutionProgress，執行完成後自動導向 ResultPage）
 - [ ] T093 [US5] 建立 `frontend/src/pages/ResultPage.vue`（整合 ResultViewer，顯示所有案例結果，媒體按步驟順序排列）
+- [ ] T093b [US5] 在 `frontend/src/pages/ResultPage.vue` 加入「匯出報告」按鈕（呼叫 `GET /executions/{id}/export`，觸發瀏覽器下載 HTML 報告；對應 FR-011）
 - [ ] T094 [US5] 在 `frontend/src/components/ChecklistView/index.vue` 加入「執行測試」按鈕（含平行執行開關 + 並行數設定）
 
 **Checkpoint**: 選取清單點擊執行，瀏覽器收到 SSE 進度事件；執行完成後結果頁顯示截圖

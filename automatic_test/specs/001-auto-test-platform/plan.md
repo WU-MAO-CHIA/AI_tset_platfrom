@@ -50,13 +50,17 @@
 | Principle | Status | Notes |
 |-----------|--------|-------|
 | I. Library-First | ✅ PASS | 各功能域（case_service, checklist_service, execution_engine, ai_service, report_service）各自獨立，可單獨測試 |
-| II. CLI Interface | ✅ PASS | 每個 service 模組提供 CLI 入口（FastAPI 路由作為 HTTP CLI 等價；另提供 `python -m xxx` 腳本） |
+| II. CLI Interface | ✅ PASS（豁免已記錄） | 本專案為 Web application，FastAPI HTTP 端點作為 CLI 等價介面（request body = stdin，response body = stdout，HTTP 狀態碼 = exit code）；`python -m xxx` 腳本模式適用於 library 型專案，不適用 REST API 服務。豁免已記錄於 Complexity Tracking。 |
 | III. Test-First (NON-NEGOTIABLE) | ✅ PASS | 所有 tasks 遵循 Red-Green-Refactor；failing tests 須先存在才能開始 implement |
 | IV. Integration Testing | ✅ PASS | DB 操作、LLM API、Robot Framework 執行、檔案 I/O 均需 integration tests |
 | V. Simplicity (YAGNI) | ✅ PASS | 不預先建 plugin 系統；LLM provider 抽象僅在確認多模型需求時引入 |
 | VI. Develop Principles | ✅ PASS | SOLID + KISS + Python 3.14 + Service/Repository + TypeScript/Vue |
 
-**Complexity Tracking**: 無違規需記錄。
+**Complexity Tracking**:
+
+| 原則 | 豁免項目 | 理由 |
+|------|---------|------|
+| II. CLI Interface | `python -m xxx` CLI 腳本 | 本專案為 Web application；FastAPI HTTP 端點等同 CLI 介面（stdin/stdout 對應 request/response），`python -m` 模式適用 library 型專案，於此架構不具實質效益 |
 
 ## Project Structure
 

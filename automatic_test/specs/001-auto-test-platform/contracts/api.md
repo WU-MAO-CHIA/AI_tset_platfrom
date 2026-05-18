@@ -272,6 +272,20 @@ AI 輔助補齊測試步驟
 }
 ```
 
+### GET /executions/{execution_id}/export
+匯出測試報告為可下載 HTML 檔案（對應 FR-011）
+
+**Response 200**:
+- `Content-Type: text/html; charset=utf-8`
+- `Content-Disposition: attachment; filename="report_{execution_id}.html"`
+- Body: 完整 HTML 報告（含每個案例結果、執行時間、失敗詳情）
+
+**Error**:
+- `404 Not Found`: 執行紀錄不存在
+- `422 Unprocessable Entity`: 執行尚未完成，報告無法產生
+
+---
+
 ### GET /executions/{execution_id}/stream
 SSE 即時執行進度串流
 
