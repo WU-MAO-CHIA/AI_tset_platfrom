@@ -1,0 +1,61 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+
+# Node.js / TypeScript
+node_modules/
+dist/
+build/
+*.log
+.npm
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# SQLite DB files (runtime data)
+*.db
+*.sqlite
+*.sqlite3
+
+# Media / test execution artifacts (runtime data)
+automatic_test/backend/data/
+automatic_test/robot_scripts/results/
+automatic_test/robot_scripts/generated/
+
+# IDE
+.vscode/
+.idea/
+*.suo
+*.user
+
+# OS
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+*.swo
+
+# Alembic (keep versions, ignore __pycache__ inside)
+automatic_test/backend/alembic/__pycache__/
+automatic_test/backend/alembic/versions/__pycache__/
+
+# Frontend build
+automatic_test/frontend/dist/
+automatic_test/frontend/coverage/
+
+# Playwright / RF browser binaries (large binary, installed via rfbrowser init)
+automatic_test/backend/.rf_browser/

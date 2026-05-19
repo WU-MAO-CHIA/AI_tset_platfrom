@@ -83,6 +83,40 @@
 
 ---
 
+### GET /cases/{case_id}/execution-history
+取得測試案例的執行歷史（曾被哪些 ExecutionRecord 執行過）
+
+**Query Parameters**:
+| 參數 | 型別 | 說明 |
+|------|------|------|
+| page | int | 分頁（預設 1） |
+| page_size | int | 每頁筆數（預設 20） |
+
+**Response 200**:
+```json
+{
+  "items": [
+    {
+      "execution_id": "uuid",
+      "status": "completed",
+      "started_at": "2026-05-19T10:00:00Z",
+      "finished_at": "2026-05-19T10:02:00Z",
+      "passed_count": 1,
+      "failed_count": 0,
+      "checklist_name": "Sprint 1 測試"
+    }
+  ],
+  "total": 5,
+  "page": 1,
+  "page_size": 20
+}
+```
+
+**Error**:
+- `404 Not Found`: 案例不存在
+
+---
+
 ### PUT /cases/{case_id}
 更新測試案例（自動遞增版本號）
 
