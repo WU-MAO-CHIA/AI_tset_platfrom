@@ -230,6 +230,23 @@ async def delete_case(
         raise HTTPException(400, detail={"error": "error", "message": msg})
 
 
+@router.post("/ai-complete")
+async def ai_complete_steps_preview(
+    body: AICompleteRequest,
+):
+    """AI complete without a saved case — no media context."""
+    settings = get_settings()
+    model = body.llm_model or settings.default_llm_model
+    provider = get_provider(model, settings)
+    ai_service = AIService(provider=provider)
+    completed = await ai_service.complete_steps(
+        partial_steps=body.partial_steps,
+        description=body.description or "",
+        media_attachments=[],
+    )
+    return {"completed_steps": completed, "model_used": model}
+
+
 @router.post("/{case_id}/ai-complete")
 async def ai_complete_steps(
     case_id: str,

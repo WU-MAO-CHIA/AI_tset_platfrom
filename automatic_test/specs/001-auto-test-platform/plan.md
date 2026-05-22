@@ -1,48 +1,23 @@
 # Implementation Plan: 自動化測試平台 (Automatic Test Platform)
 
-**Branch**: `001-auto-test-platform` | **Date**: 2026-05-19 | **Spec**: [spec.md](./spec.md)
-**Input**: Feature specification from `/specs/001-auto-test-platform/spec.md`
+**Branch**: `001-auto-test-platform` | **Date**: 2026-05-14 | **Spec**: [spec.md](spec.md)  
+**Input**: Feature specification from `specs/001-auto-test-platform/spec.md`
 
 ## Summary
 
-建立一個 Web 自動化測試平台，涵蓋：測試案例 CRUD（含版本管理、LLM 輔助步驟補齊、多媒體附件、建立後即時試跑）、測試清單管理（含執行歷史）、Excel/CSV 測試參數匯入、外部 SQLite 資料庫串接、AI 代碼生成 + 平行網頁測試執行，以及結構化執行結果的網頁呈現（含截圖/影片）。
-
-技術方向：Python 3.14 後端（FastAPI + SQLAlchemy + Robot Framework）、TypeScript + Vue 3 前端；TDD 強制執行；Library-First 架構，每個核心功能域包裝為獨立 service/repository 模組。
+建構一套基於瀏覽器操作的自動化測試平台，核心功能包含：測試案例 CRUD 管理（含 AI 輔助步驟補齊與多媒體附件）、測試清單組裝與執行排程、Robot Framework + Playwright 自動化執行引擎、SSE 即時進度推送、以及 HTML 測試報告產生與下載。後端採 FastAPI（Python 3.11+）+ SQLAlchemy 2.x async + SQLite，前端採 Vue 3 + TypeScript + Pinia。
 
 ## Technical Context
 
-**Language/Version**: Python 3.14 (backend) + TypeScript (frontend)
-**Primary Dependencies**:
-- Backend: FastAPI, SQLAlchemy 2.x, Alembic, Robot Framework, robotframework-browser (Playwright), httpx, python-multipart, aiofiles, jinja2
-- Frontend: Vue 3 + Composition API, TypeScript, Pinia, Vue Router, Axios, VueUse
-- LLM: Anthropic SDK / OpenAI SDK（可切換，透過 provider 抽象層）
-- Testing: pytest + pytest-asyncio (backend), Vitest + Vue Test Utils (frontend)
-
-**Storage**:
-- Primary DB: SQLite（開發/生產初期）→ 可遷移至 PostgreSQL（SQLAlchemy 抽象）
-- File Storage: 本地檔案系統（媒體附件 + 執行結果截圖/影片），路徑設定化
-- Test Result: Robot Framework XML → 解析後存入 DB，XML 原始檔保留
-
-**Testing**: pytest (unit + integration + contract), Vitest (frontend unit), playwright test (e2e)
-**Target Platform**: Web 應用程式（瀏覽器存取），部署於 Linux server
-**Project Type**: Web application（frontend SPA + backend REST API + background task engine）
-**Performance Goals**:
-- 篩選清單：千筆案例 ≤2s
-- AI 補齊：≤15s（LLM API 依賴）
-- 代碼生成：≤30s，失敗率 <5%
-- 平行執行效能提升：≥40%（≥10 案例清單）
-- 結果頁面載入：≤10s（含前 50 截圖縮圖）
-- 試跑完成：≤60s
-
-**Constraints**:
-- 無需客戶端安裝（瀏覽器存取）
-- 圖片附件 ≤10MB；影片附件 ≤100MB
-- 平行執行預設並行數 5（管理員可設定）
-- LLM API 金鑰由管理員統一設定，不暴露給個別使用者
-- 測試案例刪除採軟刪除（保留歷史報告可查閱）
-- **後端伺服器須安裝 Playwright 瀏覽器**：`pip install robotframework-browser` 後需執行 `rfbrowser init` 安裝 Chromium 二進位檔；部署環境須支援 headless 模式（建議 2 核心 / 4GB RAM，並行數 5 時）
-
-**Scale/Scope**: 10 位同時操作的測試人員，千筆案例規模，每次執行最多數十個案例
+**Language/Version**: Python 3.11+ (backend), TypeScript 5.6+ (frontend)  
+**Primary Dependencies**: FastAPI 0.115, Uvicorn, SQLAlchemy 2.0 (async), Alembic 1.13, aiosqlite, Robot Framework 7.1, robotframework-browser ≥18.9, Anthropic SDK, OpenAI SDK, Jinja2, Vue 3.5, Pinia 2.2, Vue Router 4.4, Axios 1.7, Vite 5.4  
+**Storage**: SQLite（開發 / 單機部署）via `aiosqlite`；Alembic 管理 schema 版本，7 個 migration 已套用  
+**Testing**: pytest + pytest-asyncio（backend, asyncio_mode=auto）；vitest + @vue/test-utils（frontend）  
+**Target Platform**: Windows / Linux 伺服器；後端提供 REST API，前端為 SPA  
+**Project Type**: Web application（browser UI + REST API 後端）  
+**Performance Goals**: 篩選結果 ≤2s（千筆）；AI 補齊 ≤15s；報告可查閱 ≤30s（執行完成後）  
+**Constraints**: SQLite 單機；headless Chromium 安裝於後端伺服器；平行執行上限 5（可調）  
+**Scale/Scope**: 10 位測試人員同時操作；案例數千筆規模
 
 ## Constitution Check
 
@@ -50,12 +25,14 @@
 
 | Principle | Status | Notes |
 |-----------|--------|-------|
-| I. Library-First | ✅ PASS | 各功能域（case_service, checklist_service, execution_engine, ai_service, report_service）各自獨立，可單獨測試 |
-| II. CLI Interface | ✅ PASS（豁免已記錄） | 本專案為 Web application，FastAPI HTTP 端點作為 CLI 等價介面（request body = stdin，response body = stdout，HTTP 狀態碼 = exit code）；`python -m xxx` 腳本模式適用於 library 型專案，不適用 REST API 服務。豁免已記錄於 Complexity Tracking。 |
-| III. Test-First (NON-NEGOTIABLE) | ✅ PASS | 所有 tasks 遵循 Red-Green-Refactor；failing tests 須先存在才能開始 implement |
-| IV. Integration Testing | ✅ PASS | DB 操作、LLM API、Robot Framework 執行、檔案 I/O 均需 integration tests |
-| V. Simplicity (YAGNI) | ✅ PASS | 不預先建 plugin 系統；LLM provider 抽象僅在確認多模型需求時引入 |
-| VI. Develop Principles | ✅ PASS | SOLID + KISS + Python 3.14 + Service/Repository + TypeScript/Vue |
+| I. Library-First | ⚠️ VIOLATION (justified) | 本專案為完整 Web 應用程式，不適合拆解為獨立 library；見 Complexity Tracking |
+| II. CLI Interface | ⚠️ VIOLATION (justified) | 主要介面為瀏覽器 UI + HTTP API；見 Complexity Tracking |
+| III. Test-First (TDD) | ✅ PASS | 所有 tests 先寫入 RED 狀態，再實作至 GREEN |
+| IV. Integration Testing | ✅ PASS | contract tests（httpx ASGITransport）+ integration tests |
+| V. Simplicity / YAGNI | ✅ PASS | 無過度抽象；SSE 使用輪詢而非 pub/sub |
+| VI. Develop Principles | ✅ PASS | SOLID/KISS；Service + Repository 分層；Vue + TypeScript |
+
+**Post-Phase-1 Re-check**: 設計完成後無新違規。Complexity Tracking 已記錄並有業務理由。
 
 ## Project Structure
 
@@ -63,110 +40,58 @@
 
 ```text
 specs/001-auto-test-platform/
-├── plan.md              ← 本文件
-├── research.md          ← Phase 0 輸出
-├── data-model.md        ← Phase 1 輸出
-├── quickstart.md        ← Phase 1 輸出
-├── contracts/           ← Phase 1 輸出
-│   ├── api.md           ← REST API 合約
-│   └── sse.md           ← SSE 即時進度串流合約
-└── tasks.md             ← Phase 2 輸出（/speckit-tasks 生成）
+├── plan.md          # 本檔案
+├── research.md      # Phase 0 技術選型決策
+├── data-model.md    # Phase 1 資料模型
+├── quickstart.md    # Phase 1 整合情境
+├── contracts/       # Phase 1 API 合約（SSE、media、cases、checklists 等）
+└── tasks.md         # 102 tasks（全部完成）
 ```
 
-### Source Code (repository root)
+### Source Code
 
 ```text
-backend/
-├── src/
-│   ├── models/              # SQLAlchemy ORM models
-│   │   ├── base.py
-│   │   ├── test_case.py
-│   │   ├── test_data.py
-│   │   ├── media_attachment.py
-│   │   ├── automation_code.py
-│   │   ├── test_checklist.py
-│   │   ├── checklist_item.py
-│   │   ├── execution_record.py
-│   │   ├── case_result.py
-│   │   ├── execution_media.py
-│   │   └── db_connection.py
-│   ├── repositories/        # Repository pattern — DB CRUD 封裝
-│   │   ├── base.py
-│   │   ├── test_case_repo.py
-│   │   ├── checklist_repo.py
-│   │   └── execution_repo.py
-│   ├── services/            # Business logic
-│   │   ├── case_service.py        # 測試案例 CRUD + 版本管理
-│   │   ├── checklist_service.py   # 測試清單管理
-│   │   ├── ai_service.py          # LLM 整合（補齊/代碼生成）
-│   │   ├── execution_service.py   # 測試執行（RF 呼叫 + 平行）
-│   │   ├── report_service.py      # 測試結果解析、儲存、匯出
-│   │   ├── db_connect_service.py  # 外部 DB 串接
-│   │   ├── media_service.py       # 媒體附件 + 執行截圖管理
-│   │   └── file_parser_service.py # Excel/CSV/文字檔解析
-│   ├── api/                 # FastAPI routers
-│   │   ├── cases.py
-│   │   ├── checklists.py
-│   │   ├── executions.py
-│   │   ├── media.py
-│   │   ├── db_connections.py
-│   │   └── llm_models.py
-│   ├── core/
-│   │   ├── config.py        # 設定（DB path、media path、LLM keys）
-│   │   ├── database.py      # SQLAlchemy async engine + session
-│   │   ├── dependencies.py  # FastAPI dependency injection
-│   │   └── llm_provider.py  # LLMProvider Protocol + AnthropicProvider + OpenAIProvider
-│   ├── templates/
-│   │   └── report.html.j2   # 報告匯出 Jinja2 template
-│   └── main.py              # FastAPI app entry
+automatic_test/
+├── backend/
+│   ├── src/
+│   │   ├── api/              # FastAPI 路由（cases, checklists, executions, media, llm_models, db_connections）
+│   │   ├── core/             # config.py, database.py, llm_provider.py, dependencies.py
+│   │   ├── models/           # SQLAlchemy ORM（TestCase, TestChecklist, ChecklistItem,
+│   │   │                     #   ExecutionRecord, AutomationCode, CaseResult, ExecutionMedia,
+│   │   │                     #   DBConnection, MediaAttachment, TestData）
+│   │   ├── repositories/     # TestCaseRepository, ChecklistRepository, ExecutionRepository
+│   │   ├── services/         # CaseService, ChecklistService, ExecutionService, AIService,
+│   │   │                     #   ReportService, DBConnectionService, MediaService, FileParserService
+│   │   └── templates/        # report.html.j2（Jinja2 HTML 報告）
+│   ├── tests/
+│   │   ├── contract/         # test_cases_api, test_checklists_api, test_executions_api, test_db_connections_api
+│   │   ├── integration/      # test_checklist_with_history, test_robot_execution
+│   │   └── unit/             # test_case_service, test_ai_service_codegen, test_execution_service,
+│   │                         #   test_report_service, test_db_connect_service, test_edge_cases
+│   ├── alembic/              # 7 migrations
+│   ├── data/                 # SQLite DB + media（runtime）
+│   ├── robot_scripts/        # .robot 腳本（AI 生成，runtime）
+│   └── requirements.txt
 │
-└── tests/
-    ├── unit/                # 純邏輯，mock 外部依賴
-    ├── integration/         # 真實 DB + 真實服務互動
-    └── contract/            # API 合約測試
-
-frontend/
-├── src/
-│   ├── components/          # 可重用 UI 元件
-│   │   ├── TestCaseForm/
-│   │   ├── TestCaseList/
-│   │   ├── ChecklistView/
-│   │   ├── ExecutionProgress/
-│   │   ├── ResultViewer/
-│   │   ├── MediaUploader/
-│   │   ├── FileImporter/
-│   │   └── LLMModelSelector/
-│   ├── pages/               # 路由頁面
-│   │   ├── CasesPage.vue
-│   │   ├── CaseDetailPage.vue
-│   │   ├── ChecklistsPage.vue
-│   │   ├── ChecklistDetailPage.vue
-│   │   ├── ExecutionPage.vue
-│   │   ├── ResultPage.vue
-│   │   └── DBConnectionPage.vue
-│   ├── services/            # API client
-│   │   ├── apiClient.ts
-│   │   ├── caseApi.ts
-│   │   ├── checklistApi.ts
-│   │   └── executionApi.ts
-│   ├── stores/              # Pinia state
-│   │   ├── caseStore.ts
-│   │   └── executionStore.ts
-│   └── types/               # TypeScript 型別定義
-│
-└── tests/
-    ├── unit/
-    └── e2e/
-
-robot_scripts/               # Robot Framework .robot 檔案（AI 生成後存放）
-├── generated/               # AI 生成的 .robot 檔
-└── results/                 # RF 執行輸出（XML、截圖、影片）
+└── frontend/
+    ├── src/
+    │   ├── components/       # TestCaseForm, TestCaseList, MediaUploader, LLMModelSelector,
+    │   │                     #   ChecklistView, ExecutionProgress, ResultViewer
+    │   ├── pages/            # CasesPage, CaseCreatePage, CaseDetailPage,
+    │   │                     #   ChecklistsPage, ChecklistDetailPage,
+    │   │                     #   ExecutionPage, ResultPage, DBConnectionPage
+    │   ├── services/         # caseApi, checklistApi, executionApi, apiClient
+    │   ├── stores/           # executionStore（Pinia，SSE 狀態管理）
+    │   └── router/           # index.ts（Vue Router）
+    └── tests/
+        └── unit/             # TestCaseForm.spec.ts
 ```
 
-**Structure Decision**: 採 Option 2（Web application）。backend 為獨立 Python 套件，frontend 為獨立 Vue 3 SPA；robot_scripts 為執行引擎工作目錄，與後端分離但由 execution_service 管理。
+**Structure Decision**: Web application（Option 2）— backend + frontend 分離。後端 API 服務於 port 8000，前端 Vite dev server 於 port 5173（proxy `/api` → 8000）。
 
 ## Complexity Tracking
 
-| 原則 | 豁免項目 | 理由 |
-|------|---------|------|
-| II. CLI Interface | `python -m xxx` CLI 腳本 | 本專案為 Web application；FastAPI HTTP 端點等同 CLI 介面（stdin/stdout 對應 request/response），`python -m` 模式適用 library 型專案，於此架構不具實質效益 |
+| Violation | Why Needed | Simpler Alternative Rejected Because |
+|-----------|------------|--------------------------------------|
+| Library-First（I） | 平台需要完整 Web UI 供測試人員操作，無法以純 library 形式提供價值 | CLI-only 無法滿足即時進度顯示、媒體瀏覽、報告下載等 UX 需求 |
+| CLI Interface（II） | 主介面為瀏覽器 SPA；後端提供 REST API，已涵蓋 text in/out 的精神 | 純 CLI 工具無法提供 SSE 即時推送與截圖瀏覽等 spec 明確要求的功能 |

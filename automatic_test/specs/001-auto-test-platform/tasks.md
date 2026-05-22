@@ -1,4 +1,4 @@
-# Tasks: 自動化測試平台 (Automatic Test Platform)
+﻿# Tasks: 自動化測試平台 (Automatic Test Platform)
 
 **Input**: Design documents from `/specs/001-auto-test-platform/`
 **Prerequisites**: plan.md ✅ | spec.md ✅ | research.md ✅ | data-model.md ✅ | contracts/ ✅
@@ -316,6 +316,58 @@ Phase 2 完成後：
   Developer B：US2（瀏覽篩選）  ← 需等 Developer A 完成 T027
   Developer C：US4（DB 串接）   ← 完全獨立
 ```
+
+---
+
+## Phase 9: Enhancements（後續優化，2026-05-20）
+
+**Purpose**: AI 補齊按鈕修復、全域導覽列、字體更新、測試補齊、啟動文件
+
+### AI 補齊按鈕修復（FR-US1）
+
+- [X] T103 [US1] 新增 `POST /api/v1/cases/ai-complete`（stateless，無需 case_id）端點在 `backend/src/api/cases.py`；確保路由在 `/{case_id}` 之前宣告以避免路徑衝突
+- [X] T104 [P] [US1] 在 `frontend/src/services/caseApi.ts` 新增 `aiCompletePreview()` 方法呼叫新端點
+- [X] T105 [US1] 更新 `frontend/src/components/TestCaseForm/index.vue` 的 `onAiComplete()`：移除 `!props.caseId` early-return，改為依 `caseId` 有無選擇 `aiComplete()` 或 `aiCompletePreview()`
+
+### 全域導覽列（FR-022）
+
+- [X] T106 重寫 `frontend/src/App.vue`：加入 sticky 全域導覽列（含「測試案例管理」、「測試清單」、「資料庫連線」快速連結），以 `active-class` 高亮目前頁面
+
+### 字體更新
+
+- [X] T107 [P] 更新 `frontend/index.html`：加入 Noto Sans TC Google Fonts preconnect + stylesheet（wght 400/500/600/700）
+- [X] T108 [P] 更新 `frontend/src/App.vue` 全域 CSS：`font-family` 改為 `'Noto Sans TC', system-ui, -apple-system, sans-serif`
+
+### 前端測試補齊
+
+- [X] T109 重寫 `frontend/tests/unit/TestCaseForm.spec.ts`：將 8 個 placeholder RED stub 替換為實際測試（mount + vi.mock caseApi + stubs for MediaUploader/LLMModelSelector），修正 `find('textarea')` 精確定位為 `find('textarea[required]')`
+
+### 維護
+
+- [X] T110 [P] 升級 `backend/requirements.txt` 中 `robotframework-browser==18.6.0` → `>=18.9.0` 以支援 Python 3.13 wheel（解決 grpcio-tools 編譯錯誤）
+- [X] T111 [P] 建立 `automatic_test/STARTUP.md`（後端 / 前端啟動步驟、資料庫管理、測試執行、目錄結構、常見問題）
+
+**Checkpoint**: `npm run test` 8/8 PASS；後端 100/100 PASS；`npm run dev` 可看到導覽列與 Noto Sans TC 字體
+
+---
+
+## Phase 10: Post-Analysis Remediation（分析後修正，2026-05-21）
+
+**Purpose**: 修正 `/speckit-analyze` 找出的 6 項文件不一致，補充 SC-006/SC-009 缺少的測試覆蓋
+
+### 規格文件修正
+
+- [X] T112 [P] 修正 `automatic_test/.specify/memory/constitution.md` 第 51 行：`Use Python 3.14` → `Use Python 3.11+`（CRITICAL：3.14 尚未發布，constitution 應與 plan.md Python 3.11+ 一致）
+- [X] T113 [P] 修正 `specs/001-auto-test-platform/spec.md` SC-010：`30 秒` → `35 秒`（HIGH：T082 實作設定 35s timeout，SC-010 說 30 秒形成矛盾）
+- [X] T114 [P] 更新 `specs/001-auto-test-platform/spec.md` FR-006b：將 FR-006b 文字（清單執行歷史顯示）合併至 FR-006 末段，刪除 FR-006b 條目（HIGH：FR-006 與 FR-006b 指向同一需求，應合為一條）
+- [X] T115 [P] 更新 `specs/001-auto-test-platform/spec.md` Clarifications 段落：移除 FR-022 重複引用塊（`> **FR-022（補充）**...`），保留 `### Session 2026-05-20` 下的 Q&A 說明即可（MEDIUM：FR-022 已在 Functional Requirements 正式定義，引用塊重複且易造成混淆）
+
+### 測試覆蓋補充（SC-006 / SC-009）
+
+- [X] T116 [P] [US5] 建立 `backend/tests/load/test_concurrent_users.py`：使用 `asyncio.gather` 模擬 10 個並發使用者同時呼叫 `GET /cases`，斷言 p95 回應時間 ≤ 2000ms（對應 SC-006 & SC-002：10 位測試人員同時操作不出現效能衰退）
+- [X] T117 [P] [US5] 建立 `backend/tests/load/test_parallel_benchmark.py`：建立含 10 個案例的執行紀錄，比較平行執行（max_workers=5）vs 循序執行的模擬耗時，斷言平行時間 ≤ 循序時間 × 0.6（即縮短 ≥ 40%，對應 SC-009）
+
+**Checkpoint**: T112–T115 文件已更新；`pytest backend/tests/load/` 兩個測試通過
 
 ---
 

@@ -48,7 +48,7 @@ Start simple, apply YAGNI principles:
 ### VI. Develop Princople
 - Use SOLID principal
 - Use KISS principal
-- Use Python 3.14
+- Use Python 3.11+
 - Use Service to wrap common operations
 - Use Repository to wrap common EF Core queries (CRUD)
 - Use Typescript with Vue

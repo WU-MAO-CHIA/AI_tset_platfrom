@@ -84,6 +84,10 @@ export const caseApi = {
     return apiClient.post<AICompleteResponse>(`/cases/${id}/ai-complete`, data)
   },
 
+  aiCompletePreview(data: AICompleteRequest) {
+    return apiClient.post<AICompleteResponse>('/cases/ai-complete', data)
+  },
+
   uploadAttachment(id: string, file: File) {
     const form = new FormData()
     form.append('file', file)

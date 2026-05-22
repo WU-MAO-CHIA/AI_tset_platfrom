@@ -108,15 +108,18 @@ async function onSubmit() {
 }
 
 async function onAiComplete() {
-  if (!props.caseId || !form.main_steps) return
+  if (!form.main_steps) return
   aiLoading.value = true
   aiError.value = ''
   try {
-    const res = await caseApi.aiComplete(props.caseId, {
+    const payload = {
       partial_steps: form.main_steps,
       llm_model: selectedModel.value,
       description: form.description,
-    })
+    }
+    const res = props.caseId
+      ? await caseApi.aiComplete(props.caseId, payload)
+      : await caseApi.aiCompletePreview(payload)
     form.main_steps = res.data.completed_steps
   } catch (e: any) {
     aiError.value = e.message
