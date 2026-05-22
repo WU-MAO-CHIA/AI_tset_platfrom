@@ -14,6 +14,24 @@ _COMPLETE_STEPS_PROMPT = """\
 請補齊完整的測試步驟，格式為「1. xxx\n2. xxx\n...」，每步驟清晰、可執行，步驟應包含預期結果驗證。
 只回傳步驟列表，不加其他說明。"""
 
+_PREVIEW_ROBOT_PROMPT = """\
+將以下測試步驟轉換為 Robot Framework 格式的 .robot 腳本，使用 Browser library（Playwright）。
+
+測試步驟：
+{main_steps}
+
+若步驟過於模糊無法轉換，請只回傳：UNABLE_TO_GENERATE: <原因>
+
+否則只回傳 .robot 腳本內容，範例格式：
+*** Settings ***
+Library    Browser
+
+*** Test Cases ***
+測試案例名稱
+    [Documentation]    自動生成
+    ...
+"""
+
 _GENERATE_ROBOT_PROMPT = """\
 將以下測試步驟轉換為 Robot Framework 格式的 .robot 腳本，使用 Browser library（Playwright）。
 
@@ -95,6 +113,26 @@ class AIService:
             return None
 
         await self._cache_code(cache_key, code, "success", None)
+        return code
+
+    async def preview_robot_code(
+        self,
+        main_steps: str,
+        llm_model: Optional[str] = None,
+        timeout_sec: float = 35.0,
+    ) -> Optional[str]:
+        """Generate RF preview from steps without case metadata or caching."""
+        prompt = _PREVIEW_ROBOT_PROMPT.format(main_steps=main_steps)
+        try:
+            code = await asyncio.wait_for(
+                self.provider.complete(prompt, model=llm_model),
+                timeout=timeout_sec,
+            )
+        except asyncio.TimeoutError:
+            return None
+
+        if code and code.strip().startswith("UNABLE_TO_GENERATE"):
+            return None
         return code
 
     async def _get_cached_code(self, cache_key: str):

@@ -51,6 +51,11 @@ class AICompleteRequest(BaseModel):
     description: Optional[str] = None
 
 
+class PreviewRFRequest(BaseModel):
+    main_steps: str
+    llm_model: Optional[str] = None
+
+
 # ─── Dependencies ────────────────────────────────────────────────────────────
 
 def get_case_service(session: AsyncSession = Depends(get_db)) -> CaseService:
@@ -228,6 +233,26 @@ async def delete_case(
                 detail={"error": "case_in_use", "message": "案例被清單引用中", "affected_checklists": affected},
             )
         raise HTTPException(400, detail={"error": "error", "message": msg})
+
+
+@router.post("/preview-rf")
+async def preview_rf_code(body: PreviewRFRequest):
+    """Generate Robot Framework code preview from steps without creating execution records."""
+    if not body.main_steps or not body.main_steps.strip():
+        raise HTTPException(422, detail={"error": "empty_steps", "message": "main_steps must not be empty"})
+    if len(body.main_steps) > 10000:
+        raise HTTPException(422, detail={"error": "steps_too_long", "message": "main_steps exceeds 10000 characters"})
+
+    provider = get_provider(model=body.llm_model)
+    ai_service = AIService(provider)
+    rf_code = await ai_service.preview_robot_code(
+        main_steps=body.main_steps,
+        llm_model=body.llm_model,
+        timeout_sec=35.0,
+    )
+    if rf_code is None:
+        raise HTTPException(422, detail={"error": "unable_to_generate", "message": "AI could not generate RF code from the given steps"})
+    return {"rf_code": rf_code}
 
 
 @router.post("/ai-complete")

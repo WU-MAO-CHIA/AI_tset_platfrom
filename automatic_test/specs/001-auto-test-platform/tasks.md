@@ -27,7 +27,7 @@
 - [X] T006 建立 `backend/.env.example`（DATABASE_URL, MEDIA_ROOT, ROBOT_SCRIPTS_DIR, PARALLEL_MAX_WORKERS, ANTHROPIC_API_KEY, OPENAI_API_KEY, DEFAULT_LLM_MODEL）
 - [X] T007 [P] 建立 `backend/pytest.ini`（asyncio_mode=auto, testpaths=tests）及 `frontend/vitest.config.ts`
 - [X] T008 建立 `backend/alembic.ini` 及執行 `alembic init backend/alembic/`（首次建立時執行，已存在時跳過）
-- [ ] T009 執行 `rfbrowser init` 安裝 Playwright 瀏覽器二進位檔（Chromium）至後端伺服器；確認 headless 模式可正常啟動（⚠️ 需手動執行：先 `pip install -r requirements.txt`，再 `rfbrowser init`）
+- [X] T009 執行 `rfbrowser init` 安裝 Playwright 瀏覽器二進位檔（Chromium）至後端伺服器；確認 headless 模式可正常啟動（⚠️ 需手動執行：先 `pip install -r requirements.txt`，再 `rfbrowser init`）
 
 **Checkpoint**: `pip install -r requirements.txt`、`npm install`、`rfbrowser init` 均無錯誤
 
@@ -368,6 +368,34 @@ Phase 2 完成後：
 - [X] T117 [P] [US5] 建立 `backend/tests/load/test_parallel_benchmark.py`：建立含 10 個案例的執行紀錄，比較平行執行（max_workers=5）vs 循序執行的模擬耗時，斷言平行時間 ≤ 循序時間 × 0.6（即縮短 ≥ 40%，對應 SC-009）
 
 **Checkpoint**: T112–T115 文件已更新；`pytest backend/tests/load/` 兩個測試通過
+
+---
+
+## Phase 11: UI Layout Refactor — 左右分割版面（FR-001，2026-05-22）
+
+**Purpose**: 依 PRD.md 更新後的 FR-001，將「建立測試案例」畫面重構為左右兩欄版面（僅 CaseCreatePage，編輯頁維持單欄）：右欄專注步驟撰寫與 AI 溝通（含 RF 程式碼預覽），左欄放置其餘欄位
+
+> **TDD 順序**：測試先寫（RED）→ 後端端點 → 前端元件實作（GREEN）
+
+### 步驟一：先寫測試（RED 階段）
+
+- [X] T118 [P] [US1] 在 `backend/tests/contract/test_cases_api.py` 新增 `preview_rf` contract test：`POST /api/v1/cases/preview-rf` 回傳 `{ rf_code: str }`；main_steps 為空時回傳 422；確認測試目前為 RED（端點尚未存在）
+- [X] T119 [P] [US1] 建立 `frontend/tests/unit/StepsEditor.spec.ts`（RED stub）：測試 AI 補齊按鈕在 `mainSteps` 為空時為 disabled、點擊後呼叫 `caseApi.aiCompletePreview` 並 emit `update:mainSteps`；元件尚未存在，測試失敗為預期
+- [X] T120 [P] [US1] 建立 `frontend/tests/unit/RFCodePreview.spec.ts`（RED stub）：測試翻譯按鈕觸發 `caseApi.previewRfCode`、loading 狀態顯示、翻譯失敗時顯示錯誤提示（不清空步驟）、程式碼預覽區渲染；元件尚未存在，測試失敗為預期
+
+### 步驟二：後端實作（GREEN 階段）
+
+- [X] T121 [US1] 在 `backend/src/api/cases.py` 新增 `POST /api/v1/cases/preview-rf` 端點（stateless）：接收 `{ main_steps: str, llm_model: str }` → 呼叫 AIService 生成 Robot Framework 語法 → 回傳 `{ rf_code: str }`；main_steps 為空或超過 10000 字元時回傳 422；timeout 設為 35s（對應 SC-010）；路由宣告於 `/{case_id}` 之前；不建立執行紀錄
+- [X] T122 [P] [US1] 在 `frontend/src/services/caseApi.ts` 新增 `previewRfCode(payload: { main_steps: string; llm_model: string })` 方法，呼叫 `POST /api/v1/cases/preview-rf`
+
+### 步驟三：前端元件實作（GREEN 階段）
+
+- [X] T123 [US1] 建立 `frontend/src/components/StepsEditor/index.vue`：包含「主要步驟」`<textarea>`（required）、LLMModelSelector、「AI 補齊步驟」按鈕，透過 `v-model:mainSteps` 與 `v-model:selectedModel` 雙向綁定；AI 補齊邏輯移自 TestCaseForm，保持相同 API 呼叫（`caseApi.aiCompletePreview`）
+- [X] T124 [P] [US1] 建立 `frontend/src/components/RFCodePreview/index.vue`：接受 `mainSteps` 與 `selectedModel` 作為 props；包含「翻譯為 Robot Framework」按鈕（點擊呼叫 `caseApi.previewRfCode`）、loading 狀態、`<pre><code>` 程式碼預覽區；翻譯失敗時顯示「翻譯失敗，請稍後重試」，不清除 mainSteps 內容
+- [X] T125 [US1] 更新 `frontend/src/components/TestCaseForm/index.vue`：將「主要步驟」欄位改為接受 `mainSteps` prop（optional，預設空字串）並 emit `update:mainSteps`；當 prop 由父層傳入時父層控制，否則元件內部維護（**保持 CaseDetailPage 向後相容**，編輯頁不受影響）；移除 TestCaseForm 內的 AI bar（LLMModelSelector + AI 補齊按鈕）
+- [X] T126 [US1] 重寫 `frontend/src/pages/CaseCreatePage.vue`：以 CSS Grid（`grid-template-columns: 1fr 1.4fr`）實作左右分割版面；左欄渲染 `<TestCaseForm>`（傳入 `mainSteps`/`selectedModel` v-model），右欄上方渲染 `<StepsEditor>`、下方渲染 `<RFCodePreview>`；`mainSteps` 與 `selectedModel` 狀態由 CaseCreatePage 持有並向下傳遞；在 `<768px` 時自動改為單欄（`grid-template-columns: 1fr`）
+
+**Checkpoint**: `pytest backend/tests/contract/test_cases_api.py -k preview_rf` PASS；`npm run test` T118–T120 測試全數 GREEN；`npm run dev` 可見 CaseCreatePage 左右兩欄，右欄含步驟輸入、AI 補齊、翻譯為 RF 功能；CaseDetailPage 編輯功能不受影響
 
 ---
 

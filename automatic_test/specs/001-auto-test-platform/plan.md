@@ -1,4 +1,4 @@
-# Implementation Plan: 自動化測試平台 (Automatic Test Platform)
+﻿# Implementation Plan: 自動化測試平台 (Automatic Test Platform)
 
 **Branch**: `001-auto-test-platform` | **Date**: 2026-05-14 | **Spec**: [spec.md](spec.md)  
 **Input**: Feature specification from `specs/001-auto-test-platform/spec.md`
@@ -75,10 +75,13 @@ automatic_test/
 │
 └── frontend/
     ├── src/
-    │   ├── components/       # TestCaseForm, TestCaseList, MediaUploader, LLMModelSelector,
+    │   ├── components/       # TestCaseForm（左欄欄位集合）, TestCaseList, MediaUploader,
+    │   │                     #   LLMModelSelector, StepsEditor（右欄：主要步驟+AI溝通）,
+    │   │                     #   RFCodePreview（右欄：RF程式碼預覽確認），
     │   │                     #   ChecklistView, ExecutionProgress, ResultViewer
-    │   ├── pages/            # CasesPage, CaseCreatePage, CaseDetailPage,
-    │   │                     #   ChecklistsPage, ChecklistDetailPage,
+    │   ├── pages/            # CasesPage, CaseCreatePage（左右分割兩欄版面：
+    │   │                     #   左欄→TestCaseForm，右欄→StepsEditor+RFCodePreview）,
+    │   │                     #   CaseDetailPage, ChecklistsPage, ChecklistDetailPage,
     │   │                     #   ExecutionPage, ResultPage, DBConnectionPage
     │   ├── services/         # caseApi, checklistApi, executionApi, apiClient
     │   ├── stores/           # executionStore（Pinia，SSE 狀態管理）

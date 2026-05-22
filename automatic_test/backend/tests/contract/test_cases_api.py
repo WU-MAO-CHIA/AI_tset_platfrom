@@ -66,6 +66,29 @@ class TestUpdateCase:
         assert response.status_code == 404
 
 
+class TestPreviewRF:
+    async def test_preview_rf_returns_rf_code(self, client):
+        response = await client.post(
+            "/api/v1/cases/preview-rf",
+            json={"main_steps": "1. 開啟登入頁面\n2. 輸入帳號密碼\n3. 點擊登入", "llm_model": "claude-3-5-sonnet-20241022"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert "rf_code" in data
+        assert isinstance(data["rf_code"], str)
+
+    async def test_preview_rf_empty_steps_returns_422(self, client):
+        response = await client.post(
+            "/api/v1/cases/preview-rf",
+            json={"main_steps": "", "llm_model": "claude-3-5-sonnet-20241022"},
+        )
+        assert response.status_code == 422
+
+    async def test_preview_rf_missing_steps_returns_422(self, client):
+        response = await client.post("/api/v1/cases/preview-rf", json={"llm_model": "claude-3-5-sonnet-20241022"})
+        assert response.status_code == 422
+
+
 class TestDeleteCase:
     async def test_soft_delete_returns_200(self, client, valid_case_payload):
         create_resp = await client.post("/api/v1/cases", json=valid_case_payload)

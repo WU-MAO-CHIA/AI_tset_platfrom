@@ -59,6 +59,15 @@ export interface AICompleteResponse {
   model_used: string
 }
 
+export interface PreviewRFRequest {
+  main_steps: string
+  llm_model?: string
+}
+
+export interface PreviewRFResponse {
+  rf_code: string
+}
+
 export const caseApi = {
   createCase(data: CreateCaseRequest) {
     return apiClient.post<{ id: string; case_number: string; version: number; created_at: string }>('/cases', data)
@@ -86,6 +95,10 @@ export const caseApi = {
 
   aiCompletePreview(data: AICompleteRequest) {
     return apiClient.post<AICompleteResponse>('/cases/ai-complete', data)
+  },
+
+  previewRfCode(data: PreviewRFRequest) {
+    return apiClient.post<PreviewRFResponse>('/cases/preview-rf', data)
   },
 
   uploadAttachment(id: string, file: File) {
