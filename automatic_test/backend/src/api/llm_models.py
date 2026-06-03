@@ -17,15 +17,19 @@ OPENAI_MODELS = [
 ]
 
 
+def _is_valid_key(key: str) -> bool:
+    return bool(key) and len(key) >= 20 and "..." not in key
+
+
 @router.get("")
 async def list_llm_models():
     settings = get_settings()
     available = []
 
-    if settings.anthropic_api_key:
+    if _is_valid_key(settings.anthropic_api_key):
         available.extend(ANTHROPIC_MODELS)
 
-    if settings.openai_api_key:
+    if _is_valid_key(settings.openai_api_key):
         available.extend(OPENAI_MODELS)
 
     if not available:

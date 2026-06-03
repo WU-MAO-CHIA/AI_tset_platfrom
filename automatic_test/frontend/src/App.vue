@@ -19,7 +19,7 @@ import { RouterView, RouterLink } from 'vue-router'
 </script>
 
 <style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: inherit; }
 body { font-family: 'Noto Sans TC', system-ui, -apple-system, sans-serif; background: #f8fafc; color: #1e293b; }
 </style>
 
