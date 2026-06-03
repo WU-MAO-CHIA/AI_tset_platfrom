@@ -26,3 +26,4 @@ class TestCase(Base, TimestampMixin):
 
     test_data: Mapped[list["TestData"]] = relationship("TestData", back_populates="test_case", cascade="all, delete-orphan")
     attachments: Mapped[list["MediaAttachment"]] = relationship("MediaAttachment", back_populates="test_case", cascade="all, delete-orphan")
+    chat_messages: Mapped[list["CaseChatMessage"]] = relationship("CaseChatMessage", back_populates="test_case", cascade="all, delete-orphan", order_by="CaseChatMessage.created_at")  # type: ignore[name-defined]

@@ -12,7 +12,7 @@ class Settings(BaseSettings):
 
     anthropic_api_key: str = ""
     openai_api_key: str = ""
-    default_llm_model: str = "claude-3-5-sonnet-20241022"
+    default_llm_model: str = "claude-sonnet-4-6"
 
 
 @lru_cache

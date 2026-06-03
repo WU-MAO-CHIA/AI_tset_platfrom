@@ -3,6 +3,20 @@ from typing import Optional
 
 from src.core.llm_provider import LLMProvider
 
+_CHAT_SYSTEM_PROMPT = """\
+你是一位專業的軟體測試工程師，負責協助撰寫測試案例步驟與 Robot Framework 腳本。
+
+使用者會描述需要測試的功能，你需要：
+1. 提供清楚的測試步驟建議（以自然語言對話方式）
+2. 同時生成對應的 Robot Framework (.robot) 腳本（使用 Browser library/Playwright）
+
+你的回應必須嚴格遵循以下格式（含分隔線）：
+---MESSAGE---
+（你的對話回應，解釋測試思路、步驟建議，或向使用者提問）
+---RF_CODE---
+（Robot Framework .robot 腳本內容，以 *** Settings *** 開頭；若步驟不足以生成腳本，填入 # 尚無足夠資訊）
+---END---"""
+
 _COMPLETE_STEPS_PROMPT = """\
 你是一位專業的軟體測試工程師，請根據以下資訊補齊測試步驟：
 
@@ -125,7 +139,7 @@ class AIService:
         prompt = _PREVIEW_ROBOT_PROMPT.format(main_steps=main_steps)
         try:
             code = await asyncio.wait_for(
-                self.provider.complete(prompt, model=llm_model),
+                self.provider.complete(prompt),
                 timeout=timeout_sec,
             )
         except asyncio.TimeoutError:
@@ -134,6 +148,42 @@ class AIService:
         if code and code.strip().startswith("UNABLE_TO_GENERATE"):
             return None
         return code
+
+    async def chat_and_generate_rf(
+        self,
+        messages: list[dict],
+        user_message: str,
+        llm_model: str,
+        timeout_sec: float = 35.0,
+    ) -> dict:
+        """Multi-turn chat that returns assistant reply and RF code.
+
+        messages: existing history [{role, content}]
+        Returns { assistant_message: str, rf_code: str }
+        """
+        conversation = [*messages, {"role": "user", "content": user_message}]
+        try:
+            raw = await asyncio.wait_for(
+                self.provider.complete_with_messages(conversation, system=_CHAT_SYSTEM_PROMPT),
+                timeout=timeout_sec,
+            )
+        except asyncio.TimeoutError:
+            return {"assistant_message": "抱歉，回應逾時，請稍後再試。", "rf_code": ""}
+
+        assistant_message, rf_code = self._parse_chat_response(raw)
+        return {"assistant_message": assistant_message, "rf_code": rf_code}
+
+    def _parse_chat_response(self, raw: str) -> tuple[str, str]:
+        """Parse the structured chat response into (message, rf_code)."""
+        try:
+            msg_start = raw.index("---MESSAGE---") + len("---MESSAGE---")
+            rf_start = raw.index("---RF_CODE---")
+            end_marker = raw.index("---END---")
+            assistant_message = raw[msg_start:rf_start].strip()
+            rf_code = raw[rf_start + len("---RF_CODE---"):end_marker].strip()
+            return assistant_message, rf_code
+        except ValueError:
+            return raw.strip(), ""
 
     async def _get_cached_code(self, cache_key: str):
         if cache_key in self._code_cache:

@@ -41,26 +41,22 @@ describe('TestCaseForm', () => {
     expect(textarea.exists()).toBe(true)
   })
 
-  it('should show AI complete button', () => {
+  it('should not show AI complete button (moved to AIChatPanel)', () => {
+    // Phase 12: AI completion moved to AIChatPanel in Tab 2; TestCaseForm only has basic fields
     const wrapper = mount(TestCaseForm, { global: globalStubs })
     const btn = wrapper.findAll('button').find(b => b.text().includes('AI 補齊步驟'))
-    expect(btn).toBeDefined()
+    expect(btn).toBeUndefined()
   })
 
-  it('should trigger AI completion when AI button clicked', async () => {
-    const wrapper = mount(TestCaseForm, { global: globalStubs })
-
-    await wrapper.find('textarea[required]').setValue('1. Open login page')
-    const btn = wrapper.findAll('button').find(b => b.text().includes('AI 補齊步驟'))!
-    expect(btn.attributes('disabled')).toBeUndefined()
-
-    await btn.trigger('click')
-    await flushPromises()
-
-    // No caseId prop → should call aiCompletePreview
-    expect(caseApi.aiCompletePreview).toHaveBeenCalledWith(
-      expect.objectContaining({ partial_steps: '1. Open login page' }),
-    )
+  it('should have submit and trial-run buttons only', async () => {
+    const wrapper = mount(TestCaseForm, {
+      props: { caseId: 'case-abc' },
+      global: globalStubs,
+    })
+    const buttons = wrapper.findAll('button')
+    const texts = buttons.map(b => b.text())
+    expect(texts.some(t => t.includes('儲存'))).toBe(true)
+    expect(texts.some(t => t.includes('試跑'))).toBe(true)
   })
 
   it('should show media upload section', () => {
@@ -95,8 +91,9 @@ describe('TestCaseForm validation', () => {
     expect(submitBtn.exists()).toBe(true)
   })
 
-  it('should show LLM model selector', () => {
+  it('should not show LLM model selector (moved to AIChatPanel)', () => {
+    // Phase 12: LLMModelSelector moved to AIChatPanel in Tab 2
     const wrapper = mount(TestCaseForm, { global: globalStubs })
-    expect(wrapper.find('.llm-selector').exists()).toBe(true)
+    expect(wrapper.find('.llm-selector').exists()).toBe(false)
   })
 })

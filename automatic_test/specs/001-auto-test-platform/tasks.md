@@ -399,6 +399,62 @@ Phase 2 完成後：
 
 ---
 
+## Phase 12: AI Chat 介面 — Tab 分頁重構（FR-001，2026-05-29）
+
+**Purpose**: 將建立／編輯測試案例畫面重構為 Tab 分頁；Tab 2「測試步驟」實作 AI Chat 多輪對話（左側）+ RF 程式碼自動預覽（右側）；對話歷史持久化至資料庫。
+
+> **TDD 順序**：測試先寫（RED）→ 後端 DB/Model/Service/API → 前端 Service → 前端元件 → 頁面重構（GREEN）
+
+### 步驟一：先寫測試（RED 階段）
+
+- [X] T127 [P] [US1] 在 `backend/tests/contract/test_cases_api.py` 新增 `TestChatEndpoints` class：`POST /api/v1/cases/{id}/chat` 回傳 `{ assistant_message, rf_code }`；`GET /api/v1/cases/{id}/chat-history` 回傳 `{ messages: [] }`；確認目前為 RED（端點尚未存在）
+- [X] T128 [P] [US1] 建立 `frontend/tests/unit/AIChatPanel.spec.ts`（RED stub）：測試聊天輸入框渲染、送出按鈕 disabled 狀態（空輸入時）、送出後呼叫 `caseApi.chatWithAI`、AI 回應以氣泡顯示、emit `rf-updated` 事件；元件尚未存在，測試失敗為預期
+
+### 步驟二：後端 DB + Model（GREEN 階段）
+
+- [X] T129 [US1] 建立 Alembic migration：新增 `case_chat_messages` 資料表（id UUID PK, case_id FK→test_cases, role VARCHAR('user'/'assistant'), content TEXT, created_at DATETIME）；執行 `alembic upgrade head`
+- [X] T130 [P] [US1] 建立 `backend/src/models/case_chat_message.py`：`CaseChatMessage` SQLAlchemy ORM model，`role` 欄位限定 'user'/'assistant'，與 `TestCase` 建立 `relationship`
+
+### 步驟三：後端 Service + API（GREEN 階段）
+
+- [X] T131 [US1] 在 `backend/src/services/ai_service.py` 新增 `chat_and_generate_rf(messages: list, user_message: str, llm_model: str) -> dict`：將歷史訊息組裝成 LLM context，送出多輪對話請求，解析回應同時生成 RF 程式碼，回傳 `{ assistant_message: str, rf_code: str }`；timeout 35s
+- [X] T132 [P] [US1] 在 `backend/src/api/cases.py` 新增 `POST /cases/{id}/chat`：讀取現有對話歷史，呼叫 `ai_service.chat_and_generate_rf()`，將 user/assistant 訊息寫入 `case_chat_messages`，回傳 `{ assistant_message, rf_code }`；路由宣告須在 `/{case_id}` 模板路由之前
+- [X] T133 [P] [US1] 在 `backend/src/api/cases.py` 新增 `GET /cases/{id}/chat-history`：從 DB 讀取該 case 的所有 `CaseChatMessage`（依 created_at 排序），回傳 `{ messages: [{ role, content, created_at }] }`
+
+### 步驟四：前端 Service + 元件（GREEN 階段）
+
+- [X] T134 [P] [US1] 在 `frontend/src/services/caseApi.ts` 新增 `chatWithAI(caseId: string, message: string, model: string)` → `POST /cases/{id}/chat`；`getChatHistory(caseId: string)` → `GET /cases/{id}/chat-history`
+- [X] T135 [US1] 建立 `frontend/src/components/AIChatPanel/index.vue`：左側 Chat 氣泡介面（user 訊息靠右藍色，assistant 訊息靠左灰色），底部輸入框 + 送出按鈕（空輸入或 loading 時 disabled），送出後呼叫 `caseApi.chatWithAI`，AI 回應後 emit `rf-updated` 事件並傳遞 `rf_code`；props: `caseId?: string`、`selectedModel: string`；載入時若有 `caseId` 則呼叫 `getChatHistory` 還原歷史訊息
+
+### 步驟五：頁面重構（GREEN 階段）
+
+- [X] T136 [US1] 重寫 `frontend/src/pages/CaseCreatePage.vue`：採 Tab 分頁結構（Tab 1「基本資訊」→ TestCaseForm + 儲存按鈕；Tab 2「測試步驟」→ AIChatPanel（左）+ RFCodePreview（右）左右分割 `1fr 1.2fr`）；`selectedModel` 狀態由頁面持有；Tab 2 監聽 `rf-updated` 事件更新 RFCodePreview；RFCodePreview 在此模式下僅顯示，不再有翻譯按鈕（由 AIChatPanel 觸發自動更新）；`<768px` 改為單欄
+- [X] T137 [US1] 重構 `frontend/src/pages/CaseDetailPage.vue` 編輯模式：與 CaseCreatePage 採相同 Tab 結構；開啟編輯時以 `caseId` 載入現有對話歷史；儲存成功後回到檢視模式；`caseId` 傳入 AIChatPanel
+
+**Checkpoint**: `pytest backend/tests/contract/test_cases_api.py -k chat` PASS；`npm run test` T127–T128 GREEN；`npm run dev` 可見 CaseCreatePage Tab 分頁，Tab 2 左側 AI Chat 氣泡，右側 RF 自動更新；CaseDetailPage 編輯模式同樣 Tab 結構
+
+---
+
+## Phase 13: 測試清單版面重構（FR-006，2026-05-29）
+
+**Purpose**: 將測試清單列表頁與詳情頁版面比照測試案例管理頁面（相同的條列式結構、搜尋篩選、詳情版面）。
+
+> **TDD 順序**：測試先寫（RED）→ 頁面重構（GREEN）
+
+### 步驟一：先寫測試（RED 階段）
+
+- [X] T138 [P] [US3] 建立 `frontend/tests/unit/ChecklistsPage.spec.ts`（RED stub）：測試清單列表渲染、搜尋欄存在、清單項目可點擊；頁面尚未重構，若已有舊版本則測試新增的元素為 RED
+- [X] T139 [P] [US3] 建立 `frontend/tests/unit/ChecklistDetailPage.spec.ts`（RED stub）：測試標題區、基本資訊區、清單案例列表、執行歷史區四個區塊存在
+
+### 步驟二：頁面重構（GREEN 階段）
+
+- [X] T140 [US3] 重構 `frontend/src/pages/ChecklistsPage.vue`：採用與 `CasesPage` 相同版面（頁面標題＋「建立清單」按鈕、搜尋欄、條列式清單表格（欄位：清單名稱、建立人員、案例數、最後執行時間、狀態）、空狀態提示；清單項目可點擊進入詳情頁
+- [X] T141 [P] [US3] 重構 `frontend/src/pages/ChecklistDetailPage.vue`：採用與 `CaseDetailPage` 相同版面結構（頁首：清單名稱＋動作按鈕（執行測試／編輯）；基本資訊區：名稱、建立人員、建立時間；案例列表區：條列所含案例（名稱、系統別、順序）可移除；執行歷史區：比照 CaseDetailPage 的歷史紀錄表格）
+
+**Checkpoint**: `npm run test` T138–T139 GREEN；`npm run dev` /checklists 與 /checklists/:id 版面與 /cases 系列一致
+
+---
+
 ## Notes
 
 - `[P]` = 不同檔案，無未完成依賴，可平行執行

@@ -70,7 +70,7 @@ class TestPreviewRF:
     async def test_preview_rf_returns_rf_code(self, client):
         response = await client.post(
             "/api/v1/cases/preview-rf",
-            json={"main_steps": "1. 開啟登入頁面\n2. 輸入帳號密碼\n3. 點擊登入", "llm_model": "claude-3-5-sonnet-20241022"},
+            json={"main_steps": "1. 開啟登入頁面\n2. 輸入帳號密碼\n3. 點擊登入", "llm_model": "claude-sonnet-4-6"},
         )
         assert response.status_code == 200
         data = response.json()
@@ -80,12 +80,12 @@ class TestPreviewRF:
     async def test_preview_rf_empty_steps_returns_422(self, client):
         response = await client.post(
             "/api/v1/cases/preview-rf",
-            json={"main_steps": "", "llm_model": "claude-3-5-sonnet-20241022"},
+            json={"main_steps": "", "llm_model": "claude-sonnet-4-6"},
         )
         assert response.status_code == 422
 
     async def test_preview_rf_missing_steps_returns_422(self, client):
-        response = await client.post("/api/v1/cases/preview-rf", json={"llm_model": "claude-3-5-sonnet-20241022"})
+        response = await client.post("/api/v1/cases/preview-rf", json={"llm_model": "claude-sonnet-4-6"})
         assert response.status_code == 422
 
 
@@ -125,3 +125,26 @@ class TestDeleteCase:
         assert len(data["affected_checklists"]) > 0
         assert "name" in data["affected_checklists"][0]
         assert "id" in data["affected_checklists"][0]
+
+
+class TestChatEndpoints:
+    async def test_chat_returns_message_and_rf_code(self, client, valid_case_payload):
+        create_resp = await client.post("/api/v1/cases", json=valid_case_payload)
+        case_id = create_resp.json()["id"]
+        response = await client.post(
+            f"/api/v1/cases/{case_id}/chat",
+            json={"message": "測試登入功能", "llm_model": "claude-sonnet-4-6"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert "assistant_message" in data
+        assert "rf_code" in data
+
+    async def test_chat_history_returns_messages(self, client, valid_case_payload):
+        create_resp = await client.post("/api/v1/cases", json=valid_case_payload)
+        case_id = create_resp.json()["id"]
+        response = await client.get(f"/api/v1/cases/{case_id}/chat-history")
+        assert response.status_code == 200
+        data = response.json()
+        assert "messages" in data
+        assert isinstance(data["messages"], list)

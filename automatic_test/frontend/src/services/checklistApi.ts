@@ -11,10 +11,16 @@ export interface Checklist {
   name: string
   created_by: string
   description?: string
+  case_count?: number
+  last_run_at?: string | null
+  status?: string | null
+  created_at?: string
 }
 
 export interface ChecklistDetail extends Checklist {
   items: ChecklistItem[]
+  order?: number
+  test_case?: { case_number: string; name: string; system_category: string | null }
 }
 
 export interface ChecklistListResponse {

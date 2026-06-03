@@ -9,6 +9,9 @@ class LLMProvider(Protocol):
     async def complete_with_vision(self, prompt: str, media_list: list) -> str:
         ...
 
+    async def complete_with_messages(self, messages: list[dict], system: str = "") -> str:
+        ...
+
 
 class AnthropicProvider:
     def __init__(self, api_key: str, model: str = "claude-3-5-sonnet-20241022") -> None:
@@ -58,6 +61,18 @@ class AnthropicProvider:
         )
         return message.content[0].text
 
+    async def complete_with_messages(self, messages: list[dict], system: str = "") -> str:
+        client = self._get_client()
+        kwargs: dict = {
+            "model": self.model,
+            "max_tokens": 2048,
+            "messages": messages,
+        }
+        if system:
+            kwargs["system"] = system
+        message = await client.messages.create(**kwargs)
+        return message.content[0].text
+
 
 class OpenAIProvider:
     def __init__(self, api_key: str, model: str = "gpt-4o") -> None:
@@ -103,6 +118,18 @@ class OpenAIProvider:
         response = await client.chat.completions.create(
             model=self.model,
             messages=[{"role": "user", "content": content}],
+            max_tokens=2048,
+        )
+        return response.choices[0].message.content or ""
+
+    async def complete_with_messages(self, messages: list[dict], system: str = "") -> str:
+        client = self._get_client()
+        all_messages = messages
+        if system:
+            all_messages = [{"role": "system", "content": system}] + messages
+        response = await client.chat.completions.create(
+            model=self.model,
+            messages=all_messages,
             max_tokens=2048,
         )
         return response.choices[0].message.content or ""

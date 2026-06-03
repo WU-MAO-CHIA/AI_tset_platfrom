@@ -22,17 +22,25 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch, computed } from 'vue'
 import { caseApi } from '../../services/caseApi'
 
 const props = defineProps<{
   mainSteps: string
   selectedModel: string
+  rfCodeOverride?: string
 }>()
 
 const loading = ref(false)
-const rfCode = ref('')
+const translatedCode = ref('')
 const error = ref('')
+
+// AI Chat override takes precedence over manually translated code
+const rfCode = computed(() => props.rfCodeOverride || translatedCode.value)
+
+watch(() => props.rfCodeOverride, (val) => {
+  if (val) error.value = ''
+})
 
 async function onTranslate() {
   if (!props.mainSteps.trim()) return
@@ -43,7 +51,7 @@ async function onTranslate() {
       main_steps: props.mainSteps,
       llm_model: props.selectedModel,
     })
-    rfCode.value = res.data.rf_code
+    translatedCode.value = res.data.rf_code
   } catch {
     error.value = '翻譯失敗，請稍後重試'
   } finally {

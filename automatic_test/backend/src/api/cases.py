@@ -56,6 +56,11 @@ class PreviewRFRequest(BaseModel):
     llm_model: Optional[str] = None
 
 
+class ChatRequest(BaseModel):
+    message: str
+    llm_model: Optional[str] = None
+
+
 # ─── Dependencies ────────────────────────────────────────────────────────────
 
 def get_case_service(session: AsyncSession = Depends(get_db)) -> CaseService:
@@ -243,11 +248,13 @@ async def preview_rf_code(body: PreviewRFRequest):
     if len(body.main_steps) > 10000:
         raise HTTPException(422, detail={"error": "steps_too_long", "message": "main_steps exceeds 10000 characters"})
 
-    provider = get_provider(model=body.llm_model)
+    settings = get_settings()
+    model = body.llm_model or settings.default_llm_model
+    provider = get_provider(model, settings)
     ai_service = AIService(provider)
     rf_code = await ai_service.preview_robot_code(
         main_steps=body.main_steps,
-        llm_model=body.llm_model,
+        llm_model=model,
         timeout_sec=35.0,
     )
     if rf_code is None:
@@ -294,6 +301,70 @@ async def ai_complete_steps(
         media_attachments=media_attachments,
     )
     return {"completed_steps": completed, "model_used": model}
+
+
+@router.post("/{case_id}/chat")
+async def chat_with_ai(
+    case_id: str,
+    body: ChatRequest,
+    session: AsyncSession = Depends(get_db),
+):
+    """Multi-turn AI chat for test step generation; persists messages to DB."""
+    from src.repositories.test_case_repo import TestCaseRepository
+    from src.models.case_chat_message import CaseChatMessage
+    from src.models.base import generate_uuid
+
+    repo = TestCaseRepository(session)
+    case = await repo.get(case_id)
+    if not case:
+        raise HTTPException(404, detail={"error": "not_found", "message": "案例不存在"})
+
+    # Load existing chat history for context
+    from sqlalchemy import select
+    stmt = select(CaseChatMessage).where(CaseChatMessage.case_id == case_id).order_by(CaseChatMessage.created_at)
+    result = await session.execute(stmt)
+    history = result.scalars().all()
+    messages = [{"role": m.role, "content": m.content} for m in history]
+
+    settings = get_settings()
+    model = body.llm_model or settings.default_llm_model
+    provider = get_provider(model, settings)
+    ai_service = AIService(provider=provider)
+
+    response = await ai_service.chat_and_generate_rf(
+        messages=messages,
+        user_message=body.message,
+        llm_model=model,
+    )
+
+    # Persist user message and assistant response
+    user_msg = CaseChatMessage(id=generate_uuid(), case_id=case_id, role="user", content=body.message)
+    assistant_msg = CaseChatMessage(id=generate_uuid(), case_id=case_id, role="assistant", content=response["assistant_message"])
+    session.add(user_msg)
+    session.add(assistant_msg)
+    await session.flush()
+
+    return {"assistant_message": response["assistant_message"], "rf_code": response["rf_code"]}
+
+
+@router.get("/{case_id}/chat-history")
+async def get_chat_history(
+    case_id: str,
+    session: AsyncSession = Depends(get_db),
+):
+    """Return all chat messages for a case ordered by created_at."""
+    from src.models.case_chat_message import CaseChatMessage
+    from sqlalchemy import select
+
+    stmt = select(CaseChatMessage).where(CaseChatMessage.case_id == case_id).order_by(CaseChatMessage.created_at)
+    result = await session.execute(stmt)
+    messages = result.scalars().all()
+    return {
+        "messages": [
+            {"role": m.role, "content": m.content, "created_at": m.created_at.isoformat()}
+            for m in messages
+        ]
+    }
 
 
 @router.post("/{case_id}/attachments", status_code=201)

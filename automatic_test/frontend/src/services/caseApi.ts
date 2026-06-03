@@ -68,6 +68,21 @@ export interface PreviewRFResponse {
   rf_code: string
 }
 
+export interface ChatResponse {
+  assistant_message: string
+  rf_code: string
+}
+
+export interface ChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+  created_at: string
+}
+
+export interface ChatHistoryResponse {
+  messages: ChatMessage[]
+}
+
 export const caseApi = {
   createCase(data: CreateCaseRequest) {
     return apiClient.post<{ id: string; case_number: string; version: number; created_at: string }>('/cases', data)
@@ -131,5 +146,13 @@ export const caseApi = {
 
   confirmImportTestData(id: string, importToken: string) {
     return apiClient.post(`/cases/${id}/import-test-data/confirm`, { import_token: importToken })
+  },
+
+  chatWithAI(caseId: string, message: string, model: string) {
+    return apiClient.post<ChatResponse>(`/cases/${caseId}/chat`, { message, llm_model: model })
+  },
+
+  getChatHistory(caseId: string) {
+    return apiClient.get<ChatHistoryResponse>(`/cases/${caseId}/chat-history`)
   },
 }
