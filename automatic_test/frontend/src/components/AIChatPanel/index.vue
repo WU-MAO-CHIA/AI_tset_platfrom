@@ -10,7 +10,7 @@
         class="chat-bubble"
         :class="msg.role === 'user' ? 'bubble-user' : 'bubble-assistant'"
       >
-        <div class="bubble-content">{{ msg.content }}</div>
+        <div class="bubble-content">{{ displayContent(msg) }}</div>
       </div>
       <div v-if="loading" class="chat-bubble bubble-assistant loading-bubble">
         <div class="bubble-content">AI 思考中...</div>
@@ -88,6 +88,12 @@ async function sendMessage() {
     loading.value = false
     scrollToBottom()
   }
+}
+
+function displayContent(msg: ChatMessage): string {
+  if (msg.role !== 'assistant') return msg.content
+  const rfIdx = msg.content.indexOf('---RF_CODE---')
+  return rfIdx !== -1 ? msg.content.slice(0, rfIdx).trim() : msg.content
 }
 
 async function scrollToBottom() {

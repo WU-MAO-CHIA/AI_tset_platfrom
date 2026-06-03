@@ -44,6 +44,7 @@
           :main-steps="mainSteps"
           :selected-model="selectedModel"
           :rf-code-override="rfCode"
+          :chat-mode="true"
         />
       </section>
     </div>

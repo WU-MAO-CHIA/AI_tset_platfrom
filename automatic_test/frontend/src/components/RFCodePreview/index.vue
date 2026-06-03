@@ -3,6 +3,7 @@
     <div class="rf-header">
       <span class="rf-title">Robot Framework 程式碼預覽</span>
       <button
+        v-if="!chatMode"
         type="button"
         data-testid="rf-translate-btn"
         :disabled="!mainSteps.trim() || loading"
@@ -11,12 +12,13 @@
         {{ loading ? '翻譯中...' : '翻譯為 Robot Framework' }}
       </button>
     </div>
-    <p v-if="error" data-testid="rf-error" class="error">{{ error }}</p>
+    <p v-if="error && !chatMode" data-testid="rf-error" class="error">{{ error }}</p>
     <div v-if="rfCode" class="code-block">
       <pre><code>{{ rfCode }}</code></pre>
     </div>
-    <div v-else-if="!error" class="placeholder">
-      點擊「翻譯為 Robot Framework」按鈕，AI 將自動將測試步驟轉換為可執行的 Robot Framework 腳本。
+    <div v-else class="placeholder">
+      <span v-if="chatMode">向 AI 描述測試功能，每次 AI 回應後 RF 腳本將自動更新。</span>
+      <span v-else>點擊「翻譯為 Robot Framework」按鈕，AI 將自動將測試步驟轉換為可執行的 Robot Framework 腳本。</span>
     </div>
   </div>
 </template>
@@ -29,6 +31,7 @@ const props = defineProps<{
   mainSteps: string
   selectedModel: string
   rfCodeOverride?: string
+  chatMode?: boolean
 }>()
 
 const loading = ref(false)

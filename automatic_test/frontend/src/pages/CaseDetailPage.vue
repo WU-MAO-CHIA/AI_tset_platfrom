@@ -57,6 +57,7 @@
             :main-steps="mainSteps"
             :selected-model="selectedModel"
             :rf-code-override="rfCode"
+            :chat-mode="true"
           />
         </section>
       </div>
@@ -85,12 +86,12 @@
       </div>
     </template>
 
-    <div class="section">
+    <div class="section" v-show="!editing">
       <h2>測試資料匯入</h2>
       <FileImporter :case-id="caseData.id" />
     </div>
 
-    <div class="section">
+    <div class="section" v-show="!editing">
       <h2>執行歷史</h2>
       <button @click="loadHistory">載入執行歷史</button>
       <table v-if="history.length" class="history-table">

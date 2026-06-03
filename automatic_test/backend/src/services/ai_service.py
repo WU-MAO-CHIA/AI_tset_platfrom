@@ -121,6 +121,9 @@ class AIService:
         except asyncio.TimeoutError:
             await self._cache_code(cache_key, None, "failed", "Timeout exceeded")
             return None
+        except Exception as exc:
+            await self._cache_code(cache_key, None, "failed", str(exc))
+            return None
 
         if code and code.strip().startswith("UNABLE_TO_GENERATE"):
             await self._cache_code(cache_key, None, "unable_to_generate", code.strip())
@@ -143,6 +146,8 @@ class AIService:
                 timeout=timeout_sec,
             )
         except asyncio.TimeoutError:
+            return None
+        except Exception:
             return None
 
         if code and code.strip().startswith("UNABLE_TO_GENERATE"):
@@ -169,21 +174,36 @@ class AIService:
             )
         except asyncio.TimeoutError:
             return {"assistant_message": "抱歉，回應逾時，請稍後再試。", "rf_code": ""}
+        except Exception as exc:
+            return {"assistant_message": f"抱歉，AI 服務發生錯誤：{exc}", "rf_code": ""}
 
         assistant_message, rf_code = self._parse_chat_response(raw)
         return {"assistant_message": assistant_message, "rf_code": rf_code}
 
     def _parse_chat_response(self, raw: str) -> tuple[str, str]:
-        """Parse the structured chat response into (message, rf_code)."""
-        try:
-            msg_start = raw.index("---MESSAGE---") + len("---MESSAGE---")
-            rf_start = raw.index("---RF_CODE---")
-            end_marker = raw.index("---END---")
-            assistant_message = raw[msg_start:rf_start].strip()
-            rf_code = raw[rf_start + len("---RF_CODE---"):end_marker].strip()
-            return assistant_message, rf_code
-        except ValueError:
-            return raw.strip(), ""
+        """Parse the structured chat response into (message, rf_code).
+
+        Handles cases where LLM omits ---MESSAGE--- or ---END--- markers by
+        anchoring on ---RF_CODE--- which is the most reliably present delimiter.
+        """
+        rf_marker = "---RF_CODE---"
+        end_marker = "---END---"
+        msg_marker = "---MESSAGE---"
+
+        if rf_marker in raw:
+            rf_idx = raw.index(rf_marker)
+            message_part = raw[:rf_idx]
+            if msg_marker in message_part:
+                message_part = message_part[message_part.index(msg_marker) + len(msg_marker):]
+            assistant_message = message_part.strip()
+
+            rf_content_start = rf_idx + len(rf_marker)
+            rf_content = raw[rf_content_start:raw.index(end_marker)].strip() if end_marker in raw else raw[rf_content_start:].strip()
+            return assistant_message, rf_content
+
+        if msg_marker in raw:
+            return raw[raw.index(msg_marker) + len(msg_marker):].strip(), ""
+        return raw.strip(), ""
 
     async def _get_cached_code(self, cache_key: str):
         if cache_key in self._code_cache:
