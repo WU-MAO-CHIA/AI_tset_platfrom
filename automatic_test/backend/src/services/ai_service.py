@@ -3,12 +3,26 @@ from typing import Optional
 
 from src.core.llm_provider import LLMProvider
 
-_CHAT_SYSTEM_PROMPT = """\
+_RF_RULES = """\
+RF 腳本必須遵守以下規則：
+- 使用 Browser library（Playwright）。Settings 區塊宣告：Library  Browser
+- Test Setup 必須開啟瀏覽器：依序呼叫 New Browser（chromium, headless=True）、New Context、New Page 並導至 BASE_URL 變數
+- Test Teardown 必須呼叫 Close Browser
+- *** Variables *** 區塊以 RF 變數（如 BASE_URL、USERNAME 等）取代任何寫死的 URL、帳號密碼，於步驟中以 RF 變數語法引用
+- Locator 優先序：role= > text= > id= / data-testid= > CSS。禁止使用絕對 XPath（如 //div[3]/...）
+- 等待請用 Wait For Elements State 或 Browser library 內建 auto-wait；禁止使用 Sleep 同步 UI
+- 每個 *** Test Cases *** 條目必須含 [Documentation] 與 [Tags]
+- 切勿混用 SeleniumLibrary 與 Browser library
+"""
+
+_CHAT_SYSTEM_PROMPT = f"""\
 你是一位專業的軟體測試工程師，負責協助撰寫測試案例步驟與 Robot Framework 腳本。
 
 使用者會描述需要測試的功能，你需要：
 1. 提供清楚的測試步驟建議（以自然語言對話方式）
-2. 同時生成對應的 Robot Framework (.robot) 腳本（使用 Browser library/Playwright）
+2. 同時生成對應的 Robot Framework (.robot) 腳本
+
+{_RF_RULES}
 
 你的回應必須嚴格遵循以下格式（含分隔線）：
 ---MESSAGE---
@@ -28,42 +42,73 @@ _COMPLETE_STEPS_PROMPT = """\
 請補齊完整的測試步驟，格式為「1. xxx\n2. xxx\n...」，每步驟清晰、可執行，步驟應包含預期結果驗證。
 只回傳步驟列表，不加其他說明。"""
 
-_PREVIEW_ROBOT_PROMPT = """\
-將以下測試步驟轉換為 Robot Framework 格式的 .robot 腳本，使用 Browser library（Playwright）。
+_PREVIEW_ROBOT_PROMPT = f"""\
+將以下測試步驟轉換為 Robot Framework 格式的 .robot 腳本。
+
+{_RF_RULES}
 
 測試步驟：
-{main_steps}
+{{main_steps}}
 
 若步驟過於模糊無法轉換，請只回傳：UNABLE_TO_GENERATE: <原因>
 
-否則只回傳 .robot 腳本內容，範例格式：
+否則只回傳 .robot 腳本內容，骨架範例（請依實際步驟填入互動）：
 *** Settings ***
 Library    Browser
+Test Setup       Open Test Browser
+Test Teardown    Close Browser
+
+*** Variables ***
+${{{{BASE_URL}}}}    http://localhost:5173
+
+*** Keywords ***
+Open Test Browser
+    New Browser    chromium    headless=True
+    New Context
+    New Page    ${{{{BASE_URL}}}}
 
 *** Test Cases ***
 測試案例名稱
     [Documentation]    自動生成
-    ...
+    [Tags]    auto-generated
+    # 依測試步驟填入互動，例如：
+    # Click    role=button[name="登入"]
+    # Fill Text    role=textbox[name="帳號"]    test_user
+    # Get Text    role=heading    ==    歡迎
 """
 
-_GENERATE_ROBOT_PROMPT = """\
-將以下測試步驟轉換為 Robot Framework 格式的 .robot 腳本，使用 Browser library（Playwright）。
+_GENERATE_ROBOT_PROMPT = f"""\
+將以下測試步驟轉換為 Robot Framework 格式的 .robot 腳本。
 
-測試案例編號：{case_number}
-測試案例名稱：{case_name}
+{_RF_RULES}
+
+測試案例編號：{{case_number}}
+測試案例名稱：{{case_name}}
 測試步驟：
-{main_steps}
+{{main_steps}}
 
 若步驟過於模糊無法轉換，請只回傳：UNABLE_TO_GENERATE: <原因>
 
-否則只回傳 .robot 腳本內容：
+否則只回傳 .robot 腳本內容，骨架範例（請依實際步驟填入互動）：
 *** Settings ***
 Library    Browser
+Test Setup       Open Test Browser
+Test Teardown    Close Browser
+
+*** Variables ***
+${{{{BASE_URL}}}}    http://localhost:5173
+
+*** Keywords ***
+Open Test Browser
+    New Browser    chromium    headless=True
+    New Context
+    New Page    ${{{{BASE_URL}}}}
 
 *** Test Cases ***
-{case_name}
-    [Documentation]    {case_number}
-    ...
+{{case_name}}
+    [Documentation]    {{case_number}} - 自動生成
+    [Tags]    auto-generated    case-{{case_number}}
+    # 依測試步驟填入互動
 """
 
 

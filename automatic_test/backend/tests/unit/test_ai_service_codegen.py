@@ -10,11 +10,39 @@ import pytest
 from src.services.ai_service import AIService
 
 
+# Representative Browser-library (Playwright) output. Production prompt requires
+# this shape — keep the fixture aligned so tests validate real contract.
+SAMPLE_BROWSER_RF = """\
+*** Settings ***
+Library    Browser
+Test Setup       Open Test Browser
+Test Teardown    Close Browser
+
+*** Variables ***
+${BASE_URL}    http://localhost:5173
+
+*** Keywords ***
+Open Test Browser
+    New Browser    chromium    headless=True
+    New Context
+    New Page    ${BASE_URL}
+
+*** Test Cases ***
+Test Login
+    [Documentation]    Login smoke test
+    [Tags]    auto-generated    login
+    Fill Text    role=textbox[name="帳號"]    test_user
+    Fill Text    role=textbox[name="密碼"]    secret
+    Click    role=button[name="登入"]
+    Get Text    role=heading    ==    歡迎
+"""
+
+
 @pytest.fixture
 def mock_provider():
     provider = MagicMock()
-    provider.complete = AsyncMock(return_value="*** Test Cases ***\nTest Login\n    Open Browser    http://example.com    headlessChrome")
-    provider.complete_with_vision = AsyncMock(return_value="*** Test Cases ***\nTest Login\n    Open Browser    http://example.com    headlessChrome")
+    provider.complete = AsyncMock(return_value=SAMPLE_BROWSER_RF)
+    provider.complete_with_vision = AsyncMock(return_value=SAMPLE_BROWSER_RF)
     return provider
 
 
