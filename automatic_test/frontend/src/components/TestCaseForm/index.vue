@@ -25,10 +25,16 @@
       <textarea v-model="form.precondition_steps" rows="2" placeholder="（選填）" />
     </div>
 
-    <!-- 主要步驟：僅在父層未提供 mainSteps prop 時顯示（CaseDetailPage 編輯用）-->
-    <div v-if="!externalSteps" class="field">
+    <!-- 主要步驟：總是顯示，支援雙向綁定 -->
+    <div class="field">
       <label>主要步驟 *</label>
-      <textarea v-model="internalMainSteps" rows="6" required placeholder="1. 開啟登入頁面&#10;2. 輸入帳號密碼" />
+      <textarea
+        :value="effectiveMainSteps"
+        @input="handleMainStepsInput"
+        rows="6"
+        required
+        placeholder="1. 開啟登入頁面&#10;2. 輸入帳號密碼"
+      />
     </div>
 
     <div class="field">
@@ -60,6 +66,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'saved', id: string): void
   (e: 'trial-run', executionId: string): void
+  (e: 'update:main-steps', value: string): void
 }>()
 
 /** True when CaseCreatePage provides mainSteps via prop (two-column layout). */
@@ -127,6 +134,14 @@ async function onTrialRun() {
 }
 
 function onAttachmentUploaded(_att: object) {}
+
+function handleMainStepsInput(e: Event) {
+  const value = (e.target as HTMLTextAreaElement).value
+  internalMainSteps.value = value
+  if (externalSteps.value) {
+    emit('update:main-steps', value)
+  }
+}
 </script>
 
 <style scoped>
