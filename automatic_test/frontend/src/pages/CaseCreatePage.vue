@@ -33,26 +33,21 @@
     </div>
 
     <!-- Tab 2：測試步驟（左：AI Chat，右：RF 預覽） -->
-    <div v-show="activeTab === 'steps'" class="tab-content">
-      <div class="split-layout">
-        <section class="left-col">
-          <AIChatPanel
-            :selected-model="selectedModel"
-            @rf-updated="rfCode = $event"
-          />
-        </section>
-        <section class="right-col">
-          <RFCodePreview
-            :main-steps="mainSteps"
-            :selected-model="selectedModel"
-            :rf-code-override="rfCode"
-            :chat-mode="true"
-          />
-        </section>
-      </div>
-      <div class="tab-actions">
-        <button type="button" class="btn-save" @click="saveFromTab2">儲存案例</button>
-      </div>
+    <div v-show="activeTab === 'steps'" class="tab-content split-layout">
+      <section class="left-col">
+        <AIChatPanel
+          :selected-model="selectedModel"
+          @rf-updated="rfCode = $event"
+        />
+      </section>
+      <section class="right-col">
+        <RFCodePreview
+          :main-steps="mainSteps"
+          :selected-model="selectedModel"
+          :rf-code-override="rfCode"
+          :chat-mode="true"
+        />
+      </section>
     </div>
   </div>
 </template>
@@ -78,14 +73,6 @@ function onSaved(id: string) {
 
 function onTrialRun(executionId: string) {
   router.push(`/executions/${executionId}`)
-}
-
-function saveFromTab2() {
-  // Find and click the submit button in TestCaseForm
-  const submitBtn = document.querySelector('.case-form button[type="submit"]') as HTMLButtonElement
-  if (submitBtn && !submitBtn.disabled) {
-    submitBtn.click()
-  }
 }
 </script>
 
@@ -134,29 +121,6 @@ h1 { margin-bottom: 16px; font-size: 22px; }
   height: 100%;
 }
 
-.tab-actions {
-  display: flex;
-  gap: 12px;
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid #e5e7eb;
-}
-
-.btn-save {
-  padding: 10px 20px;
-  background: #4f46e5;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.btn-save:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
 
 @media (max-width: 767px) {
   .split-layout {

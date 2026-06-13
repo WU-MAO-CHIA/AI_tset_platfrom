@@ -4,7 +4,10 @@
       <h1>{{ caseData.case_number }} — {{ caseData.name }}</h1>
       <div class="actions">
         <button v-if="!editing" @click="startEdit">編輯</button>
-        <button v-else class="btn-cancel" @click="cancelEdit">取消</button>
+        <template v-else>
+          <button class="btn-save-edit" @click="saveFromPageHeader">儲存案例</button>
+          <button class="btn-cancel" @click="cancelEdit">取消</button>
+        </template>
         <button v-if="!editing" @click="onTrialRun" :disabled="trialRunning">
           {{ trialRunning ? '試跑中...' : '立即試跑' }}
         </button>
@@ -44,27 +47,22 @@
       </div>
 
       <!-- Tab 2：測試步驟（左：AI Chat，右：RF 預覽） -->
-      <div v-show="editTab === 'steps'" class="tab-content">
-        <div class="split-layout">
-          <section class="left-col">
-            <AIChatPanel
-              :case-id="caseData.id"
-              :selected-model="selectedModel"
-              @rf-updated="rfCode = $event"
-            />
-          </section>
-          <section class="right-col">
-            <RFCodePreview
-              :main-steps="mainSteps"
-              :selected-model="selectedModel"
-              :rf-code-override="rfCode"
-              :chat-mode="true"
-            />
-          </section>
-        </div>
-        <div class="tab-actions">
-          <button type="button" class="btn-save" @click="saveFromEditTab2">儲存案例</button>
-        </div>
+      <div v-show="editTab === 'steps'" class="tab-content split-layout">
+        <section class="left-col">
+          <AIChatPanel
+            :case-id="caseData.id"
+            :selected-model="selectedModel"
+            @rf-updated="rfCode = $event"
+          />
+        </section>
+        <section class="right-col">
+          <RFCodePreview
+            :main-steps="mainSteps"
+            :selected-model="selectedModel"
+            :rf-code-override="rfCode"
+            :chat-mode="true"
+          />
+        </section>
       </div>
     </template>
 
@@ -201,7 +199,7 @@ function onTrialRunFromForm(executionId: string) {
   router.push(`/executions/${executionId}`)
 }
 
-function saveFromEditTab2() {
+function saveFromPageHeader() {
   const submitBtn = document.querySelector('.case-form button[type="submit"]') as HTMLButtonElement
   if (submitBtn && !submitBtn.disabled) {
     submitBtn.click()
@@ -257,18 +255,10 @@ h1 { font-size: 20px; }
   height: 100%;
 }
 
-.tab-actions {
-  display: flex;
-  gap: 12px;
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid #e5e7eb;
-}
-
-.btn-save {
-  padding: 10px 20px;
+.btn-save-edit {
   background: #4f46e5;
   color: white;
+  padding: 8px 16px;
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -276,7 +266,7 @@ h1 { font-size: 20px; }
   font-weight: 500;
 }
 
-.btn-save:disabled {
+.btn-save-edit:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
