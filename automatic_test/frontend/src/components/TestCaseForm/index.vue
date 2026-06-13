@@ -1,8 +1,9 @@
 <template>
   <form class="case-form" @submit.prevent="onSubmit">
-    <div class="field">
-      <label>案例編號 *</label>
-      <input v-model="form.case_number" :disabled="!!caseId" required placeholder="TC-001" />
+    <!-- 編輯時顯示自動生成的案例編號（唯讀）；建立時由後端自動生成，無需輸入 -->
+    <div v-if="caseId && initialData?.case_number" class="field">
+      <label>案例編號</label>
+      <input :value="initialData.case_number" disabled />
     </div>
 
     <div class="field">
@@ -80,7 +81,6 @@ const effectiveMainSteps = computed(() =>
 )
 
 const form = reactive({
-  case_number: '',
   name: '',
   description: '',
   precondition_steps: '',

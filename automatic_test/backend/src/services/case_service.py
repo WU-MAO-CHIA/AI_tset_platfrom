@@ -7,9 +7,18 @@ class CaseService:
     def __init__(self, repo: TestCaseRepository) -> None:
         self.repo = repo
 
+    async def generate_case_number(self, system_category: Optional[str]) -> str:
+        prefix = (system_category or "TC").strip()
+        cases = await self.repo.list_by_prefix(prefix)
+        max_num = 0
+        for c in cases:
+            parts = c.case_number.rsplit("-", 1)
+            if len(parts) == 2 and parts[-1].isdigit():
+                max_num = max(max_num, int(parts[-1]))
+        return f"{prefix}-{str(max_num + 1).zfill(3)}"
+
     async def create(
         self,
-        case_number: str,
         name: str,
         main_steps: str,
         created_by: str,
@@ -18,10 +27,7 @@ class CaseService:
         system_category: Optional[str] = None,
         tags: Optional[list[str]] = None,
     ):
-        existing = await self.repo.get_by_case_number(case_number)
-        if existing:
-            raise ValueError("case_number_conflict")
-
+        case_number = await self.generate_case_number(system_category)
         return await self.repo.create(
             case_number=case_number,
             name=name,

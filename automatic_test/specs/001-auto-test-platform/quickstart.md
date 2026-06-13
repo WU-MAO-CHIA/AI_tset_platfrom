@@ -4,7 +4,7 @@
 
 ## Prerequisites
 
-- Python 3.14
+- Python 3.11+
 - Node.js 20+
 - Git
 - **後端伺服器需求**（執行自動化測試的機器）：
@@ -105,7 +105,6 @@ npm run test:e2e
 curl -X POST http://localhost:8000/api/v1/cases \
   -H "Content-Type: application/json" \
   -d '{
-    "case_number": "TC-001",
     "name": "示範登入測試",
     "main_steps": "1. 開啟 https://example.com\n2. 點擊登入按鈕\n3. 輸入帳號密碼\n4. 確認登入成功",
     "system_category": "auth",

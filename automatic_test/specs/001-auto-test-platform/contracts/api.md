@@ -9,10 +9,11 @@
 ### POST /cases
 建立新測試案例
 
+> **Note**: `case_number` 由後端根據 `system_category` 自動生成（格式：`{system_category}-{NNN}`，序號含軟刪除案例以防重複）。請求中不需傳入 `case_number`。
+
 **Request Body**:
 ```json
 {
-  "case_number": "TC-001",
   "name": "登入功能測試",
   "description": "驗證使用者登入流程",
   "precondition_steps": "使用者已註冊帳號",
@@ -30,14 +31,11 @@
 ```json
 {
   "id": "uuid",
-  "case_number": "TC-001",
+  "case_number": "auth-001",
   "version": 1,
   "created_at": "2026-05-19T10:00:00Z"
 }
 ```
-
-**Error**:
-- `409 Conflict`: case_number 重複
 
 ---
 

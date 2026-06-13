@@ -59,3 +59,6 @@ automatic_test/frontend/coverage/
 
 # Playwright / RF browser binaries (large binary, installed via rfbrowser init)
 automatic_test/backend/.rf_browser/
+
+# Temporary Robot Framework script generated during AI code-gen preview
+tmp.robot

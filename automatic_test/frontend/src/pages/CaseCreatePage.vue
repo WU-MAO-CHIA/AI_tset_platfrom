@@ -33,21 +33,26 @@
     </div>
 
     <!-- Tab 2：測試步驟（左：AI Chat，右：RF 預覽） -->
-    <div v-show="activeTab === 'steps'" class="tab-content split-layout">
-      <section class="left-col">
-        <AIChatPanel
-          :selected-model="selectedModel"
-          @rf-updated="rfCode = $event"
-        />
-      </section>
-      <section class="right-col">
-        <RFCodePreview
-          :main-steps="mainSteps"
-          :selected-model="selectedModel"
-          :rf-code-override="rfCode"
-          :chat-mode="true"
-        />
-      </section>
+    <div v-show="activeTab === 'steps'" class="tab-content">
+      <div class="split-layout">
+        <section class="left-col">
+          <AIChatPanel
+            :selected-model="selectedModel"
+            @rf-updated="rfCode = $event"
+          />
+        </section>
+        <section class="right-col">
+          <RFCodePreview
+            :main-steps="mainSteps"
+            :selected-model="selectedModel"
+            :rf-code-override="rfCode"
+            :chat-mode="true"
+          />
+        </section>
+      </div>
+      <div class="tab2-save-bar">
+        <button class="btn-save-tab2" @click="saveFromTab2">儲存案例</button>
+      </div>
     </div>
   </div>
 </template>
@@ -65,6 +70,12 @@ const mainSteps = ref('')
 const selectedModel = ref('claude-sonnet-4-6')
 const rfCode = ref('')
 const savedCaseId = ref('')
+const formRef = ref<InstanceType<typeof TestCaseForm> | null>(null)
+
+function saveFromTab2() {
+  const submitBtn = formRef.value?.$el?.querySelector('button[type="submit"]') as HTMLButtonElement | null
+  submitBtn?.click()
+}
 
 function onSaved(id: string) {
   savedCaseId.value = id
@@ -127,5 +138,27 @@ h1 { margin-bottom: 16px; font-size: 22px; }
     grid-template-columns: 1fr;
     height: auto;
   }
+}
+
+.tab2-save-bar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 0 0;
+}
+
+.btn-save-tab2 {
+  padding: 8px 20px;
+  background: #4f46e5;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.btn-save-tab2:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 </style>

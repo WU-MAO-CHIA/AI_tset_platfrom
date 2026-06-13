@@ -96,6 +96,13 @@ class TestCaseRepository(BaseRepository[TestCase]):
         items = list(items_result.scalars().all())
         return items, total
 
+    async def list_by_prefix(self, prefix: str) -> list["TestCase"]:
+        """Return all cases (including soft-deleted) whose case_number starts with '{prefix}-'."""
+        result = await self.session.execute(
+            select(TestCase).where(TestCase.case_number.like(f"{prefix}-%"))
+        )
+        return list(result.scalars().all())
+
     async def get_referencing_checklists_with_names(self, case_id: str) -> list[dict]:
         """Return list of {id, name} for checklists that contain this case and are not deleted."""
         from src.models.checklist_item import ChecklistItem

@@ -20,7 +20,6 @@ router = APIRouter(prefix="/cases", tags=["cases"])
 # ─── Schemas ────────────────────────────────────────────────────────────────
 
 class CaseCreateRequest(BaseModel):
-    case_number: str
     name: str
     main_steps: str
     description: Optional[str] = None
@@ -114,7 +113,6 @@ async def create_case(
 ):
     try:
         case = await service.create(
-            case_number=body.case_number,
             name=body.name,
             main_steps=body.main_steps,
             created_by=body.created_by,
@@ -124,8 +122,6 @@ async def create_case(
             tags=body.tags,
         )
     except ValueError as e:
-        if "case_number_conflict" in str(e):
-            raise HTTPException(409, detail={"error": "case_number_conflict", "message": "案例編號已存在"})
         raise HTTPException(400, detail={"error": "validation_error", "message": str(e)})
     return {
         "id": case.id,

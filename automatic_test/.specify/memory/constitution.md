@@ -50,7 +50,7 @@ Start simple, apply YAGNI principles:
 - Use KISS principal
 - Use Python 3.11+
 - Use Service to wrap common operations
-- Use Repository to wrap common EF Core queries (CRUD)
+- Use Repository to wrap common SQLAlchemy queries (CRUD)
 - Use Typescript with Vue
 
 

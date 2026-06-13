@@ -455,6 +455,22 @@ Phase 2 完成後：
 
 ---
 
+---
+
+## Phase 14: 效能 SCs 驗收測試（SC-005/SC-007/SC-011/SC-012/SC-013，2026-06-13）
+
+**Purpose**: 補充 `/speckit-analyze` 找出的 5 項效能 SC 缺乏可自動化執行的驗收測試（H3 remediation）
+
+- [X] T142 [P] [US5] 建立 `backend/tests/load/test_report_generation_time.py`：執行一次含 5 個案例的 checklist 後，呼叫 `ReportService.export_report()`，斷言從呼叫到回傳 HTML 字串的時間 ≤ 30s（對應 SC-005）
+- [X] T143 [P] [US1] 建立 `backend/tests/load/test_ai_complete_latency.py`：mock LLM provider 以固定 12s 延遲回應，呼叫 `AIService.complete_steps()`，斷言整體呼叫時間 ≤ 15s（對應 SC-007；mock 延遲設為 12s 以留出 3s 餘裕）
+- [X] T144 [P] [US5] 建立 `backend/tests/load/test_trial_run_latency.py`：mock RF subprocess 以固定 50s 完成，呼叫 `ExecutionService.run_trial()`，斷言從觸發到回傳結果 ≤ 60s（對應 SC-011）
+- [X] T145 [P] [US2] 建立 `backend/tests/load/test_file_parser_latency.py`：生成包含 1000 筆資料列的 Excel 檔案，呼叫 `FileParserService.parse_excel()`，斷言解析與預覽生成時間 ≤ 5s（對應 SC-012）
+- [X] T146 [P] [US5] 建立 `backend/tests/load/test_results_page_latency.py`：建立含 50 筆 ExecutionMedia 的執行紀錄，呼叫 `GET /executions/{id}/results`，斷言回應時間 ≤ 10s（對應 SC-013）
+
+**Checkpoint**: `pytest backend/tests/load/test_report_generation_time.py backend/tests/load/test_ai_complete_latency.py backend/tests/load/test_trial_run_latency.py backend/tests/load/test_file_parser_latency.py backend/tests/load/test_results_page_latency.py` 全數 PASS
+
+---
+
 ## Notes
 
 - `[P]` = 不同檔案，無未完成依賴，可平行執行
