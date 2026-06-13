@@ -140,13 +140,30 @@ const editInitialData = computed(() => caseData.value ? { ...caseData.value } : 
 onMounted(async () => {
   const res = await caseApi.getCase(caseId)
   caseData.value = res.data
+
+  // Attempt to restore last RF code from chat history on page load
+  try {
+    const histRes = await caseApi.getChatHistory(caseId)
+    if (histRes.data.messages.length > 0) {
+      const lastMessage = histRes.data.messages[histRes.data.messages.length - 1]
+      if (lastMessage.role === 'assistant' && lastMessage.content.includes('---RF_CODE---')) {
+        const rfIdx = lastMessage.content.indexOf('---RF_CODE---')
+        const endIdx = lastMessage.content.indexOf('---END---')
+        if (rfIdx !== -1 && endIdx !== -1) {
+          rfCode.value = lastMessage.content.slice(rfIdx + 13, endIdx).trim()
+        }
+      }
+    }
+  } catch {
+    // Silently fail; rfCode remains empty if no chat history
+  }
 })
 
 function startEdit() {
   mainSteps.value = caseData.value?.main_steps ?? ''
-  rfCode.value = ''
   editTab.value = 'basic'
   editing.value = true
+  // rfCode was already restored from chat history in onMounted; keep it.
 }
 
 function cancelEdit() {

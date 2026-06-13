@@ -63,9 +63,18 @@ const activeTab = ref<'basic' | 'steps'>('basic')
 const mainSteps = ref('')
 const selectedModel = ref('claude-sonnet-4-6')
 const rfCode = ref('')
+const savedCaseId = ref('')
 
 function onSaved(id: string) {
-  router.push(`/cases/${id}`)
+  // Save the current case ID and maintain rfCode state, but navigate to detail page.
+  // The detail page will load the chat history in edit mode, allowing RF code restoration.
+  savedCaseId.value = id
+  // Navigate with state so detail page knows we just saved
+  router.push({
+    name: 'case-detail',
+    params: { id },
+    state: { justCreated: true, rfCode: rfCode.value },
+  })
 }
 
 function onTrialRun(executionId: string) {
