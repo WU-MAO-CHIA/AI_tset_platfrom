@@ -204,6 +204,39 @@ evtSource.onmessage = (e) => store.updateProgress(JSON.parse(e.data))
 
 ---
 
+---
+
+## 決策 7：測試案例編號自動生成策略（Session 2026-06-13）
+
+**Decision**: 後端在建立測試案例時，根據 `system_category` 查詢**同前綴的最大現有序號**（含已軟刪除者以防 reuse），加 1 後格式化為三位數，組合為 `{system_category}-{NNN}`。若 `system_category` 為空則使用預設前綴 `TC`。
+
+**Rationale**:
+- 符合 spec：「編號由系統別+三位數序號組成，序號從 001 開始往後遞增，在同一系統別內保持唯一性」（Clarifications Session 2026-06-13）
+- 查詢含軟刪除案例的最大號碼，防止刪除後重複使用
+- 不依賴 DB auto-increment，因為編號前綴與 system_category 繫結
+
+**Implementation sketch**:
+```python
+# In CaseService.generate_case_number()
+async def generate_case_number(self, system_category: str) -> str:
+    prefix = (system_category or "TC").strip()
+    # Query all (including soft-deleted) to avoid reuse
+    cases = await self.repo.list_by_prefix(prefix)
+    max_num = 0
+    for c in cases:
+        parts = c.case_number.rsplit("-", 1)
+        if len(parts) == 2 and parts[-1].isdigit():
+            max_num = max(max_num, int(parts[-1]))
+    return f"{prefix}-{str(max_num + 1).zfill(3)}"
+```
+
+**Alternatives considered**:
+- DB sequence per system_category：需額外表格，過度複雜
+- UUID：不符合 spec 要求
+- Client-side generation：並行操作有競態條件風險
+
+---
+
 ## 所有 NEEDS CLARIFICATION 解析完畢
 
 | 問題 | 決策 |
@@ -214,3 +247,4 @@ evtSource.onmessage = (e) => store.updateProgress(JSON.parse(e.data))
 | 平行執行 | asyncio.Semaphore，預設 5 並行 |
 | 即時進度 | Server-Sent Events (SSE) |
 | Excel/CSV | openpyxl + csv，標頭比對 + 預覽確認 |
+| 案例編號生成 | system_category 前綴 + 三位數序號，查最大值+1 |

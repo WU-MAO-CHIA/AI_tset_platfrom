@@ -210,6 +210,60 @@ AI 輔助補齊測試步驟
 
 ---
 
+### POST /cases/{case_id}/chat
+多輪 AI 對話，生成 RF 程式碼（Tab 2 Chat 介面）
+
+**Request Body**:
+```json
+{
+  "message": "請幫我生成登入功能的測試腳本",
+  "llm_model": "claude-sonnet-4-6"
+}
+```
+
+**Response 200**:
+```json
+{
+  "assistant_message": "好的，以下是登入功能的 Robot Framework 腳本...",
+  "rf_code": "*** Settings ***\nLibrary    Browser\n\n*** Test Cases ***\n登入功能測試\n    Open Browser..."
+}
+```
+
+**Side effect**: 用戶訊息與 AI 回應均寫入 `case_chat_messages` 表持久化
+
+**Note**: `assistant_message` 僅包含人類可讀部分（RF code 已從 content 提取）
+
+---
+
+### GET /cases/{case_id}/chat-history
+取得測試案例的 AI 對話歷史
+
+**Response 200**:
+```json
+{
+  "messages": [
+    { "role": "user", "content": "請幫我生成登入功能的測試腳本", "created_at": "2026-06-13T10:00:00Z" },
+    { "role": "assistant", "content": "好的，以下是登入功能的 Robot Framework 腳本...\n---RF_CODE---\n*** Settings ***\n...\n---END---", "created_at": "2026-06-13T10:00:05Z" }
+  ]
+}
+```
+
+**Note**: assistant content 包含完整結構化格式（含 `---RF_CODE---` 分隔符），前端解析後僅顯示前段
+
+---
+
+### POST /cases/preview-rf
+根據測試步驟預覽生成 RF 代碼（不建立案例）
+
+**Request Body**:
+```json
+{ "main_steps": "1. 開啟登入頁面\n2. 輸入帳號密碼", "llm_model": "claude-sonnet-4-6" }
+```
+
+**Response 200**: `{ "rf_code": "*** Settings ***\n..." }`
+
+---
+
 ### POST /cases/{case_id}/trial-run
 立即試跑
 
