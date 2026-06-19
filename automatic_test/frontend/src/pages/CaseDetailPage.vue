@@ -66,26 +66,70 @@
       </div>
     </template>
 
-    <!-- 檢視模式 -->
+    <!-- 檢視模式：Tab 分頁結構 -->
     <template v-else>
-      <div class="section">
-        <h2>基本資訊</h2>
-        <dl>
-          <dt>系統別</dt><dd>{{ caseData.system_category || '-' }}</dd>
-          <dt>版本</dt><dd>v{{ caseData.version }}</dd>
-          <dt>建立者</dt><dd>{{ caseData.created_by }}</dd>
-          <dt>更新時間</dt><dd>{{ caseData.updated_at }}</dd>
-        </dl>
+      <div class="tabs">
+        <button
+          class="tab-btn"
+          :class="{ active: viewTab === 'basic' }"
+          @click="viewTab = 'basic'"
+        >
+          基本資訊
+        </button>
+        <button
+          class="tab-btn"
+          :class="{ active: viewTab === 'steps' }"
+          @click="viewTab = 'steps'"
+        >
+          測試步驟
+        </button>
       </div>
 
-      <div class="section">
-        <h2>前置條件</h2>
-        <pre>{{ caseData.precondition_steps || '（無）' }}</pre>
+      <!-- Tab 1：基本資訊（唯讀） -->
+      <div v-show="viewTab === 'basic'" class="tab-content">
+        <div class="section">
+          <h2>基本資訊</h2>
+          <dl>
+            <dt>系統別</dt><dd>{{ caseData.system_category || '-' }}</dd>
+            <dt>版本</dt><dd>v{{ caseData.version }}</dd>
+            <dt>建立者</dt><dd>{{ caseData.created_by }}</dd>
+            <dt>更新時間</dt><dd>{{ caseData.updated_at }}</dd>
+          </dl>
+        </div>
+        <div class="section">
+          <h2>前置條件</h2>
+          <pre>{{ caseData.precondition_steps || '（無）' }}</pre>
+        </div>
+        <div class="section">
+          <h2>主要步驟</h2>
+          <pre>{{ caseData.main_steps }}</pre>
+        </div>
       </div>
 
-      <div class="section">
-        <h2>主要步驟</h2>
-        <pre>{{ caseData.main_steps }}</pre>
+      <!-- Tab 2：測試步驟（唯讀：AI 對話歷史 + RF 程式碼預覽） -->
+      <div v-show="viewTab === 'steps'" class="tab-content split-layout">
+        <section class="left-col">
+          <h2 style="font-size:16px;font-weight:600;margin-bottom:12px;">AI 對話歷史</h2>
+          <div v-if="chatMessages.length === 0" class="empty-chat">尚無對話紀錄</div>
+          <div v-else class="chat-history">
+            <div
+              v-for="(msg, idx) in chatMessages"
+              :key="idx"
+              class="chat-bubble"
+              :class="msg.role"
+            >
+              <span class="bubble-role">{{ msg.role === 'user' ? '使用者' : 'AI' }}</span>
+              <p>{{ chatDisplayText(msg) }}</p>
+            </div>
+          </div>
+        </section>
+        <section class="right-col">
+          <h2 style="font-size:16px;font-weight:600;margin-bottom:12px;">最新 RF 程式碼（唯讀）</h2>
+          <div v-if="rfCode" class="rf-readonly">
+            <pre class="rf-code">{{ rfCode }}</pre>
+          </div>
+          <div v-else class="empty-chat">尚無 RF 程式碼（請先透過 AI 對話生成）</div>
+        </section>
       </div>
     </template>
 
@@ -134,9 +178,11 @@ const historyLoaded = ref(false)
 const trialRunning = ref(false)
 const editing = ref(false)
 const editTab = ref<'basic' | 'steps'>('basic')
+const viewTab = ref<'basic' | 'steps'>('basic')
 const mainSteps = ref('')
 const selectedModel = ref('claude-sonnet-4-6')
 const rfCode = ref('')
+const chatMessages = ref<Array<{ role: string; content: string; created_at: string }>>([])
 
 const editInitialData = computed(() => caseData.value ? { ...caseData.value } : undefined)
 
@@ -144,9 +190,10 @@ onMounted(async () => {
   const res = await caseApi.getCase(caseId)
   caseData.value = res.data
 
-  // Attempt to restore last RF code from chat history on page load
+  // Restore chat history and last RF code on page load
   try {
     const histRes = await caseApi.getChatHistory(caseId)
+    chatMessages.value = histRes.data.messages ?? []
     if (histRes.data.messages.length > 0) {
       const lastMessage = histRes.data.messages[histRes.data.messages.length - 1]
       if (lastMessage.role === 'assistant' && lastMessage.content.includes('---RF_CODE---')) {
@@ -197,6 +244,12 @@ async function onTrialRun() {
 
 function onTrialRunFromForm(executionId: string) {
   router.push(`/executions/${executionId}`)
+}
+
+function chatDisplayText(msg: { role: string; content: string }) {
+  if (msg.role !== 'assistant') return msg.content
+  const rfIdx = msg.content.indexOf('---RF_CODE---')
+  return rfIdx !== -1 ? msg.content.slice(0, rfIdx).trim() : msg.content
 }
 
 function saveFromPageHeader() {
@@ -285,4 +338,13 @@ pre { white-space: pre-wrap; background: #f9f9f9; padding: 12px; border-radius: 
 .clickable { cursor: pointer; }
 .clickable:hover { background: #f0f4ff; }
 .empty { color: #888; }
+
+.chat-history { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; max-height: calc(100vh - 300px); }
+.chat-bubble { padding: 10px 14px; border-radius: 8px; max-width: 90%; font-size: 14px; }
+.chat-bubble.user { background: #eff6ff; align-self: flex-end; }
+.chat-bubble.assistant { background: #f9fafb; border: 1px solid #e5e7eb; align-self: flex-start; }
+.bubble-role { font-size: 11px; font-weight: 600; color: #6b7280; display: block; margin-bottom: 4px; }
+.empty-chat { color: #9ca3af; font-size: 14px; padding: 24px 0; }
+.rf-readonly { background: #1e1e1e; border-radius: 6px; padding: 16px; overflow: auto; max-height: calc(100vh - 300px); }
+.rf-code { color: #d4d4d4; font-family: 'Consolas', 'Monaco', monospace; font-size: 13px; white-space: pre-wrap; margin: 0; }
 </style>

@@ -20,10 +20,11 @@ class ChecklistRepository(BaseRepository[TestChecklist]):
         return result.scalar_one_or_none()
 
     async def get_with_items(self, id: str) -> Optional[TestChecklist]:
+        from src.models.test_case import TestCase
         result = await self.session.execute(
             select(TestChecklist)
             .where(TestChecklist.id == id)
-            .options(selectinload(TestChecklist.items))
+            .options(selectinload(TestChecklist.items).selectinload(ChecklistItem.test_case))
         )
         return result.scalar_one_or_none()
 
@@ -84,6 +85,15 @@ class ChecklistRepository(BaseRepository[TestChecklist]):
         await self.session.delete(checklist)
         await self.session.flush()
         return True
+
+    async def get_active_executions(self, checklist_id: str) -> list[str]:
+        from src.models.execution_record import ExecutionRecord
+        result = await self.session.execute(
+            select(ExecutionRecord.id)
+            .where(ExecutionRecord.checklist_id == checklist_id)
+            .where(ExecutionRecord.status.in_(["pending", "running"]))
+        )
+        return [row[0] for row in result.all()]
 
     async def get_execution_history(self, checklist_id: str):
         from src.models.execution_record import ExecutionRecord

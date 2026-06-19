@@ -128,59 +128,120 @@ report_service.parse_xml(output.xml) → ExecutionRecord + TestReport 寫入 DB
 
 ## 決策 4：平行測試執行管理
 
-**Decision**: 使用 Python `asyncio.Semaphore` 控制並行數，搭配 `asyncio.create_task` 非同步啟動各案例的 subprocess 執行。
+**Decision**: 使用 **pabot（robotframework-pabot）** 執行平行測試，一次清單執行對應一個 `pabot` 指令。
 
 **架構**:
-```python
-async def run_checklist_parallel(checklist_id, max_workers=5):
-    semaphore = asyncio.Semaphore(max_workers)
-    tasks = [run_case_with_semaphore(case, semaphore) for case in checklist.cases]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-    return results
+```
+清單執行請求
+    │
+    ▼
+execution_service.run_checklist()
+    │  為每個 ChecklistItem 產生對應的 .robot 檔案
+    │  robot_scripts/generated/{execution_id}/{case_id}_{version}.robot
+    │
+    ▼
+asyncio.create_subprocess_exec(
+    "pabot",
+    "--processes", str(max_workers),
+    "--listener", "src/execution/listener.py:ExecutionListener:{execution_id}",
+    "--outputdir", f"robot_scripts/results/{execution_id}",
+    *[str(f) for f in robot_files]
+)
+    │
+    ▼
+ExecutionListener（RF Listener Plugin）監聽事件
+    → 每個 start_test / end_test 寫入 asyncio.Queue
+    → FastAPI SSE endpoint 讀取 Queue 推送至前端
+    │
+    ▼
+pabot 完成後解析 output.xml
+    → 更新 CaseResult 狀態 + ExecutionRecord 統計
 ```
 
 **執行狀態管理**:
-- `ExecutionRecord` 有 `status` 欄位：`pending | running | passed | failed | timeout | error`
-- 每個案例執行時更新 DB 狀態（透過 async DB session）
-- WebSocket 訂閱者在狀態變更時收到推送
+- `ExecutionRecord.status`：`pending | running | completed | failed`
+- `CaseResult.status`：`passed | failed | timeout | error | skipped`
+- DB 狀態由 ExecutionListener 在 `end_test` 時即時更新
 
 **逾時處理**:
-- 每個案例執行設定 `asyncio.wait_for(..., timeout=300)` (5分鐘)
-- 逾時 → 終止 subprocess（`process.kill()`）→ 標記 `timeout`
+- pabot 本身支援 `--timeout` 參數設定每個 test 的上限
+- 或由外層 `asyncio.wait_for(pabot_process, timeout=N)` 控制整體執行時間上限
 
 **Alternatives considered**:
-- `concurrent.futures.ThreadPoolExecutor`：不與 async FastAPI 整合，需額外橋接
-- Celery：過重，初期不需要 broker；若未來需要分散式執行可引入
+- asyncio.Semaphore + subprocess per case：需自行管理程序池，pabot 提供現成的並行管理與 output.xml 合併
+- Celery：過重，引入 broker 複雜度；單機部署使用 pabot 已足夠
 
 ---
 
 ## 決策 5：即時執行進度推送機制
 
-**Decision**: Server-Sent Events (SSE) — 比 WebSocket 更輕量，符合「只需單向推送」的場景。
+**Decision**: Server-Sent Events (SSE) + **RF Listener Plugin** — SSE 負責前端推送，Listener Plugin 負責從 pabot 取得結構化事件。
 
-**FastAPI SSE 實作**:
+**RF Listener Plugin（事件來源）**:
+```python
+# src/execution/listener.py
+class ExecutionListener:
+    ROBOT_LISTENER_API_VERSION = 2
+
+    def __init__(self, execution_id: str):
+        self.execution_id = execution_id
+        self._queue = get_execution_queue(execution_id)  # 從全域 registry 取得 asyncio.Queue
+
+    def start_test(self, name, attrs):
+        self._queue.put_nowait({
+            "event": "case_started",
+            "execution_id": self.execution_id,
+            "case_name": name,
+        })
+
+    def end_test(self, name, attrs):
+        self._queue.put_nowait({
+            "event": "case_completed",
+            "execution_id": self.execution_id,
+            "case_name": name,
+            "status": attrs["status"],  # PASS / FAIL
+            "elapsed_ms": int(attrs["elapsedtime"]),
+            "message": attrs.get("message", ""),
+        })
+```
+
+**FastAPI SSE endpoint（事件消費）**:
 ```python
 @router.get("/executions/{execution_id}/stream")
 async def stream_execution(execution_id: str):
+    queue = get_execution_queue(execution_id)
+
     async def event_generator():
         while True:
-            status = await get_execution_status(execution_id)
-            yield f"data: {status.model_dump_json()}\n\n"
-            if status.is_terminal:
+            event = await asyncio.wait_for(queue.get(), timeout=30)
+            yield f"data: {json.dumps(event)}\n\n"
+            if event.get("event") in ("execution_completed", "execution_error"):
                 break
-            await asyncio.sleep(1)
+
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+```
+
+**全域 Queue Registry**:
+```python
+_queues: dict[str, asyncio.Queue] = {}
+
+def get_execution_queue(execution_id: str) -> asyncio.Queue:
+    if execution_id not in _queues:
+        _queues[execution_id] = asyncio.Queue()
+    return _queues[execution_id]
 ```
 
 **前端**:
 ```typescript
-const evtSource = new EventSource(`/api/executions/${id}/stream`)
+const evtSource = new EventSource(`/api/v1/executions/${id}/stream`)
 evtSource.onmessage = (e) => store.updateProgress(JSON.parse(e.data))
+evtSource.addEventListener("execution_completed", () => evtSource.close())
 ```
 
 **Alternatives considered**:
 - WebSocket：雙向通訊，適合聊天應用；這裡只需服務端推送，SSE 夠用且更簡單
 - Polling：每秒 GET 請求，效率低且產生大量無效請求
+- 輪詢 pabot stdout：比解析文字輸出更脆弱，RF Listener 提供結構化事件
 
 ---
 
@@ -242,9 +303,11 @@ async def generate_case_number(self, system_category: str) -> str:
 | 問題 | 決策 |
 |------|------|
 | LLM 多模型 | Provider 抽象層，初期 Anthropic + OpenAI |
-| RF 整合 | subprocess 呼叫 + XML 解析 + RF Browser |
+| RF 整合 | pabot 執行 + RF Listener Plugin + XML 解析 + RF Browser |
 | 媒體儲存 | 本地檔案系統，路徑設定化 |
-| 平行執行 | asyncio.Semaphore，預設 5 並行 |
-| 即時進度 | Server-Sent Events (SSE) |
+| 平行執行 | **pabot（robotframework-pabot）**，一個清單執行 = 一個 pabot 指令 |
+| 即時進度 | SSE + **RF Listener Plugin**（`start_test`/`end_test` → asyncio.Queue） |
 | Excel/CSV | openpyxl + csv，標頭比對 + 預覽確認 |
 | 案例編號生成 | system_category 前綴 + 三位數序號，查最大值+1 |
+| RF 代碼生成時機 | Tab 2 Chat 生成後存入 DB；執行時直接取用，無存檔時回退即時生成 |
+| 清單案例管理 | 獨立畫面 /checklists/:id/cases，支援新增/移除/排序/備註 |

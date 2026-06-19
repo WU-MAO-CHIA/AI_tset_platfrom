@@ -1,7 +1,7 @@
 import uuid
 from typing import Optional, TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base, TimestampMixin
@@ -19,6 +19,7 @@ class ChecklistItem(Base, TimestampMixin):
     checklist_id: Mapped[str] = mapped_column(String(36), ForeignKey("test_checklists.id"), nullable=False)
     test_case_id: Mapped[str] = mapped_column(String(36), ForeignKey("test_cases.id"), nullable=False)
     position: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     checklist: Mapped["TestChecklist"] = relationship("TestChecklist", back_populates="items")
     test_case: Mapped["TestCase"] = relationship("TestCase")

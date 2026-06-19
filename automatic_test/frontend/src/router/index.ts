@@ -31,6 +31,11 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../pages/ChecklistDetailPage.vue'),
   },
   {
+    path: '/checklists/:id/cases',
+    name: 'ChecklistCases',
+    component: () => import('../pages/ChecklistCasesPage.vue'),
+  },
+  {
     path: '/executions/:id',
     name: 'Execution',
     component: () => import('../pages/ExecutionPage.vue'),

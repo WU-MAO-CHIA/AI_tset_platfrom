@@ -10,7 +10,7 @@
 ## Technical Context
 
 **Language/Version**: Python 3.11+ (backend)、TypeScript 5+ (frontend)  
-**Primary Dependencies**: FastAPI、SQLAlchemy（async）、Pydantic v2（backend）；Vue 3、Vite、Vue Router 4（frontend）；Robot Framework + robotframework-playwright（測試執行）；Anthropic SDK + OpenAI SDK（AI 整合）；cryptography（DB 憑證加密）  
+**Primary Dependencies**: FastAPI、SQLAlchemy（async）、Pydantic v2（backend）；Vue 3、Vite、Vue Router 4（frontend）；Robot Framework + **robotframework-pabot**（平行執行）+ robotframework-browser（Playwright-based，截圖/影片）；Anthropic SDK + OpenAI SDK（AI 整合）；cryptography（DB 憑證加密）  
 **Storage**: SQLite（透過 SQLAlchemy async ORM）；媒體附件存 filesystem `uploads/`，DB 僅記錄路徑  
 **Testing**: pytest + pytest-asyncio（backend）；vitest + Playwright E2E（frontend）  
 **Target Platform**: Linux server（backend）+ Chrome/Edge 最新版（frontend）  

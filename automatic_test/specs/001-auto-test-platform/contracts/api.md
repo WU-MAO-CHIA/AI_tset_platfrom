@@ -295,8 +295,114 @@ AI 輔助補齊測試步驟
 ### GET /checklists/{checklist_id}
 取得清單詳細（含 items 和 execution_history 摘要）
 
+**Response 200**:
+```json
+{
+  "id": "uuid",
+  "name": "Sprint 5 回歸測試",
+  "created_by": "tester_01",
+  "items": [
+    { "id": "uuid", "test_case_id": "uuid", "case_number": "auth-001", "name": "登入功能測試", "position": 1, "notes": null }
+  ],
+  "execution_history": [
+    { "execution_id": "uuid", "status": "completed", "started_at": "...", "passed_count": 3, "failed_count": 0 }
+  ]
+}
+```
+
+---
+
+### PUT /checklists/{checklist_id}
+編輯清單基本資訊（名稱、建立人員）
+
+**Request Body**:
+```json
+{ "name": "Sprint 5 完整回歸測試", "created_by": "tester_02" }
+```
+**Response 200**: 更新後完整 TestChecklist 物件
+
+---
+
+### DELETE /checklists/{checklist_id}
+刪除測試清單
+
+**Response 200**: `{ "success": true }`
+
+**Error**:
+- `409 Conflict`: 清單有執行中的測試
+  ```json
+  { "error": "checklist_in_use", "active_executions": ["exec_uuid_1"] }
+  ```
+
+---
+
+### GET /checklists/{checklist_id}/cases
+取得案例管理畫面的案例列表（含備註與排序）
+
+**Response 200**:
+```json
+{
+  "items": [
+    { "item_id": "uuid", "test_case_id": "uuid", "case_number": "auth-001", "name": "登入功能測試", "position": 1, "notes": "此清單專用備註" }
+  ],
+  "total": 3
+}
+```
+
+---
+
+### POST /checklists/{checklist_id}/cases
+新增案例至清單
+
+**Request Body**:
+```json
+{ "case_id": "uuid", "position": null }
+```
+> `position` 為 null 時加入末尾
+
+**Response 201**:
+```json
+{ "item_id": "uuid", "position": 4 }
+```
+
+**Error**:
+- `409 Conflict`: 案例已在清單中
+
+---
+
+### DELETE /checklists/{checklist_id}/cases/{case_id}
+從清單移除案例
+
+**Response 200**: `{ "success": true }`
+
+---
+
+### PATCH /checklists/{checklist_id}/cases/{case_id}
+更新清單項目屬性（備註或排序）
+
+**Request Body** (所有欄位均為 optional):
+```json
+{ "notes": "此案例在此清單中的備註", "position": 2 }
+```
+**Response 200**: 更新後的 ChecklistItem 物件
+
+---
+
+### PUT /checklists/{checklist_id}/cases/reorder
+批次更新排序（拖曳後送出完整新順序）
+
+**Request Body**:
+```json
+{ "case_ids": ["uuid3", "uuid1", "uuid2"] }
+```
+> 列表順序即為新的 position 1, 2, 3...
+
+**Response 200**: `{ "success": true }`
+
+---
+
 ### PUT /checklists/{checklist_id}/items
-更新清單案例（覆寫 items 列表）
+更新清單案例（覆寫 items 列表，舊介面保留相容）
 
 **Request Body**: `{ "case_ids": ["uuid1", "uuid3"] }`
 

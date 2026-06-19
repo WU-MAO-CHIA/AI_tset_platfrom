@@ -2,6 +2,10 @@
 
 **Phase**: 1 | **Date**: 2026-05-19 | **Plan**: [plan.md](./plan.md)
 
+## Architecture Note
+
+事件來源為 **RF Listener Plugin**（`src/execution/listener.py:ExecutionListener`），由後端在呼叫 `pabot --listener ExecutionListener:{execution_id}` 時自動掛載。Listener 的 `start_test` / `end_test` 回呼將事件寫入 `asyncio.Queue`，FastAPI SSE endpoint 從 Queue 讀取後串流至前端。
+
 ## Endpoint
 
 ```
