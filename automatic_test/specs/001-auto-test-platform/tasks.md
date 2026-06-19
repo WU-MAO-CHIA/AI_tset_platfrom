@@ -181,7 +181,7 @@
 ### TDD 測試（先寫、確認 RED）
 
 - [X] T074 [P] [US5] 寫 contract test：`backend/tests/contract/test_executions_api.py`（POST /checklists/{id}/execute 202、GET /executions/{id}、GET /executions/{id}/results、GET /executions/{id}/export 200 Content-Disposition）
-- [X] T075 [P] [US5] 寫 unit test：`backend/tests/unit/test_execution_service.py`（Semaphore 平行控制、timeout 處理、trial run 填入 source_case_id、checklist 執行填入 checklist_id）
+- [X] T075 [P] [US5] 寫 unit test：`backend/tests/unit/test_execution_service.py`（pabot subprocess 呼叫驗證（含 --processes、--listener 參數）、timeout 處理、trial run 填入 source_case_id、checklist 執行填入 checklist_id）
 - [X] T076 [P] [US5] 寫 unit test：`backend/tests/unit/test_report_service.py`（XML 解析、status mapping、media 路徑提取、export_report 回傳有效 HTML）
 - [X] T077 [P] [US5] 寫 integration test：`backend/tests/integration/test_robot_execution.py`（Robot Framework subprocess 呼叫、output.xml 解析、截圖路徑存入 DB）
 - [X] T078 [P] [US5] 寫 unit test：`backend/tests/unit/test_ai_service_codegen.py`（generate_robot_code、快取命中不重複呼叫 LLM、模糊步驟標記 unable_to_generate、35s timeout 後標記失敗繼續執行）
@@ -192,7 +192,7 @@
 - [X] T080 [P] [US5] 建立 `backend/src/models/case_result.py`（CaseResult ORM：execution_id FK, test_case_id FK, case_version, automation_code_id FK nullable, status ENUM, elapsed_ms, failure_message, position）及 `backend/src/models/execution_media.py`（ExecutionMedia ORM：case_result_id FK, media_type ENUM, file_path, step_index, step_name）
 - [X] T081 [US5] 執行 `alembic revision --autogenerate -m "add_execution_tables"` 並驗證
 - [X] T082 [US5] 完善 `backend/src/services/ai_service.py` 的 `generate_robot_code()`（快取檢查 AutomationCode、呼叫 LLM 生成 .robot 代碼、模糊步驟標記 unable_to_generate、設定 35s timeout 後標記 failed 並繼續、存入 AutomationCode）
-- [X] T083 [US5] 建立 `backend/src/services/execution_service.py`（ExecutionService：`run_single_case`（RF subprocess + timeout）、`run_checklist_parallel`（asyncio.Semaphore，checklist_id 填入 ExecutionRecord）、`run_trial`（source_case_id 填入 ExecutionRecord，execution_type=trial_run，不計入清單歷史））
+- [X] T083 [US5] 建立 `backend/src/services/execution_service.py`（ExecutionService：`run_checklist`（`asyncio.create_subprocess_exec("pabot", "--processes", N, "--listener", "src/execution/listener.py:ExecutionListener:{execution_id}", "--outputdir", ..., *robot_files)`，checklist_id 填入 ExecutionRecord）、`run_trial`（source_case_id 填入 ExecutionRecord，execution_type=trial_run，不計入清單歷史））
 - [X] T084 [US5] 建立 `backend/src/services/report_service.py`（ReportService：parse_xml, extract_media_paths, build_case_results, persist_to_db；`export_report(execution_id)` 使用 Jinja2 渲染 `report.html.j2` 回傳 HTML 字串）
 - [X] T085 [US5] 建立 `backend/src/templates/report.html.j2`（HTML 報告 Jinja2 template：標題含執行時間/通過率、案例結果列表（status badge、elapsed_ms、failure_message）、截圖縮圖列表）
 - [X] T086 [US5] 在 `backend/src/api/checklists.py` 加入 `POST /{id}/execute`（回傳 202 + execution_id + stream_url，背景啟動 execution_service.run_checklist_parallel）
@@ -468,6 +468,25 @@ Phase 2 完成後：
 - [X] T146 [P] [US5] 建立 `backend/tests/load/test_results_page_latency.py`：建立含 50 筆 ExecutionMedia 的執行紀錄，呼叫 `GET /executions/{id}/results`，斷言回應時間 ≤ 10s（對應 SC-013）
 
 **Checkpoint**: `pytest backend/tests/load/test_report_generation_time.py backend/tests/load/test_ai_complete_latency.py backend/tests/load/test_trial_run_latency.py backend/tests/load/test_file_parser_latency.py backend/tests/load/test_results_page_latency.py` 全數 PASS
+
+---
+
+## Phase 15: FR-023 清單 CRUD + 案例管理畫面 + pabot 整合（2026-06-20 新增）
+
+**Purpose**: 實作本日 /speckit-clarify 新增的 FR-023（清單 CRUD、/checklists/:id/cases 案例管理畫面）及修補 speckit-analyze 找出的 3 項 CRITICAL：ExecutionListener RF Plugin、ChecklistItem.notes migration、CaseDetailPage 瀏覽模式 Tab 2
+
+- [ ] T147 [P] 更新 `backend/requirements.txt`：新增 `robotframework-pabot` 依賴（對應 plan.md 主要依賴更新，修補 F2）
+- [ ] T148 [US3] 執行 `alembic revision --autogenerate -m "add_checklist_item_notes"` 並驗證 `checklist_items` 表新增 `notes TEXT nullable` 欄位（對應 data-model.md ChecklistItem.notes，修補 E3）
+- [ ] T149 [P] [US3] 寫 contract test（TDD RED）：`backend/tests/contract/test_checklist_crud_api.py`（PUT /checklists/{id} 200、DELETE /checklists/{id} 200/409、GET /checklists/{id}/cases 200、POST /checklists/{id}/cases 201/409、DELETE /checklists/{id}/cases/{case_id} 200、PATCH /checklists/{id}/cases/{case_id} 200、PUT /checklists/{id}/cases/reorder 200）（修補 C1/C2）
+- [ ] T150 [P] [US5] 寫 unit test（TDD RED）：`backend/tests/unit/test_execution_listener.py`（ExecutionListener.start_test 寫入 Queue 的 case_started 事件、end_test 寫入 case_completed 事件含 status/elapsed_ms/message、Queue Registry get_execution_queue 建立並複用同 execution_id 的 Queue）（修補 E2）
+- [ ] T151 [US5] 建立 `backend/src/execution/listener.py`：ExecutionListener RF Plugin（ROBOT_LISTENER_API_VERSION = 2、`__init__(self, execution_id)`、start_test/end_test 回呼寫入 asyncio.Queue）+ Queue Registry（`_queues: dict[str, asyncio.Queue]`、`get_execution_queue(execution_id) -> asyncio.Queue`）（修補 E2，對應 research.md Decision 5）
+- [ ] T152 [US3] 完善 `backend/src/services/checklist_service.py`：新增 `update_checklist`（修改 name/created_by）、`delete_checklist`（409 guard：active executions 中止刪除）、`list_checklist_cases`（回傳 ChecklistItem + TestCase 摘要含 notes/position）、`add_case`（409 guard：已存在）、`remove_case`、`update_case_item`（notes 和/或 position）、`reorder_cases`（批次更新 position）（對應 FR-023）
+- [ ] T153 [US3] 完善 `backend/src/api/checklists.py`：掛載 FR-023 新端點：`PUT /{id}`、`DELETE /{id}`、`GET /{id}/cases`、`POST /{id}/cases`、`DELETE /{id}/cases/{case_id}`、`PATCH /{id}/cases/{case_id}`、`PUT /{id}/cases/reorder`（對應 contracts/api.md）
+- [ ] T154 [P] [US2] 更新 `frontend/src/pages/CaseDetailPage.vue`：瀏覽模式（非編輯路由）改為 Tab 結構—Tab 1「基本資訊」顯示完整欄位與版本歷史（唯讀）、Tab 2「測試步驟」顯示 AI 對話歷史（`GET /cases/{id}/chat-history`）與最新 RF 程式碼預覽（唯讀，複用 RFCodePreview 元件）（對應 FR-005 更新，修補 E1）
+- [ ] T155 [P] [US3] 建立 `frontend/src/pages/ChecklistCasesPage.vue`（/checklists/:id/cases 案例管理畫面）：顯示已加入案例列表（含 notes、position 可拖曳排序）、搜尋可加入的案例（呼叫 GET /cases）、加入按鈕（POST /cases）、移除按鈕（DELETE /cases/{case_id}）、備註欄位行內編輯（PATCH /cases/{case_id}）、排序拖曳後送出（PUT /cases/reorder）
+- [ ] T156 [US3] 在 `frontend/src/router/index.ts` 新增路由 `/checklists/:id/cases` → ChecklistCasesPage；在 `frontend/src/pages/ChecklistDetailPage.vue` 頁首新增「管理案例」按鈕（跳轉至 /checklists/:id/cases）、「編輯」按鈕（PUT /checklists/:id inline modal）、「刪除」按鈕（DELETE /checklists/:id，409 時顯示 "有執行中的測試，無法刪除"）（對應 FR-023 US3 AS-6~AS-11）
+
+**Checkpoint**: `pytest backend/tests/contract/test_checklist_crud_api.py backend/tests/unit/test_execution_listener.py -v` GREEN；`npm run dev` /checklists/:id 顯示「管理案例」按鈕，/checklists/:id/cases 可正常新增/移除/排序案例
 
 ---
 
