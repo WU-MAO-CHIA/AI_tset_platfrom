@@ -11,11 +11,17 @@
     <table v-if="!loading && cases.length" class="case-table">
       <thead>
         <tr>
-          <th>編號</th>
-          <th>名稱</th>
+          <th class="sortable" @click="toggleSort('case_number')">
+            編號 <span class="sort-indicator">{{ sortIndicator('case_number') }}</span>
+          </th>
+          <th class="sortable" @click="toggleSort('name')">
+            名稱 <span class="sort-indicator">{{ sortIndicator('name') }}</span>
+          </th>
           <th>系統別</th>
           <th>版本</th>
-          <th>更新時間</th>
+          <th class="sortable" @click="toggleSort('updated_at')">
+            更新時間 <span class="sort-indicator">{{ sortIndicator('updated_at') }}</span>
+          </th>
           <th>操作</th>
         </tr>
       </thead>
@@ -63,11 +69,29 @@ const loading = ref(false)
 const categories = ref<string[]>(['auth', 'order', 'product', 'payment'])
 
 const filters = reactive({ keyword: '', system_category: '' })
+const sortBy = ref('created_at')
+const sortOrder = ref<'asc' | 'desc'>('desc')
 
 let debounceTimer: ReturnType<typeof setTimeout>
 function onFilterChange() {
   clearTimeout(debounceTimer)
   debounceTimer = setTimeout(() => { page.value = 1; load() }, 300)
+}
+
+function toggleSort(col: string) {
+  if (sortBy.value === col) {
+    sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    sortBy.value = col
+    sortOrder.value = 'asc'
+  }
+  page.value = 1
+  load()
+}
+
+function sortIndicator(col: string): string {
+  if (sortBy.value !== col) return ''
+  return sortOrder.value === 'asc' ? '↑' : '↓'
 }
 
 async function load() {
@@ -78,6 +102,8 @@ async function load() {
       system_category: filters.system_category || undefined,
       page: page.value,
       page_size: pageSize.value,
+      sort_by: sortBy.value,
+      order: sortOrder.value,
     })
     cases.value = res.data.items
     total.value = res.data.total
@@ -103,6 +129,9 @@ defineExpose({ load })
 .case-table { width: 100%; border-collapse: collapse; }
 .case-table th, .case-table td { padding: 10px; border-bottom: 1px solid #eee; text-align: left; font-size: 14px; }
 .case-table thead { background: #f9f9f9; }
+.sortable { cursor: pointer; user-select: none; }
+.sortable:hover { background: #f0f0f0; }
+.sort-indicator { display: inline-block; width: 12px; color: #4f46e5; font-weight: 700; }
 .clickable { cursor: pointer; }
 .clickable:hover { background: #f0f4ff; }
 button { padding: 4px 10px; cursor: pointer; }

@@ -77,37 +77,42 @@ async def stream_execution(execution_id: str, db: AsyncSession = Depends(get_db)
         raise HTTPException(status_code=404, detail={"error": "not_found"})
 
     async def event_generator():
-        # Send initial status event
-        event = {
-            "event": "execution_started",
-            "execution_id": execution_id,
-            "status": record.status,
-        }
-        yield f"data: {json.dumps(event)}\n\n"
+        from src.execution.listener import get_execution_queue
 
-        # Poll for completion — use a fresh session each iteration to avoid
-        # SQLite transaction isolation returning stale "pending" status
-        for _ in range(120):
-            await asyncio.sleep(1)
-            async with AsyncSessionLocal() as poll_session:
-                poll_repo = ExecutionRepository(poll_session)
-                updated = await poll_repo.get(execution_id)
-            if updated and updated.status in ("completed", "failed", "error"):
-                done_event = {
-                    "event": "execution_completed",
-                    "execution_id": execution_id,
-                    "status": updated.status,
-                    "passed": updated.passed_count,
-                    "failed": updated.failed_count,
-                    "total": updated.total_count,
-                    "report_url": f"/api/v1/executions/{execution_id}/results",
-                }
-                yield f"data: {json.dumps(done_event)}\n\n"
+        yield f"data: {json.dumps({'event': 'execution_started', 'execution_id': execution_id, 'status': record.status})}\n\n"
+
+        # If already completed (e.g., no cases), emit completion immediately
+        if record.status in ("completed", "failed", "error"):
+            yield f"data: {json.dumps({'event': 'execution_completed', 'execution_id': execution_id, 'status': record.status, 'passed': record.passed_count, 'failed': record.failed_count, 'total': record.total_count, 'report_url': f'/api/v1/executions/{execution_id}/results', '__done__': True})}\n\n"
+            return
+
+        queue = get_execution_queue(execution_id)
+        timeout_ticks = 0
+        max_ticks = 600  # 10 minutes
+
+        while timeout_ticks < max_ticks:
+            try:
+                event = await asyncio.wait_for(queue.get(), timeout=1.0)
+            except asyncio.TimeoutError:
+                timeout_ticks += 1
+                # Fallback DB check every 5 seconds to catch missed done events
+                if timeout_ticks % 5 == 0:
+                    async with AsyncSessionLocal() as poll_session:
+                        poll_repo = ExecutionRepository(poll_session)
+                        updated = await poll_repo.get(execution_id)
+                    if updated and updated.status in ("completed", "failed", "error"):
+                        yield f"data: {json.dumps({'event': 'execution_completed', 'execution_id': execution_id, 'status': updated.status, 'passed': updated.passed_count, 'failed': updated.failed_count, 'total': updated.total_count, 'report_url': f'/api/v1/executions/{execution_id}/results', '__done__': True})}\n\n"
+                        return
+                continue
+
+            # Strip internal sentinel before sending to client
+            send_event = {k: v for k, v in event.items() if k != "__done__"}
+            yield f"data: {json.dumps(send_event)}\n\n"
+
+            if event.get("__done__"):
                 return
 
-        # Timeout
-        error_event = {"event": "execution_error", "execution_id": execution_id, "message": "執行逾時"}
-        yield f"data: {json.dumps(error_event)}\n\n"
+        yield f"data: {json.dumps({'event': 'execution_error', 'execution_id': execution_id, 'message': '執行逾時'})}\n\n"
 
     return StreamingResponse(
         event_generator(),

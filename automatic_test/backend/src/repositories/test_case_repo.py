@@ -70,6 +70,13 @@ class TestCaseRepository(BaseRepository[TestCase]):
         await self.session.flush()
         return True
 
+    _SORTABLE_COLUMNS = {
+        "case_number": lambda: TestCase.case_number,
+        "name": lambda: TestCase.name,
+        "created_at": lambda: TestCase.created_at,
+        "updated_at": lambda: TestCase.updated_at,
+    }
+
     async def list_with_filters(
         self,
         system_category: Optional[str] = None,
@@ -77,6 +84,8 @@ class TestCaseRepository(BaseRepository[TestCase]):
         tags: Optional[list[str]] = None,
         page: int = 1,
         page_size: int = 20,
+        sort_by: str = "created_at",
+        order: str = "desc",
     ) -> tuple[list[TestCase], int]:
         conditions = [TestCase.is_deleted.is_(False)]
         if system_category:
@@ -92,9 +101,13 @@ class TestCaseRepository(BaseRepository[TestCase]):
         total_result = await self.session.execute(count_query)
         total = total_result.scalar_one()
 
+        col_factory = self._SORTABLE_COLUMNS.get(sort_by, self._SORTABLE_COLUMNS["created_at"])
+        col = col_factory()
+        order_expr = col.asc() if order == "asc" else col.desc()
+
         offset = (page - 1) * page_size
         items_result = await self.session.execute(
-            base_query.offset(offset).limit(page_size).order_by(TestCase.created_at.desc())
+            base_query.offset(offset).limit(page_size).order_by(order_expr)
         )
         items = list(items_result.scalars().all())
         return items, total

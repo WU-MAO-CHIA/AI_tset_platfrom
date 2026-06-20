@@ -24,6 +24,40 @@ def _ts_diff_ms(start: str, end: str) -> int:
 
 
 class ReportService:
+    def parse_per_test_results(self, xml_content: str) -> list[dict]:
+        """Extract per-test results from output.xml, keyed by suite source file basename."""
+        try:
+            root = ET.fromstring(xml_content)
+        except ET.ParseError:
+            return []
+
+        results = []
+        for suite in root.iter("suite"):
+            source = suite.get("source", "")
+            suite_basename = Path(source).stem if source else suite.get("name", "")
+            for test in suite.findall("test"):
+                status_el = test.find("status")
+                if status_el is None:
+                    continue
+                rf_status = status_el.get("status", "FAIL")
+                start_ts = status_el.get("starttime", "")
+                end_ts = status_el.get("endtime", "")
+                elapsed = _ts_diff_ms(start_ts, end_ts)
+                failure_message = None
+                if rf_status == "FAIL":
+                    for msg_el in test.iter("msg"):
+                        if msg_el.get("level") == "FAIL":
+                            failure_message = msg_el.text
+                            break
+                results.append({
+                    "case_number": suite_basename,
+                    "test_name": test.get("name", ""),
+                    "status": "passed" if rf_status == "PASS" else "failed",
+                    "elapsed_ms": elapsed,
+                    "failure_message": failure_message,
+                })
+        return results
+
     def parse_xml(self, xml_content: str) -> dict:
         try:
             root = ET.fromstring(xml_content)

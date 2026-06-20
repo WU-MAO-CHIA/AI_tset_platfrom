@@ -181,7 +181,7 @@
 ### TDD 測試（先寫、確認 RED）
 
 - [X] T074 [P] [US5] 寫 contract test：`backend/tests/contract/test_executions_api.py`（POST /checklists/{id}/execute 202、GET /executions/{id}、GET /executions/{id}/results、GET /executions/{id}/export 200 Content-Disposition）
-- [X] T075 [P] [US5] 寫 unit test：`backend/tests/unit/test_execution_service.py`（pabot subprocess 呼叫驗證（含 --processes、--listener 參數）、timeout 處理、trial run 填入 source_case_id、checklist 執行填入 checklist_id）
+- [X] T075 [P] [US5] 寫 unit test：`backend/tests/unit/test_execution_service.py`（RF subprocess 每案例執行驗證、.robot 檔讀取路徑、timeout 處理、trial run 填入 source_case_id、checklist 執行填入 checklist_id；⚠️ pabot 驗證改由 T168 實作後更新此測試）
 - [X] T076 [P] [US5] 寫 unit test：`backend/tests/unit/test_report_service.py`（XML 解析、status mapping、media 路徑提取、export_report 回傳有效 HTML）
 - [X] T077 [P] [US5] 寫 integration test：`backend/tests/integration/test_robot_execution.py`（Robot Framework subprocess 呼叫、output.xml 解析、截圖路徑存入 DB）
 - [X] T078 [P] [US5] 寫 unit test：`backend/tests/unit/test_ai_service_codegen.py`（generate_robot_code、快取命中不重複呼叫 LLM、模糊步驟標記 unable_to_generate、35s timeout 後標記失敗繼續執行）
@@ -192,7 +192,7 @@
 - [X] T080 [P] [US5] 建立 `backend/src/models/case_result.py`（CaseResult ORM：execution_id FK, test_case_id FK, case_version, automation_code_id FK nullable, status ENUM, elapsed_ms, failure_message, position）及 `backend/src/models/execution_media.py`（ExecutionMedia ORM：case_result_id FK, media_type ENUM, file_path, step_index, step_name）
 - [X] T081 [US5] 執行 `alembic revision --autogenerate -m "add_execution_tables"` 並驗證
 - [X] T082 [US5] 完善 `backend/src/services/ai_service.py` 的 `generate_robot_code()`（快取檢查 AutomationCode、呼叫 LLM 生成 .robot 代碼、模糊步驟標記 unable_to_generate、設定 35s timeout 後標記 failed 並繼續、存入 AutomationCode）
-- [X] T083 [US5] 建立 `backend/src/services/execution_service.py`（ExecutionService：`run_checklist`（`asyncio.create_subprocess_exec("pabot", "--processes", N, "--listener", "src/execution/listener.py:ExecutionListener:{execution_id}", "--outputdir", ..., *robot_files)`，checklist_id 填入 ExecutionRecord）、`run_trial`（source_case_id 填入 ExecutionRecord，execution_type=trial_run，不計入清單歷史））
+- [X] T083 [US5] 建立 `backend/src/services/execution_service.py`（ExecutionService 骨架：`run_checklist`（目前使用 per-case asyncio.create_task + RF subprocess 讀 .robot 檔，checklist_id 填入 ExecutionRecord）、`run_trial`（source_case_id 填入 ExecutionRecord，execution_type=trial_run，不計入清單歷史）；⚠️ pabot 整合為 Phase 17 T168，尚未完成）
 - [X] T084 [US5] 建立 `backend/src/services/report_service.py`（ReportService：parse_xml, extract_media_paths, build_case_results, persist_to_db；`export_report(execution_id)` 使用 Jinja2 渲染 `report.html.j2` 回傳 HTML 字串）
 - [X] T085 [US5] 建立 `backend/src/templates/report.html.j2`（HTML 報告 Jinja2 template：標題含執行時間/通過率、案例結果列表（status badge、elapsed_ms、failure_message）、截圖縮圖列表）
 - [X] T086 [US5] 在 `backend/src/api/checklists.py` 加入 `POST /{id}/execute`（回傳 202 + execution_id + stream_url，背景啟動 execution_service.run_checklist_parallel）
@@ -487,6 +487,68 @@ Phase 2 完成後：
 - [X] T156 [US3] 在 `frontend/src/router/index.ts` 新增路由 `/checklists/:id/cases` → ChecklistCasesPage；在 `frontend/src/pages/ChecklistDetailPage.vue` 頁首新增「管理案例」按鈕（跳轉至 /checklists/:id/cases）、「編輯」按鈕（PUT /checklists/:id inline modal）、「刪除」按鈕（DELETE /checklists/:id，409 時顯示 "有執行中的測試，無法刪除"）（對應 FR-023 US3 AS-6~AS-11）
 
 **Checkpoint**: `pytest backend/tests/contract/test_checklist_crud_api.py backend/tests/unit/test_execution_listener.py -v` GREEN；`npm run dev` /checklists/:id 顯示「管理案例」按鈕，/checklists/:id/cases 可正常新增/移除/排序案例
+
+---
+
+## Phase 16: 執行引擎修正 + RF 腳本持久化（2026-06-20）
+
+**Purpose**: 修正 SSE session isolation 造成執行頁永遠顯示「error」的根因；建立 RF 腳本實體檔案持久化流程，使執行引擎能正確讀取 .robot 檔案。
+
+- [X] T157 修正 `backend/src/api/executions.py` SSE polling：每次輪詢開啟獨立 `AsyncSessionLocal()` session（修正 SQLite WAL read-transaction snapshot 問題），timeout 延長至 120 輪，timeout event 欄位由 `error` 改為 `message`
+- [X] T158 修正 `frontend/src/stores/executionStore.ts`：`execution_completed` handler 新增同步 `totalCases.value = (event.total as number) || totalCases.value` 及 `completedCases.value = totalCases.value`，確保進度數字正確
+- [X] T159 [P] 在 `backend/src/api/cases.py` 新增 `PUT /{case_id}/robot-script`（接受 `rf_code: str`，寫入 `robot_scripts/{case_number}.robot`）與 `GET /{case_id}/robot-script`（讀取檔案回傳 `rf_code`，404 若不存在）
+- [X] T160 更新 `backend/src/services/execution_service.py` `_execute_all_cases_bg`：先批次查 case_number，`run_one()` 內讀取 `robot_scripts/{case_number}.robot` 並將 `robot_code` 傳入 `_run_single_case_with_timeout()`
+- [X] T161 重構 `frontend/src/components/RFCodePreview/index.vue`：新增 `caseId?: string` prop；新增「儲存 RF 程式碼」按鈕（`saving`/`saved`/`saveError` 狀態）；`onMounted` 若有 `caseId` 且無 override 則呼叫 `getRobotScript` 自動載入已儲存腳本
+- [X] T162 [P] 在 `frontend/src/services/caseApi.ts` 新增 `saveRobotScript(caseId, rfCode)` 與 `getRobotScript(caseId)` 兩個 API 方法
+- [X] T163 [P] 修正 `backend/src/repositories/test_case_repo.py` 清單案例搜尋邏輯：keyword 同時比對 `case_number LIKE` 與 `name LIKE`（OR 條件），修正 ChecklistCasesPage 搜尋只找到名稱而非編號的問題
+
+**Checkpoint**: 執行清單後 ExecutionPage 正確顯示 `completed`；RFCodePreview 顯示「儲存 RF 程式碼」按鈕且可持久化；清單案例搜尋可依編號或名稱找到案例
+
+---
+
+## Phase 17: 剩餘未實作功能（待完成）
+
+**Purpose**: 補齊 spec 中尚未實作的功能：測試案例列表伺服器端排序（FR-003）與 pabot 並行執行引擎整合（FR-015）。
+
+### US1 — 測試案例列表排序（FR-003）
+
+- [X] T164 [US1] 在 `backend/src/api/cases.py` `GET /cases` 端點新增 `sort_by: str = "created_at"` 與 `order: str = "desc"` query 參數，並傳入 repository 層；支援排序欄位：`case_number`、`name`、`created_at`、`updated_at`
+- [X] T165 [P] [US1] 在 `backend/src/repositories/test_case_repo.py` `list()` 方法新增 `sort_by`/`order` 參數，對應 SQLAlchemy `order_by()` 動態排序（invalid column → fallback `created_at desc`）
+- [X] T166 [P] [US1] 更新 `frontend/src/services/caseApi.ts` `listCases()` 型別新增 `sort_by?: string` 與 `order?: string` 參數
+- [X] T167 [US1] 更新 `frontend/src/components/TestCaseList/index.vue` 表格標題列（案例編號、名稱、更新時間）改為可點擊排序；點擊後切換 `asc`/`desc`，顯示 ↑/↓ 指示符；重新呼叫 API 帶 `sort_by` 與 `order` 參數
+
+**Checkpoint**: `GET /cases?sort_by=case_number&order=asc` 回傳正確排序；CasesPage 欄位標題可點擊並顯示排序指示符
+
+### US5 — pabot 並行執行引擎（FR-015）
+
+- [X] T168 [US5] 重構 `backend/src/services/execution_service.py` `_execute_all_cases_bg`：改用 `pabot --processes {max_workers}` 執行所有 .robot 檔案（max_workers>1 時），解析 pabot output.xml 更新各案例 pass/fail 狀態；單案例保留 per-case asyncio 架構
+- [X] T169 [P] [US5] SSE 改由 `get_execution_queue(execution_id)` 讀取即時事件（`case_started`/`case_completed`/`execution_completed`），background task 直接 put_nowait 至 Queue；保留 5 秒週期 DB 輪詢作為 fallback；`clear_execution_queue` 在執行後 5 秒清理
+
+**Checkpoint**: 執行含多案例清單時，pabot 並行啟動，SSE 即時推送每個案例狀態；`pytest backend/tests/unit/test_execution_listener.py -v` GREEN
+
+### FR-022 — 行動裝置漢堡選單
+
+- [X] T170 [US3] 更新 `frontend/src/App.vue` 全域導覽列：在 `<768px` 媒體查詢下自動收合，新增漢堡按鈕（☰）切換展開/收合狀態，確保行動裝置可正常操作所有導覽連結（對應 FR-022 行動裝置支援）
+
+**Checkpoint**: 瀏覽器縮至 < 768px 時導覽列顯示 ☰ 按鈕，點擊後展開完整導覽項目
+
+### SC-006 — 並發用戶壓力測試
+
+- [X] T171 [P] 建立 `backend/tests/load/test_concurrent_users.py`：模擬 10 個並發 session 同時呼叫 `GET /cases`（各 1 頁 / 千筆資料集），斷言 p95 回應時間 ≤ 2s（對應 SC-006）
+
+**Checkpoint**: `pytest backend/tests/load/test_concurrent_users.py -v` GREEN
+
+### SC-009 — 平行執行效能 benchmark（依賴 T168）
+
+- [X] T172 [US5] 建立 `backend/tests/load/test_parallel_vs_sequential.py`：以 10 個 mock .robot 檔（各模擬 3s 執行時間）分別計算 pabot 並行 vs 逐案循序執行時間，斷言並行執行時間 ≤ 循序時間 × 60%（即縮短 ≥ 40%，對應 SC-009）；此測試依賴 T168 完成
+
+**Checkpoint**: `pytest backend/tests/load/test_parallel_vs_sequential.py -v` GREEN（需先完成 T168）
+
+### FR-017 — 試跑紀錄 30 天自動清除
+
+- [X] T173 在 `backend/src/main.py` startup event 新增 `asyncio.create_task(_cleanup_trial_runs())`；`_cleanup_trial_runs()` 每日 00:00 UTC 軟刪除 `execution_records WHERE execution_type='trial_run' AND created_at < NOW()-30days`（對應 FR-017 試跑紀錄保留 30 天）
+
+**Checkpoint**: 手動設定 `created_at` 超過 30 天的 trial_run 紀錄，呼叫清除函式後確認紀錄已標記刪除
 
 ---
 

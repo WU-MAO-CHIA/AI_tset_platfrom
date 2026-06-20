@@ -97,6 +97,8 @@ class CaseService:
         tags: Optional[list[str]] = None,
         page: int = 1,
         page_size: int = 20,
+        sort_by: str = "created_at",
+        order: str = "desc",
     ) -> tuple[list, int]:
         return await self.repo.list_with_filters(
             system_category=system_category,
@@ -104,4 +106,6 @@ class CaseService:
             tags=tags,
             page=page,
             page_size=page_size,
+            sort_by=sort_by,
+            order=order,
         )

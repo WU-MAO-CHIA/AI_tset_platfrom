@@ -88,7 +88,7 @@ export const caseApi = {
     return apiClient.post<{ id: string; case_number: string; version: number; created_at: string }>('/cases', data)
   },
 
-  listCases(params?: { system_category?: string; keyword?: string; page?: number; page_size?: number }) {
+  listCases(params?: { system_category?: string; keyword?: string; page?: number; page_size?: number; sort_by?: string; order?: string }) {
     return apiClient.get<CaseListResponse>('/cases', { params })
   },
 

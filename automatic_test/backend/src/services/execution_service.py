@@ -30,14 +30,12 @@ class ExecutionService:
             parallel_mode=parallel_mode,
             max_workers=max_workers,
         )
-        # Flush so record.id is available before session closes
         await self._session.flush()
 
         if not checklist or not checklist.items:
             await self._exec_repo.update_status(record.id, status="completed", passed_count=0, failed_count=0, total_count=0)
             return record
 
-        # Extract plain data before session is closed by request lifecycle
         case_ids = [item.test_case_id for item in checklist.items]
         concurrency = max_workers if parallel_mode else 1
 
@@ -53,9 +51,11 @@ class ExecutionService:
     async def _execute_all_cases_bg(execution_id: str, case_ids: list[str], max_workers: int) -> None:
         from src.core.config import get_settings
         from src.repositories.test_case_repo import TestCaseRepository
-        settings = get_settings()
+        from src.execution.listener import get_execution_queue, clear_execution_queue
 
-        # Fetch case_number for each case_id so we can locate the .robot file
+        settings = get_settings()
+        queue = get_execution_queue(execution_id)
+
         async with AsyncSessionLocal() as session:
             case_repo = TestCaseRepository(session)
             case_number_map: dict[str, str] = {}
@@ -64,39 +64,200 @@ class ExecutionService:
                 if case:
                     case_number_map[cid] = case.case_number
 
-        semaphore = asyncio.Semaphore(max_workers)
+        use_pabot = max_workers > 1 and len(case_ids) > 1
 
-        async def run_one(case_id: str) -> dict:
-            async with semaphore:
-                robot_code: Optional[str] = None
-                case_number = case_number_map.get(case_id)
-                if case_number:
-                    script_path = os.path.join(settings.robot_scripts_dir, f"{case_number}.robot")
-                    if os.path.exists(script_path):
-                        with open(script_path, "r", encoding="utf-8") as f:
-                            robot_code = f.read()
-                return await ExecutionService._run_single_case_with_timeout(
-                    case_id=case_id,
-                    robot_code=robot_code,
-                    timeout_sec=300,
+        try:
+            if use_pabot:
+                passed, failed, total = await ExecutionService._run_pabot(
+                    execution_id, case_ids, case_number_map, max_workers, settings, queue
                 )
+            else:
+                passed, failed, total = await ExecutionService._run_sequential(
+                    execution_id, case_ids, case_number_map, settings, queue
+                )
+        except Exception as exc:
+            queue.put_nowait({"event": "execution_error", "execution_id": execution_id, "message": str(exc), "__done__": True})
+            async with AsyncSessionLocal() as session:
+                exec_repo = ExecutionRepository(session)
+                await exec_repo.update_status(execution_id, status="error")
+                await session.commit()
+            return
 
-        tasks = [asyncio.create_task(run_one(cid)) for cid in case_ids]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        passed = sum(1 for r in results if isinstance(r, dict) and r.get("status") == "passed")
-        failed = sum(1 for r in results if not (isinstance(r, dict) and r.get("status") == "passed"))
+        final_status = "completed" if failed == 0 else "failed"
+        queue.put_nowait({
+            "event": "execution_completed",
+            "execution_id": execution_id,
+            "status": final_status,
+            "passed": passed,
+            "failed": failed,
+            "total": total,
+            "report_url": f"/api/v1/executions/{execution_id}/results",
+            "__done__": True,
+        })
 
         async with AsyncSessionLocal() as session:
             exec_repo = ExecutionRepository(session)
             await exec_repo.update_status(
                 execution_id,
-                status="completed",
+                status=final_status,
                 passed_count=passed,
                 failed_count=failed,
-                total_count=len(results),
+                total_count=total,
             )
             await session.commit()
+
+        # Clean up queue after a short delay to allow SSE to drain it
+        await asyncio.sleep(5)
+        clear_execution_queue(execution_id)
+
+    @staticmethod
+    async def _run_sequential(
+        execution_id: str,
+        case_ids: list[str],
+        case_number_map: dict[str, str],
+        settings,
+        queue: asyncio.Queue,
+    ) -> tuple[int, int, int]:
+        passed = 0
+        failed = 0
+
+        for case_id in case_ids:
+            case_number = case_number_map.get(case_id)
+            queue.put_nowait({
+                "event": "case_started",
+                "execution_id": execution_id,
+                "case_id": case_id,
+                "case_number": case_number or "",
+            })
+
+            robot_code: Optional[str] = None
+            if case_number:
+                script_path = os.path.join(settings.robot_scripts_dir, f"{case_number}.robot")
+                if os.path.exists(script_path):
+                    with open(script_path, "r", encoding="utf-8") as f:
+                        robot_code = f.read()
+
+            result = await ExecutionService._run_single_case_with_timeout(
+                case_id=case_id,
+                robot_code=robot_code,
+                timeout_sec=300,
+            )
+
+            case_status = result.get("status", "error")
+            if case_status == "passed":
+                passed += 1
+            else:
+                failed += 1
+
+            queue.put_nowait({
+                "event": "case_completed",
+                "execution_id": execution_id,
+                "case_id": case_id,
+                "case_number": case_number or "",
+                "status": case_status,
+                "elapsed_ms": result.get("elapsed_ms", 0),
+                "message": result.get("failure_message") or "",
+            })
+
+        return passed, failed, len(case_ids)
+
+    @staticmethod
+    async def _run_pabot(
+        execution_id: str,
+        case_ids: list[str],
+        case_number_map: dict[str, str],
+        max_workers: int,
+        settings,
+        queue: asyncio.Queue,
+    ) -> tuple[int, int, int]:
+        robot_files: list[str] = []
+        case_number_to_id: dict[str, str] = {v: k for k, v in case_number_map.items()}
+
+        for cid in case_ids:
+            case_number = case_number_map.get(cid)
+            if case_number:
+                script_path = os.path.join(settings.robot_scripts_dir, f"{case_number}.robot")
+                if os.path.exists(script_path):
+                    robot_files.append(script_path)
+
+        if not robot_files:
+            return 0, len(case_ids), len(case_ids)
+
+        queue.put_nowait({
+            "event": "pabot_started",
+            "execution_id": execution_id,
+            "total": len(robot_files),
+            "processes": max_workers,
+        })
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            output_dir = os.path.join(tmp_dir, "results")
+            os.makedirs(output_dir, exist_ok=True)
+            output_xml = os.path.join(output_dir, "output.xml")
+
+            cmd = [
+                "python", "-m", "pabot",
+                "--processes", str(max_workers),
+                "--outputdir", output_dir,
+                "--output", "output.xml",
+                "--nostatusrc",
+            ] + robot_files
+
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            _, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=600)
+
+            if not os.path.exists(output_xml):
+                # pabot may have written partial output; try alternate location
+                for fname in os.listdir(output_dir):
+                    if fname == "output.xml":
+                        output_xml = os.path.join(output_dir, fname)
+                        break
+
+            passed = 0
+            failed = 0
+
+            if os.path.exists(output_xml):
+                from src.services.report_service import ReportService
+                with open(output_xml, "r", encoding="utf-8") as f:
+                    xml_content = f.read()
+
+                report = ReportService()
+                per_test = report.parse_per_test_results(xml_content)
+
+                for test_result in per_test:
+                    cn = test_result["case_number"]
+                    cid = case_number_to_id.get(cn, "")
+                    status = test_result["status"]
+                    if status == "passed":
+                        passed += 1
+                    else:
+                        failed += 1
+                    queue.put_nowait({
+                        "event": "case_completed",
+                        "execution_id": execution_id,
+                        "case_id": cid,
+                        "case_number": cn,
+                        "status": status,
+                        "elapsed_ms": test_result.get("elapsed_ms", 0),
+                        "message": test_result.get("failure_message") or "",
+                    })
+
+                skipped = len(case_ids) - len(per_test)
+                failed += skipped
+            else:
+                stderr_text = stderr_bytes.decode("utf-8", errors="replace") if stderr_bytes else ""
+                failed = len(robot_files)
+                queue.put_nowait({
+                    "event": "pabot_error",
+                    "execution_id": execution_id,
+                    "message": f"pabot 執行失敗：{stderr_text[:200]}",
+                })
+
+        return passed, failed, len(case_ids)
 
     @staticmethod
     async def _run_single_case_with_timeout(

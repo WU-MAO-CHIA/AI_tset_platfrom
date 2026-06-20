@@ -142,6 +142,8 @@ async def list_cases(
     keyword: Optional[str] = None,
     page: int = 1,
     page_size: int = 20,
+    sort_by: str = "created_at",
+    order: str = "desc",
     service: CaseService = Depends(get_case_service),
 ):
     if page_size > 100:
@@ -151,6 +153,8 @@ async def list_cases(
         keyword=keyword,
         page=page,
         page_size=page_size,
+        sort_by=sort_by,
+        order=order,
     )
     return {
         "items": [serialize_case_summary(c) for c in cases],

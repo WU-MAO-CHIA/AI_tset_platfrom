@@ -15,6 +15,10 @@ def get_execution_queue(execution_id: str) -> asyncio.Queue:
     return _queues[execution_id]
 
 
+def clear_execution_queue(execution_id: str) -> None:
+    _queues.pop(execution_id, None)
+
+
 class ExecutionListener:
     ROBOT_LISTENER_API_VERSION = 2
 
