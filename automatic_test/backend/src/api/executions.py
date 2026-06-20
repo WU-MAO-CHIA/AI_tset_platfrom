@@ -1,9 +1,10 @@
 import asyncio
 import json
+import os
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -43,10 +44,16 @@ async def get_execution_results(execution_id: str, db: AsyncSession = Depends(ge
     if record is None:
         raise HTTPException(status_code=404, detail={"error": "not_found"})
 
+    from sqlalchemy.orm import joinedload
+    from src.models.test_case import TestCase
+
     result = await db.execute(
-        select(CaseResult).where(CaseResult.execution_id == execution_id).order_by(CaseResult.position)
+        select(CaseResult)
+        .options(joinedload(CaseResult.test_case))
+        .where(CaseResult.execution_id == execution_id)
+        .order_by(CaseResult.position)
     )
-    case_results = result.scalars().all()
+    case_results = result.unique().scalars().all()
 
     items = []
     for cr in case_results:
@@ -57,9 +64,12 @@ async def get_execution_results(execution_id: str, db: AsyncSession = Depends(ge
             {"id": m.id, "media_type": m.media_type, "file_path": m.file_path, "step_index": m.step_index}
             for m in media_result.scalars().all()
         ]
+        tc = cr.test_case
         items.append({
             "id": cr.id,
             "test_case_id": cr.test_case_id,
+            "case_number": tc.case_number if tc else "",
+            "case_name": tc.name if tc else "",
             "status": cr.status,
             "elapsed_ms": cr.elapsed_ms,
             "failure_message": cr.failure_message,
@@ -79,7 +89,7 @@ async def stream_execution(execution_id: str, db: AsyncSession = Depends(get_db)
     async def event_generator():
         from src.execution.listener import get_execution_queue
 
-        yield f"data: {json.dumps({'event': 'execution_started', 'execution_id': execution_id, 'status': record.status})}\n\n"
+        yield f"data: {json.dumps({'event': 'execution_started', 'execution_id': execution_id, 'status': record.status, 'total_cases': record.total_count})}\n\n"
 
         # If already completed (e.g., no cases), emit completion immediately
         if record.status in ("completed", "failed", "error"):
@@ -166,3 +176,13 @@ async def export_report(execution_id: str, db: AsyncSession = Depends(get_db)):
         content=html_content,
         headers={"Content-Disposition": f'attachment; filename="report-{execution_id}.html"'},
     )
+
+
+@router.get("/{execution_id}/rf-report/{filename:path}")
+async def get_rf_report(execution_id: str, filename: str, db: AsyncSession = Depends(get_db)):
+    from src.core.config import get_settings
+    settings = get_settings()
+    file_path = os.path.join(settings.execution_reports_dir, execution_id, filename)
+    if not os.path.isfile(file_path):
+        raise HTTPException(status_code=404, detail="報告尚未生成或不存在")
+    return FileResponse(file_path)

@@ -298,6 +298,136 @@ async def generate_case_number(self, system_category: str) -> str:
 
 ---
 
+---
+
+## 決策 8：RF Script 實體檔案儲存策略（Session 2026-06-20）
+
+**Decision**: RF 程式碼儲存為實體 `.robot` 檔案，路徑格式為 `{ROBOT_SCRIPTS_DIR}/{case_number}.robot`，透過 `PUT /cases/{id}/robot-script` 持久化，執行時由背景任務直接讀取。
+
+**Rationale**:
+- Robot Framework CLI（`robot` / `pabot`）執行時需要實體 `.robot` 檔案作為輸入，無法直接餵入字串
+- 持久化為檔案可避免每次執行前重新生成 LLM 代碼（零延遲，符合 FR-016 規格）
+- `{case_number}.robot` 命名讓運維人員可直接對應案例，易於除錯
+- 相較於存入 DB TEXT 欄位再臨時寫出，直接持久化更符合 KISS 原則
+
+**流程**:
+```
+Tab 2 Chat → AI 生成 RF 代碼 → 使用者點「儲存 RF 程式碼」
+    → PUT /cases/{id}/robot-script
+    → backend 寫入 {ROBOT_SCRIPTS_DIR}/{case_number}.robot
+    → 執行時 execution_service 讀取該檔案傳給 Robot Framework
+```
+
+**Frontend 整合**:
+- `RFCodePreview` 元件新增 `case-id` prop
+- 進入頁面時呼叫 `GET /cases/{id}/robot-script` 自動載入已儲存腳本
+- 「儲存 RF 程式碼」按鈕（紫色）觸發 `PUT /cases/{id}/robot-script`
+
+**Alternatives considered**:
+- DB TEXT 欄位（`TestCase.robot_code`）：需 schema 遷移 + 每次執行仍需寫出臨時檔案，兩步驟不如直接持久化
+- 執行時即時 LLM 生成：受 SC-010 35 秒限制，大清單執行延遲不可接受
+
+---
+
+## 決策 9：SSE Polling Session 隔離策略（Session 2026-06-20）
+
+**Decision**: SSE `/executions/{id}/stream` endpoint 每次輪詢都建立全新的 `AsyncSessionLocal()` session，而非重用 request-scoped `get_db()` session。
+
+**Root Cause**:
+SQLite 的 WAL 模式下，同一個 session 在第一次 `SELECT` 時開啟 read transaction，後續所有 `SELECT` 看到的是該 transaction 開始時的快照。背景任務（`_execute_all_cases_bg`）在自己的 session 中 commit "completed"，但 SSE 的 session 因快照隔離看不到更新 → 60 輪輪詢後 timeout → 前端收到 `execution_error`。
+
+**Fix**:
+```python
+# 每輪輪詢開新 session，確保看到最新 DB 狀態
+async with AsyncSessionLocal() as poll_session:
+    poll_repo = ExecutionRepository(poll_session)
+    updated = await poll_repo.get(execution_id)
+if updated and updated.status in ("completed", "failed", "error"):
+    ...
+```
+
+同時將輪詢上限從 60 秒延長至 120 秒，`execution_error` 的 field 改為 `message`（與前端 store 期望一致）。
+
+**Alternatives considered**:
+- `session.refresh(record)`：強制重新讀取，但 SQLite read transaction 仍在同一 snapshot 中，無法解決根本問題
+- `expire_on_commit=True`：只影響 commit 後的 expire 行為，對 read-only polling session 無效
+
+---
+
+## 決策 10：背景執行任務 Session 管理（Session 2026-06-20）
+
+**Decision**: 所有在 HTTP request 生命週期之外執行的資料庫操作（`asyncio.create_task` 觸發的背景任務），必須透過 `async with AsyncSessionLocal() as session` 建立自己的 session，嚴禁重用 `get_db()` 提供的 request-scoped session。
+
+**Root Cause**:
+`get_db()` 使用 `async with AsyncSessionLocal() as session` + `yield`，HTTP response 回傳後 `get_db` 執行 `await session.commit()`，session 進入 `'prepared'` 狀態。後續若背景任務試圖在此 session 上執行 SQL，SQLAlchemy 拋出 `InvalidRequestError: This session is in 'prepared' state`。
+
+**Fix**:
+```python
+# 在 run_checklist_parallel 中：先提取純 Python 資料再建立 task
+case_ids = [item.test_case_id for item in checklist.items]  # 在 session 關閉前提取
+asyncio.create_task(ExecutionService._execute_all_cases_bg(record.id, case_ids, concurrency))
+
+# 背景任務為 @staticmethod，完全不持有 request session 的參考
+@staticmethod
+async def _execute_all_cases_bg(execution_id: str, case_ids: list[str], ...) -> None:
+    async with AsyncSessionLocal() as session:  # 自己的 session
+        ...
+    async with AsyncSessionLocal() as session:  # 結束時再開新 session 更新狀態
+        await exec_repo.update_status(...)
+        await session.commit()
+```
+
+---
+
+---
+
+## 決策 11：RF 原生執行報告持久化與服務策略
+
+**Decision**: RF 執行完成後，在 `tempfile.TemporaryDirectory` 刪除前，將整個 output 目錄複製到持久化路徑 `data/execution_reports/{execution_id}/`；後端提供靜態檔案路由服務，前端以 `<iframe>` 嵌入。
+
+**架構說明**:
+```
+RF 執行（subprocess）
+    ↓  生成至 --outputdir {tmp}/
+       output.xml, log.html, report.html
+       browser/screenshots/*.png（embedded 至 log.html base64 by RF Browser）
+    ↓  執行完成，解析 output.xml
+    ↓  shutil.copytree(output_dir, settings.execution_reports_dir / execution_id)
+    ↓  tempdir 安全釋放
+
+GET /executions/{id}/rf-report/{filename}
+    → FileResponse("data/execution_reports/{id}/{filename}")
+
+前端 ResultPage.vue
+    → <iframe :src="`/api/v1/executions/${id}/rf-report/log.html`" />
+    → <iframe :src="`/api/v1/executions/${id}/rf-report/report.html`" />
+```
+
+**適用範圍**:
+- 清單執行（`_run_pabot` / `_run_sequential`）：`--outputdir` 已在 tmp_dir 下，copy 整個 output_dir
+- 試跑（`_execute_trial_bg`）：`_run_single_case_with_timeout` 使用 tmp_dir，在 `with` block 結束前 copy
+
+**截圖路徑問題**:
+- RF Browser 庫預設將截圖以 base64 inline 方式嵌入 log.html（`Embed Screenshots` 設定為 True 時）
+- 若截圖為外部參照：copy 時同步複製 browser/ 子目錄，相對路徑在 iframe 中仍有效
+- 建議執行時設定 `BROWSER_EMBED_SCREENSHOTS=True` 以消除相對路徑問題
+
+**兩種報告類型說明（不可混淆）**:
+- **FR-011 匯出報告**：`GET /executions/{id}/export` → 後端 Jinja2 模板渲染 → 一個自包含 HTML 可下載
+- **FR-010/FR-019 嵌入報告**：`GET /executions/{id}/rf-report/{filename}` → RF 原生 log.html/report.html → 前端 `<iframe>` 嵌入
+
+**Rationale**:
+- 直接使用 RF 原生報告，不重造輪子；log.html 的步驟折疊、截圖 lightbox、時間軸均由 RF 提供
+- 靜態檔案服務比動態代理簡單，無需 streaming proxy
+- `shutil.copytree` 原子性足夠，失敗僅影響報告顯示而不影響執行結果
+
+**Alternatives considered**:
+- 直接將 RF `--outputdir` 指向持久化路徑：避免複製，但並行執行時若多案例共用目錄會互相覆蓋
+- 動態代理（proxy 整個 tmpdir）：tmpdir 生命週期與 HTTP 請求不一致，不可行
+- 路徑重寫（rewrite log.html 內部相對路徑）：複雜且脆弱，不優先
+
+---
+
 ## 所有 NEEDS CLARIFICATION 解析完畢
 
 | 問題 | 決策 |
@@ -311,3 +441,7 @@ async def generate_case_number(self, system_category: str) -> str:
 | 案例編號生成 | system_category 前綴 + 三位數序號，查最大值+1 |
 | RF 代碼生成時機 | Tab 2 Chat 生成後存入 DB；執行時直接取用，無存檔時回退即時生成 |
 | 清單案例管理 | 獨立畫面 /checklists/:id/cases，支援新增/移除/排序/備註 |
+| RF script 儲存 | 實體檔案 `{ROBOT_SCRIPTS_DIR}/{case_number}.robot`，PUT API 持久化 |
+| SSE session 隔離 | 每輪輪詢 `AsyncSessionLocal()` 新 session，避免 SQLite transaction snapshot |
+| 背景任務 session | `@staticmethod` + 自建 `AsyncSessionLocal`，禁止重用 request-scoped session |
+| RF 報告持久化 | 執行後 `shutil.copytree` 至 `data/execution_reports/{id}/`，FastAPI FileResponse 服務，iframe 嵌入 |

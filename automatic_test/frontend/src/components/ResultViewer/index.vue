@@ -8,7 +8,8 @@
 
     <div v-for="result in results" :key="result.id" class="result-card" :class="result.status">
       <div class="result-header">
-        <span class="case-id">{{ result.test_case_id }}</span>
+        <span class="case-id">{{ result.case_number || result.test_case_id }}</span>
+        <span v-if="result.case_name" class="case-name">{{ result.case_name }}</span>
         <span class="status-badge" :class="result.status">{{ result.status }}</span>
         <span v-if="result.elapsed_ms != null" class="elapsed">{{ result.elapsed_ms }}ms</span>
       </div>

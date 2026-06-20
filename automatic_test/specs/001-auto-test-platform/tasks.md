@@ -552,6 +552,31 @@ Phase 2 完成後：
 
 ---
 
+---
+
+## Phase 18: RF 原生報告嵌入 + 排序補齊（2026-06-20）
+
+**Purpose**: 實作 FR-010/FR-019：RF 執行後持久化 log.html/report.html，在結果頁面以「RF 報告」Tab + iframe 方式嵌入；同時補齊 FR-003 `system_category` 排序欄位（speckit-analyze I3 問題）。
+
+### US4 — RF 原生報告嵌入（FR-010 / FR-019）
+
+- [X] T174 在 `backend/src/core/config.py` `Settings` 類別新增 `execution_reports_dir: str = "data/execution_reports"`；在 `backend/src/main.py` startup event 新增 `os.makedirs(settings.execution_reports_dir, exist_ok=True)` 確保目錄存在
+- [X] T175 修改 `backend/src/services/execution_service.py` `_run_pabot`：在 `with tempfile.TemporaryDirectory() as tmp_dir:` block 結束前（output_dir 存在時）呼叫 `import shutil; shutil.copytree(output_dir, os.path.join(settings.execution_reports_dir, execution_id), dirs_exist_ok=True)` 持久化 RF 原生報告
+- [X] T176 [P] 修改 `backend/src/services/execution_service.py` `_run_single_case_with_timeout` 與 `_execute_robot_subprocess`：新增 `execution_id: Optional[str] = None` 參數；在 `with tempfile.TemporaryDirectory() as tmp_dir:` block 結束前，若 `execution_id` 不為 None 則 `shutil.copytree(tmp_dir, os.path.join(settings.execution_reports_dir, execution_id), dirs_exist_ok=True)`；更新 `_execute_trial_bg` 傳入 `execution_id=execution_id`
+- [X] T177 [P] 在 `backend/src/api/executions.py` 新增 `GET /executions/{execution_id}/rf-report/{filename:path}` 端點：回傳 `FileResponse(os.path.join(settings.execution_reports_dir, execution_id, filename))`，若路徑不存在回傳 `404 {"detail": "報告尚未生成或不存在"}`；需 `from fastapi.responses import FileResponse`
+- [X] T178 更新 `frontend/src/pages/ResultPage.vue`：新增「RF 報告」主 Tab（與現有「執行結果」並列）；Tab 內含兩個子 Tab 按鈕「執行日誌」/ 「測試報告」，切換時各以 `<iframe style="width:100%;height:80vh;border:none" :src="\`/api/v1/executions/${executionId}/rf-report/log.html\`">` 或 `report.html` 嵌入；若執行 `status` 非 `completed`/`failed` 則顯示「執行進行中，報告生成後可查閱」提示
+
+**Checkpoint**: 執行完一個含 RF 腳本的清單後，`data/execution_reports/{id}/log.html` 存在；開啟結果頁點擊「RF 報告」Tab 顯示 RF 原生 log.html iframe；切換子 Tab 可查閱 report.html
+
+### US1 補強 — 排序欄位補齊（FR-003 / speckit-analyze I3）
+
+- [X] T179 [P] 修正 `backend/src/api/cases.py` `GET /cases`：在 `sort_by` query 參數允許值中新增 `"system_category"`；修正 `backend/src/repositories/test_case_repo.py` `list()` 方法：`sort_by == "system_category"` 時對應 `TestCase.system_category` 欄位排序（修補 FR-003 spec 要求但 T164 未實作的缺口）
+- [X] T180 [P] 更新 `frontend/src/components/TestCaseList/index.vue`：表格標題新增「系統類別」欄位並支援可點擊排序（`sort_by: "system_category"`），與現有 case_number/name/updated_at 排序欄位保持一致的 ↑/↓ 指示符邏輯
+
+**Checkpoint**: `GET /cases?sort_by=system_category&order=asc` 回傳依系統類別排序的結果；CasesPage 顯示「系統類別」欄位標題且可點擊排序
+
+---
+
 ## Notes
 
 - `[P]` = 不同檔案，無未完成依賴，可平行執行

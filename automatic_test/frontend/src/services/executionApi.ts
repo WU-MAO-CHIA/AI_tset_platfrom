@@ -15,6 +15,8 @@ export interface ExecutionRecord {
 export interface CaseResultItem {
   id: string
   test_case_id: string
+  case_number: string
+  case_name: string
   status: string
   elapsed_ms: number | null
   failure_message: string | null

@@ -38,6 +38,8 @@ class ExecutionService:
 
         case_ids = [item.test_case_id for item in checklist.items]
         concurrency = max_workers if parallel_mode else 1
+        await self._exec_repo.update(record.id, status="running", total_count=len(case_ids))
+        await self._session.flush()
 
         asyncio.create_task(
             ExecutionService._execute_all_cases_bg(record.id, case_ids, concurrency)
@@ -45,7 +47,94 @@ class ExecutionService:
         return record
 
     async def run_trial(self, source_case_id: str) -> ExecutionRecord:
-        return await self._exec_repo.create_for_trial_run(source_case_id=source_case_id)
+        record = await self._exec_repo.create_for_trial_run(source_case_id=source_case_id)
+        await self._exec_repo.update(record.id, status="running", total_count=1)
+        await self._session.flush()
+        asyncio.create_task(
+            ExecutionService._execute_trial_bg(record.id, source_case_id)
+        )
+        return record
+
+    @staticmethod
+    async def _execute_trial_bg(execution_id: str, source_case_id: str) -> None:
+        from src.core.config import get_settings
+        from src.repositories.test_case_repo import TestCaseRepository
+        from src.execution.listener import get_execution_queue, clear_execution_queue
+
+        settings = get_settings()
+        queue = get_execution_queue(execution_id)
+
+        async with AsyncSessionLocal() as session:
+            case_repo = TestCaseRepository(session)
+            case = await case_repo.get(source_case_id)
+
+        if not case:
+            queue.put_nowait({"event": "execution_error", "execution_id": execution_id, "message": "案例不存在", "__done__": True})
+            async with AsyncSessionLocal() as session:
+                await ExecutionRepository(session).update_status(execution_id, status="error")
+                await session.commit()
+            return
+
+        case_number = case.case_number
+        robot_code: Optional[str] = None
+        script_path = os.path.join(settings.robot_scripts_dir, f"{case_number}.robot")
+        if os.path.exists(script_path):
+            with open(script_path, "r", encoding="utf-8") as f:
+                robot_code = f.read()
+
+        queue.put_nowait({"event": "case_started", "execution_id": execution_id, "case_id": source_case_id, "case_number": case_number})
+
+        result = await ExecutionService._run_single_case_with_timeout(
+            case_id=source_case_id, robot_code=robot_code, timeout_sec=60, execution_id=execution_id
+        )
+
+        case_status = result.get("status", "error")
+        passed = 1 if case_status == "passed" else 0
+        failed = 0 if case_status == "passed" else 1
+
+        queue.put_nowait({
+            "event": "case_completed",
+            "execution_id": execution_id,
+            "case_id": source_case_id,
+            "case_number": case_number,
+            "status": case_status,
+            "elapsed_ms": result.get("elapsed_ms", 0),
+            "message": result.get("failure_message") or "",
+        })
+
+        final_status = "completed" if case_status == "passed" else "failed"
+        queue.put_nowait({
+            "event": "execution_completed",
+            "execution_id": execution_id,
+            "status": final_status,
+            "passed": passed,
+            "failed": failed,
+            "total": 1,
+            "report_url": f"/api/v1/executions/{execution_id}/results",
+            "__done__": True,
+        })
+
+        async with AsyncSessionLocal() as session:
+            from src.models.case_result import CaseResult
+            from src.models.base import generate_uuid
+            cr = CaseResult(
+                id=generate_uuid(),
+                execution_id=execution_id,
+                test_case_id=source_case_id,
+                case_version=1,
+                status=case_status,
+                elapsed_ms=result.get("elapsed_ms", 0),
+                failure_message=result.get("failure_message"),
+                position=0,
+            )
+            session.add(cr)
+            await ExecutionRepository(session).update_status(
+                execution_id, status=final_status, passed_count=passed, failed_count=failed, total_count=1
+            )
+            await session.commit()
+
+        await asyncio.sleep(5)
+        clear_execution_queue(execution_id)
 
     @staticmethod
     async def _execute_all_cases_bg(execution_id: str, case_ids: list[str], max_workers: int) -> None:
@@ -121,7 +210,7 @@ class ExecutionService:
         passed = 0
         failed = 0
 
-        for case_id in case_ids:
+        for idx, case_id in enumerate(case_ids):
             case_number = case_number_map.get(case_id)
             queue.put_nowait({
                 "event": "case_started",
@@ -148,6 +237,22 @@ class ExecutionService:
                 passed += 1
             else:
                 failed += 1
+
+            async with AsyncSessionLocal() as session:
+                from src.models.case_result import CaseResult
+                from src.models.base import generate_uuid
+                cr = CaseResult(
+                    id=generate_uuid(),
+                    execution_id=execution_id,
+                    test_case_id=case_id,
+                    case_version=1,
+                    status=case_status,
+                    elapsed_ms=result.get("elapsed_ms", 0),
+                    failure_message=result.get("failure_message"),
+                    position=idx,
+                )
+                session.add(cr)
+                await session.commit()
 
             queue.put_nowait({
                 "event": "case_completed",
@@ -228,7 +333,8 @@ class ExecutionService:
                 report = ReportService()
                 per_test = report.parse_per_test_results(xml_content)
 
-                for test_result in per_test:
+                cr_rows: list[dict] = []
+                for idx, test_result in enumerate(per_test):
                     cn = test_result["case_number"]
                     cid = case_number_to_id.get(cn, "")
                     status = test_result["status"]
@@ -236,6 +342,14 @@ class ExecutionService:
                         passed += 1
                     else:
                         failed += 1
+                    if cid:
+                        cr_rows.append({
+                            "test_case_id": cid,
+                            "status": status,
+                            "elapsed_ms": test_result.get("elapsed_ms", 0),
+                            "failure_message": test_result.get("failure_message"),
+                            "position": idx,
+                        })
                     queue.put_nowait({
                         "event": "case_completed",
                         "execution_id": execution_id,
@@ -245,6 +359,19 @@ class ExecutionService:
                         "elapsed_ms": test_result.get("elapsed_ms", 0),
                         "message": test_result.get("failure_message") or "",
                     })
+
+                if cr_rows:
+                    async with AsyncSessionLocal() as session:
+                        from src.models.case_result import CaseResult
+                        from src.models.base import generate_uuid
+                        for row in cr_rows:
+                            session.add(CaseResult(
+                                id=generate_uuid(),
+                                execution_id=execution_id,
+                                case_version=1,
+                                **row,
+                            ))
+                        await session.commit()
 
                 skipped = len(case_ids) - len(per_test)
                 failed += skipped
@@ -257,6 +384,12 @@ class ExecutionService:
                     "message": f"pabot 執行失敗：{stderr_text[:200]}",
                 })
 
+            # Persist RF native reports before tempdir is deleted
+            import shutil as _shutil
+            report_dest = os.path.join(settings.execution_reports_dir, execution_id)
+            if os.path.isdir(output_dir):
+                _shutil.copytree(output_dir, report_dest, dirs_exist_ok=True)
+
         return passed, failed, len(case_ids)
 
     @staticmethod
@@ -264,6 +397,7 @@ class ExecutionService:
         case_id: str,
         robot_code: Optional[str],
         timeout_sec: float,
+        execution_id: Optional[str] = None,
     ) -> dict:
         if robot_code is None:
             return {"status": "skipped", "elapsed_ms": 0, "failure_message": "No robot code available"}
@@ -279,9 +413,17 @@ class ExecutionService:
                     ExecutionService._execute_robot_subprocess(robot_file, output_xml, timeout_sec),
                     timeout=timeout_sec,
                 )
-                return result
             except asyncio.TimeoutError:
                 return {"status": "timeout", "elapsed_ms": int(timeout_sec * 1000), "failure_message": "Execution timed out"}
+
+            if execution_id:
+                import shutil as _shutil
+                from src.core.config import get_settings as _get_settings
+                _settings = _get_settings()
+                report_dest = os.path.join(_settings.execution_reports_dir, execution_id)
+                _shutil.copytree(tmp_dir, report_dest, dirs_exist_ok=True)
+
+            return result
 
     @staticmethod
     async def _execute_robot_subprocess(

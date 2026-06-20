@@ -448,18 +448,27 @@ async def save_robot_script(
     case_id: str,
     body: RobotScriptRequest,
     service: CaseService = Depends(get_case_service),
+    session: AsyncSession = Depends(get_db),
 ):
-    """Save Robot Framework script to {robot_scripts_dir}/{case_number}.robot"""
+    """Save Robot Framework script — write to DB and sync to disk."""
+    from src.repositories.robot_script_repo import RobotScriptRepository
     try:
         case = await service.get(case_id)
     except ValueError:
         raise HTTPException(404, detail={"error": "not_found", "message": "案例不存在"})
+
+    # Persist to DB (source of truth)
+    repo = RobotScriptRepository(session)
+    await repo.upsert(test_case_id=case_id, rf_code=body.rf_code)
+
+    # Sync to disk so RF CLI can execute it
     settings = get_settings()
     script_dir = settings.robot_scripts_dir
     os.makedirs(script_dir, exist_ok=True)
     file_path = os.path.join(script_dir, f"{case.case_number}.robot")
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(body.rf_code)
+
     return {"case_number": case.case_number, "file_path": file_path}
 
 
@@ -467,19 +476,30 @@ async def save_robot_script(
 async def get_robot_script(
     case_id: str,
     service: CaseService = Depends(get_case_service),
+    session: AsyncSession = Depends(get_db),
 ):
-    """Read saved Robot Framework script for a case"""
+    """Read saved Robot Framework script — DB first, fallback to disk."""
+    from src.repositories.robot_script_repo import RobotScriptRepository
     try:
         case = await service.get(case_id)
     except ValueError:
         raise HTTPException(404, detail={"error": "not_found", "message": "案例不存在"})
+
+    # Primary: read from DB
+    repo = RobotScriptRepository(session)
+    record = await repo.get_by_case_id(case_id)
+    if record:
+        return {"rf_code": record.rf_code, "case_number": case.case_number, "source": "db"}
+
+    # Fallback: read from disk (legacy scripts saved before this table existed)
     settings = get_settings()
     file_path = os.path.join(settings.robot_scripts_dir, f"{case.case_number}.robot")
-    if not os.path.exists(file_path):
-        raise HTTPException(404, detail={"error": "script_not_found", "message": "尚未儲存 RF 程式碼"})
-    with open(file_path, "r", encoding="utf-8") as f:
-        rf_code = f.read()
-    return {"rf_code": rf_code, "case_number": case.case_number}
+    if os.path.exists(file_path):
+        with open(file_path, "r", encoding="utf-8") as f:
+            rf_code = f.read()
+        return {"rf_code": rf_code, "case_number": case.case_number, "source": "file"}
+
+    raise HTTPException(404, detail={"error": "script_not_found", "message": "尚未儲存 RF 程式碼"})
 
 
 @router.post("/{case_id}/trial-run", status_code=202)

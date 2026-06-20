@@ -26,6 +26,8 @@ from src.models.db_connection import DBConnection  # noqa: E402, F401
 from src.models.automation_code import AutomationCode  # noqa: E402, F401
 from src.models.case_result import CaseResult  # noqa: E402, F401
 from src.models.execution_media import ExecutionMedia  # noqa: E402, F401
+from src.models.case_chat_message import CaseChatMessage  # noqa: E402, F401
+from src.models.robot_script import RobotScript  # noqa: E402, F401
 
 target_metadata = Base.metadata
 

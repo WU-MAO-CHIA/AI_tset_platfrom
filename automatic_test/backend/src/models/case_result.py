@@ -20,6 +20,7 @@ class CaseResult(Base, TimestampMixin):
     failure_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
+    test_case: Mapped[Optional["TestCase"]] = relationship("TestCase", foreign_keys="[CaseResult.test_case_id]", lazy="select")
     media: Mapped[list["ExecutionMedia"]] = relationship(
         "ExecutionMedia", back_populates="case_result", cascade="all, delete-orphan", order_by="ExecutionMedia.step_index"
     )

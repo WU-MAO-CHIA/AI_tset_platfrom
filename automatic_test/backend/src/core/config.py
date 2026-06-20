@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite+aiosqlite:///./data/autotest.db"
     media_root: str = "./data/media"
     robot_scripts_dir: str = "./robot_scripts"
+    execution_reports_dir: str = "./data/execution_reports"
     parallel_max_workers: int = 5
 
     anthropic_api_key: str = ""

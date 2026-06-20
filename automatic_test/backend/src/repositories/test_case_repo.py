@@ -73,6 +73,7 @@ class TestCaseRepository(BaseRepository[TestCase]):
     _SORTABLE_COLUMNS = {
         "case_number": lambda: TestCase.case_number,
         "name": lambda: TestCase.name,
+        "system_category": lambda: TestCase.system_category,
         "created_at": lambda: TestCase.created_at,
         "updated_at": lambda: TestCase.updated_at,
     }

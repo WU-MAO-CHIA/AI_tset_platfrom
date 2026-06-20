@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import update
 
 # Import all models to register them with SQLAlchemy mapper before any query
-from src.models import test_case, test_data, media_attachment, test_checklist, checklist_item, execution_record, db_connection, automation_code, case_result, execution_media, case_chat_message  # noqa: F401
+from src.models import test_case, test_data, media_attachment, test_checklist, checklist_item, execution_record, db_connection, automation_code, case_result, execution_media, case_chat_message, robot_script  # noqa: F401
 from src.models.execution_record import ExecutionRecord
 
 logger = logging.getLogger(__name__)
@@ -64,6 +64,10 @@ async def _cleanup_trial_runs() -> None:
 
 @app.on_event("startup")
 async def startup_event() -> None:
+    import os
+    from src.core.config import get_settings
+    settings = get_settings()
+    os.makedirs(settings.execution_reports_dir, exist_ok=True)
     asyncio.create_task(_cleanup_trial_runs())
 
 

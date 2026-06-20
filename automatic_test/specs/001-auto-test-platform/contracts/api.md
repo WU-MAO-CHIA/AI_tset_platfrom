@@ -478,6 +478,30 @@ AI 輔助補齊測試步驟
 
 ---
 
+### GET /executions/{execution_id}/rf-report/{filename}
+取得 RF 原生執行報告檔案（對應 FR-010 / FR-019 嵌入報告）
+
+`{filename}` 可為 `log.html`、`report.html`、`output.xml` 或其他 RF 生成的靜態資產。
+
+**Response 200**:
+- `Content-Type: text/html; charset=utf-8`（`.html`）或依副檔名推斷
+- Body: RF 原生檔案內容（由 `data/execution_reports/{execution_id}/{filename}` 服務）
+
+**使用場景**:
+- 前端 ResultPage.vue「RF 報告」Tab 的 `<iframe>` src
+  ```html
+  <iframe :src="`/api/v1/executions/${executionId}/rf-report/log.html`" />
+  <iframe :src="`/api/v1/executions/${executionId}/rf-report/report.html`" />
+  ```
+- 子 Tab 切換：「執行日誌（log.html）」/ 「測試報告（report.html）」
+
+**Error**:
+- `404 Not Found`: 執行紀錄不存在或報告尚未生成（執行仍在進行中）
+
+**注意**: 此端點服務 RF 原生報告，與 `/export`（FR-011 Jinja2 自製報告）為不同功能，不可混淆。
+
+---
+
 ### GET /executions/{execution_id}/stream
 SSE 即時執行進度串流
 
