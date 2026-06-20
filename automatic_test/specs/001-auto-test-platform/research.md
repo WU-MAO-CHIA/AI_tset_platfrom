@@ -428,6 +428,96 @@ GET /executions/{id}/rf-report/{filename}
 
 ---
 
+## 決策 12：身份驗證與角色授權架構（Session 2026-06-21）
+
+**Decision**: 帳號密碼 + JWT Token（`python-jose[cryptography]`）+ `passlib[bcrypt]` 密碼雜湊；三角色 RBAC（`admin` / `editor` / `viewer`）透過 FastAPI Depends 中間件執行；前端 Vue Router `beforeEach` guard 檢查 JWT 有效性。
+
+**Rationale**:
+- JWT stateless 符合現有 FastAPI 架構，無需 session store
+- `python-jose` 是 FastAPI 官方文件推薦的 JWT 庫，與 `passlib[bcrypt]` 搭配為 Python 生態標準做法
+- 三角色足以覆蓋 FR-025 需求，且後續擴充容易（JWT payload 增加 `role` claim 即可）
+
+**JWT 架構**:
+```python
+# backend/src/core/security.py
+from jose import jwt
+from passlib.context import CryptContext
+
+SECRET_KEY = settings.JWT_SECRET_KEY  # 從 .env 讀取
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_HOURS = 8
+
+pwd_context = CryptContext(schemes=["bcrypt"])
+
+def create_access_token(sub: str, role: str) -> str:
+    expire = datetime.utcnow() + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
+    return jwt.encode({"sub": sub, "role": role, "exp": expire}, SECRET_KEY, algorithm=ALGORITHM)
+
+def verify_password(plain: str, hashed: str) -> bool:
+    return pwd_context.verify(plain, hashed)
+
+def hash_password(plain: str) -> str:
+    return pwd_context.hash(plain)
+```
+
+**FastAPI Auth Dependencies**:
+```python
+# backend/src/core/dependencies.py（新增）
+async def get_current_user(token: str = Depends(oauth2_scheme), db = Depends(get_db)) -> User:
+    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    user = await user_repo.get_by_username(payload["sub"])
+    if not user or not user.is_active:
+        raise HTTPException(401)
+    return user
+
+async def require_admin(user: User = Depends(get_current_user)) -> User:
+    if user.role != "admin":
+        raise HTTPException(403, "Admin only")
+    return user
+
+async def require_editor_or_above(user: User = Depends(get_current_user)) -> User:
+    if user.role == "viewer":
+        raise HTTPException(403, "Editor or Admin required")
+    return user
+```
+
+**前端 Router Guard**:
+```typescript
+// frontend/src/router/index.ts
+router.beforeEach((to) => {
+  const token = localStorage.getItem('access_token')
+  if (to.meta.requiresAuth && !token) return '/login'
+  if (to.meta.requiresAdmin && getUserRole() !== 'admin') return '/'
+})
+```
+
+**角色權限矩陣**:
+| 功能 | admin | editor | viewer |
+|------|-------|--------|--------|
+| 瀏覽測試案例 / 清單 | ✅ | ✅ | ✅ |
+| 建立 / 編輯 / 刪除案例 | ✅ | ✅ | ❌ |
+| 建立 / 編輯 / 刪除清單 | ✅ | ✅ | ❌ |
+| 執行測試清單 | ✅ | ✅ | ✅ |
+| 管理後台（/admin） | ✅ | ❌ | ❌ |
+
+**初始管理員 Seed**:
+```python
+# backend/scripts/seed_admin.py
+# 執行方式：python -m scripts.seed_admin
+# 從 .env 讀取 ADMIN_USERNAME / ADMIN_PASSWORD
+```
+
+**Token 儲存**:
+- 前端 `localStorage`（簡單、SPA 標準）
+- 後端無 refresh token（初期；Token 有效期 8 小時，到期重新登入）
+
+**Alternatives considered**:
+- Session Cookie：需 server-side session store（Redis），增加部署複雜度
+- SSO / OAuth：超出現階段需求，未來可替換
+- PyJWT 直接使用：`python-jose` 額外提供 JWS/JWE 支援，且為 FastAPI 生態標準
+
+---
+
 ## 所有 NEEDS CLARIFICATION 解析完畢
 
 | 問題 | 決策 |
@@ -445,3 +535,4 @@ GET /executions/{id}/rf-report/{filename}
 | SSE session 隔離 | 每輪輪詢 `AsyncSessionLocal()` 新 session，避免 SQLite transaction snapshot |
 | 背景任務 session | `@staticmethod` + 自建 `AsyncSessionLocal`，禁止重用 request-scoped session |
 | RF 報告持久化 | 執行後 `shutil.copytree` 至 `data/execution_reports/{id}/`，FastAPI FileResponse 服務，iframe 嵌入 |
+| Auth / Admin RBAC | JWT Token（python-jose + passlib bcrypt），三角色（admin/editor/viewer），FastAPI Depends + Vue Router guard |
