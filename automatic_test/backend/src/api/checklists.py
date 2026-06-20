@@ -101,10 +101,11 @@ async def create_checklist(
 async def list_checklists(
     page: int = 1,
     page_size: int = 20,
+    keyword: str | None = None,
     db: AsyncSession = Depends(get_db),
 ):
     service = ChecklistService(db)
-    items, total = await service.list_all(page=page, page_size=page_size)
+    items, total = await service.list_all(page=page, page_size=page_size, keyword=keyword)
     return {
         "items": [
             {"id": c.id, "name": c.name, "created_by": c.created_by, "description": c.description}

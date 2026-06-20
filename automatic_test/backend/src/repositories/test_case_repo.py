@@ -1,6 +1,6 @@
 from typing import Optional
 
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.test_case import TestCase
@@ -82,7 +82,10 @@ class TestCaseRepository(BaseRepository[TestCase]):
         if system_category:
             conditions.append(TestCase.system_category == system_category)
         if keyword:
-            conditions.append(TestCase.name.ilike(f"%{keyword}%"))
+            conditions.append(or_(
+                TestCase.name.ilike(f"%{keyword}%"),
+                TestCase.case_number.ilike(f"%{keyword}%"),
+            ))
 
         base_query = select(TestCase).where(and_(*conditions))
         count_query = select(func.count()).select_from(base_query.subquery())

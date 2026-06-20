@@ -122,6 +122,7 @@ import {
   deleteChecklist,
   type ChecklistDetail,
 } from '../services/checklistApi'
+import { executeChecklist } from '../services/executionApi'
 
 const route = useRoute()
 const router = useRouter()
@@ -182,8 +183,18 @@ async function handleDelete() {
   }
 }
 
-function handleExecute() {
-  alert('執行功能將在後續版本實作')
+async function handleExecute() {
+  if (!checklist.value) return
+  errorMsg.value = ''
+  try {
+    const { execution_id } = await executeChecklist(checklist.value.id, {
+      parallel_mode: false,
+      max_workers: 1,
+    })
+    router.push(`/executions/${execution_id}`)
+  } catch {
+    errorMsg.value = '執行失敗，請稍後再試'
+  }
 }
 
 onMounted(fetchChecklist)

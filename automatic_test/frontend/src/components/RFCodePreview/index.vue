@@ -2,17 +2,30 @@
   <div class="rf-preview">
     <div class="rf-header">
       <span class="rf-title">Robot Framework 程式碼預覽</span>
-      <button
-        v-if="!chatMode"
-        type="button"
-        data-testid="rf-translate-btn"
-        :disabled="!mainSteps.trim() || loading"
-        @click="onTranslate"
-      >
-        {{ loading ? '翻譯中...' : '翻譯為 Robot Framework' }}
-      </button>
+      <div class="rf-actions">
+        <button
+          v-if="!chatMode"
+          type="button"
+          data-testid="rf-translate-btn"
+          :disabled="!mainSteps.trim() || loading"
+          @click="onTranslate"
+        >
+          {{ loading ? '翻譯中...' : '翻譯為 Robot Framework' }}
+        </button>
+        <button
+          v-if="caseId && rfCode"
+          type="button"
+          class="btn-save"
+          data-testid="rf-save-btn"
+          :disabled="saving"
+          @click="onSave"
+        >
+          {{ saving ? '儲存中...' : (saved ? '✓ 已儲存' : '儲存 RF 程式碼') }}
+        </button>
+      </div>
     </div>
     <p v-if="error && !chatMode" data-testid="rf-error" class="error">{{ error }}</p>
+    <p v-if="saveError" class="error">{{ saveError }}</p>
     <div v-if="rfCode" class="code-block">
       <pre><code>{{ rfCode }}</code></pre>
     </div>
@@ -24,7 +37,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, onMounted } from 'vue'
 import { caseApi } from '../../services/caseApi'
 
 const props = defineProps<{
@@ -32,23 +45,41 @@ const props = defineProps<{
   selectedModel: string
   rfCodeOverride?: string
   chatMode?: boolean
+  caseId?: string
 }>()
 
 const loading = ref(false)
 const translatedCode = ref('')
 const error = ref('')
+const saving = ref(false)
+const saved = ref(false)
+const saveError = ref('')
 
-// AI Chat override takes precedence over manually translated code
 const rfCode = computed(() => props.rfCodeOverride || translatedCode.value)
 
 watch(() => props.rfCodeOverride, (val) => {
-  if (val) error.value = ''
+  if (val) {
+    error.value = ''
+    saved.value = false
+  }
+})
+
+onMounted(async () => {
+  if (props.caseId && !props.rfCodeOverride) {
+    try {
+      const res = await caseApi.getRobotScript(props.caseId)
+      translatedCode.value = res.data.rf_code
+    } catch {
+      // no saved script yet — that's fine
+    }
+  }
 })
 
 async function onTranslate() {
   if (!props.mainSteps.trim()) return
   loading.value = true
   error.value = ''
+  saved.value = false
   try {
     const res = await caseApi.previewRfCode({
       main_steps: props.mainSteps,
@@ -61,14 +92,30 @@ async function onTranslate() {
     loading.value = false
   }
 }
+
+async function onSave() {
+  if (!props.caseId || !rfCode.value) return
+  saving.value = true
+  saveError.value = ''
+  try {
+    await caseApi.saveRobotScript(props.caseId, rfCode.value)
+    saved.value = true
+  } catch {
+    saveError.value = '儲存失敗，請稍後重試'
+  } finally {
+    saving.value = false
+  }
+}
 </script>
 
 <style scoped>
 .rf-preview { display: flex; flex-direction: column; gap: 10px; }
 .rf-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
 .rf-title { font-weight: 600; font-size: 14px; }
+.rf-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .rf-header button { padding: 6px 14px; border: none; border-radius: 4px; cursor: pointer; background: #0f766e; color: white; font-size: 13px; }
 .rf-header button:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-save { background: #4f46e5 !important; }
 .code-block { background: #1e1e2e; border-radius: 6px; padding: 12px; overflow-x: auto; }
 pre { margin: 0; }
 code { font-family: 'Courier New', monospace; font-size: 13px; color: #cdd6f4; white-space: pre; }

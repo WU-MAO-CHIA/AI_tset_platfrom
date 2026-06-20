@@ -63,6 +63,8 @@ export const useExecutionStore = defineStore('execution', () => {
       executionStatus.value = 'completed'
       passedCases.value = (event.passed as number) || 0
       failedCases.value = (event.failed as number) || 0
+      totalCases.value = (event.total as number) || totalCases.value
+      completedCases.value = totalCases.value
       runningCases.value = []
     } else if (type === 'execution_error') {
       executionStatus.value = 'error'

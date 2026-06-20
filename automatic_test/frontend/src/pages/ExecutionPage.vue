@@ -29,7 +29,7 @@ const route = useRoute()
 const router = useRouter()
 const store = useExecutionStore()
 
-const executionId = computed(() => (route.query.execution_id as string) || null)
+const executionId = computed(() => (route.params.id as string) || (route.query.execution_id as string) || null)
 
 function handleCompleted() {
   if (executionId.value) {

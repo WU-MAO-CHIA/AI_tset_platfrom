@@ -1,3 +1,4 @@
+import os
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Body
@@ -58,6 +59,10 @@ class PreviewRFRequest(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     llm_model: Optional[str] = None
+
+
+class RobotScriptRequest(BaseModel):
+    rf_code: str
 
 
 # ─── Dependencies ────────────────────────────────────────────────────────────
@@ -432,6 +437,45 @@ async def confirm_import_test_data(
 ):
     # In production, use a cache/token store; here we accept import via re-parse
     return {"imported_count": 0, "message": "Import confirmed (token-based storage not yet implemented)"}
+
+
+@router.put("/{case_id}/robot-script")
+async def save_robot_script(
+    case_id: str,
+    body: RobotScriptRequest,
+    service: CaseService = Depends(get_case_service),
+):
+    """Save Robot Framework script to {robot_scripts_dir}/{case_number}.robot"""
+    try:
+        case = await service.get(case_id)
+    except ValueError:
+        raise HTTPException(404, detail={"error": "not_found", "message": "案例不存在"})
+    settings = get_settings()
+    script_dir = settings.robot_scripts_dir
+    os.makedirs(script_dir, exist_ok=True)
+    file_path = os.path.join(script_dir, f"{case.case_number}.robot")
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(body.rf_code)
+    return {"case_number": case.case_number, "file_path": file_path}
+
+
+@router.get("/{case_id}/robot-script")
+async def get_robot_script(
+    case_id: str,
+    service: CaseService = Depends(get_case_service),
+):
+    """Read saved Robot Framework script for a case"""
+    try:
+        case = await service.get(case_id)
+    except ValueError:
+        raise HTTPException(404, detail={"error": "not_found", "message": "案例不存在"})
+    settings = get_settings()
+    file_path = os.path.join(settings.robot_scripts_dir, f"{case.case_number}.robot")
+    if not os.path.exists(file_path):
+        raise HTTPException(404, detail={"error": "script_not_found", "message": "尚未儲存 RF 程式碼"})
+    with open(file_path, "r", encoding="utf-8") as f:
+        rf_code = f.read()
+    return {"rf_code": rf_code, "case_number": case.case_number}
 
 
 @router.post("/{case_id}/trial-run", status_code=202)

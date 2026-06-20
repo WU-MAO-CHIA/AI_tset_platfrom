@@ -66,15 +66,25 @@ class ChecklistRepository(BaseRepository[TestChecklist]):
         await self.session.flush()
         return await self.get_with_items(checklist_id)
 
-    async def list_all(self, page: int = 1, page_size: int = 20) -> tuple[list[TestChecklist], int]:
+    async def list_all(
+        self,
+        page: int = 1,
+        page_size: int = 20,
+        keyword: str | None = None,
+    ) -> tuple[list[TestChecklist], int]:
+        from sqlalchemy import func, and_
+        conditions = []
+        if keyword:
+            conditions.append(TestChecklist.name.ilike(f"%{keyword}%"))
+
+        base_q = select(TestChecklist).where(and_(*conditions)) if conditions else select(TestChecklist)
         offset = (page - 1) * page_size
-        result = await self.session.execute(
-            select(TestChecklist).offset(offset).limit(page_size)
-        )
+        result = await self.session.execute(base_q.offset(offset).limit(page_size))
         items = list(result.scalars().all())
 
-        from sqlalchemy import func
-        count_result = await self.session.execute(select(func.count(TestChecklist.id)))
+        count_result = await self.session.execute(
+            select(func.count()).select_from(base_q.subquery())
+        )
         total = count_result.scalar_one()
         return items, total
 

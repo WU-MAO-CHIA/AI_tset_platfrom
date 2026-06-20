@@ -57,6 +57,7 @@
         </section>
         <section class="right-col">
           <RFCodePreview
+            :case-id="caseData.id"
             :main-steps="mainSteps"
             :selected-model="selectedModel"
             :rf-code-override="rfCode"

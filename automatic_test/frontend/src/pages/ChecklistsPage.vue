@@ -108,12 +108,8 @@ function onSearch() {
 async function fetchChecklists() {
   loading.value = true
   try {
-    const data = await listChecklists(page.value, pageSize)
-    let items = data.items
-    if (keyword.value) {
-      items = items.filter((cl) => cl.name.toLowerCase().includes(keyword.value.toLowerCase()))
-    }
-    checklists.value = items
+    const data = await listChecklists(page.value, pageSize, keyword.value || undefined)
+    checklists.value = data.items
     total.value = data.total
   } finally {
     loading.value = false

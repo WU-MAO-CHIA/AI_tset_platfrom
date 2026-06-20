@@ -7,7 +7,7 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.database import get_db
+from src.core.database import AsyncSessionLocal, get_db
 from src.models.case_result import CaseResult
 from src.models.execution_media import ExecutionMedia
 from src.models.execution_record import ExecutionRecord
@@ -85,10 +85,13 @@ async def stream_execution(execution_id: str, db: AsyncSession = Depends(get_db)
         }
         yield f"data: {json.dumps(event)}\n\n"
 
-        # Poll for completion (simple implementation)
-        for _ in range(60):
+        # Poll for completion — use a fresh session each iteration to avoid
+        # SQLite transaction isolation returning stale "pending" status
+        for _ in range(120):
             await asyncio.sleep(1)
-            updated = await repo.get(execution_id)
+            async with AsyncSessionLocal() as poll_session:
+                poll_repo = ExecutionRepository(poll_session)
+                updated = await poll_repo.get(execution_id)
             if updated and updated.status in ("completed", "failed", "error"):
                 done_event = {
                     "event": "execution_completed",
@@ -96,13 +99,14 @@ async def stream_execution(execution_id: str, db: AsyncSession = Depends(get_db)
                     "status": updated.status,
                     "passed": updated.passed_count,
                     "failed": updated.failed_count,
+                    "total": updated.total_count,
                     "report_url": f"/api/v1/executions/{execution_id}/results",
                 }
                 yield f"data: {json.dumps(done_event)}\n\n"
                 return
 
         # Timeout
-        error_event = {"event": "execution_error", "execution_id": execution_id, "error": "timeout"}
+        error_event = {"event": "execution_error", "execution_id": execution_id, "message": "執行逾時"}
         yield f"data: {json.dumps(error_event)}\n\n"
 
     return StreamingResponse(

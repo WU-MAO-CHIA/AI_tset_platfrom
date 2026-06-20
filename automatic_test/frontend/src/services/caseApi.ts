@@ -155,4 +155,12 @@ export const caseApi = {
   getChatHistory(caseId: string) {
     return apiClient.get<ChatHistoryResponse>(`/cases/${caseId}/chat-history`)
   },
+
+  saveRobotScript(caseId: string, rfCode: string) {
+    return apiClient.put<{ case_number: string; file_path: string }>(`/cases/${caseId}/robot-script`, { rf_code: rfCode })
+  },
+
+  getRobotScript(caseId: string) {
+    return apiClient.get<{ rf_code: string; case_number: string }>(`/cases/${caseId}/robot-script`)
+  },
 }
