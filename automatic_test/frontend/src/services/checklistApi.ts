@@ -4,6 +4,17 @@ export interface ChecklistItem {
   id: string
   test_case_id: string
   position: number
+  test_case?: { case_number: string | null; name: string | null; system_category: string | null } | null
+}
+
+export interface ChecklistExecutionRecord {
+  id: string
+  status: string
+  passed_count: number
+  failed_count: number
+  total_count: number
+  started_at: string | null
+  finished_at: string | null
 }
 
 export interface Checklist {
@@ -20,7 +31,6 @@ export interface Checklist {
 export interface ChecklistDetail extends Checklist {
   items: ChecklistItem[]
   order?: number
-  test_case?: { case_number: string; name: string; system_category: string | null }
 }
 
 export interface ChecklistListResponse {
@@ -104,4 +114,9 @@ export async function patchChecklistCaseItem(
 
 export async function reorderChecklistCases(checklistId: string, caseIds: string[]): Promise<void> {
   await apiClient.put(`/checklists/${checklistId}/cases/reorder`, { case_ids: caseIds })
+}
+
+export async function getChecklistExecutions(checklistId: string): Promise<{ items: ChecklistExecutionRecord[]; total: number }> {
+  const res = await apiClient.get(`/checklists/${checklistId}/executions`)
+  return res.data
 }

@@ -40,9 +40,16 @@ class ReportService:
                 if status_el is None:
                     continue
                 rf_status = status_el.get("status", "FAIL")
-                start_ts = status_el.get("starttime", "")
-                end_ts = status_el.get("endtime", "")
-                elapsed = _ts_diff_ms(start_ts, end_ts)
+                rf7_elapsed = status_el.get("elapsed")
+                if rf7_elapsed is not None:
+                    try:
+                        elapsed = max(0, int(float(rf7_elapsed) * 1000))
+                    except (ValueError, TypeError):
+                        elapsed = 0
+                else:
+                    start_ts = status_el.get("starttime", "")
+                    end_ts = status_el.get("endtime", "")
+                    elapsed = _ts_diff_ms(start_ts, end_ts)
                 failure_message = None
                 if rf_status == "FAIL":
                     for msg_el in test.iter("msg"):
@@ -76,9 +83,17 @@ class ReportService:
         suite_status = root.find(".//suite/status")
         elapsed = 0
         if suite_status is not None:
-            start = suite_status.get("starttime", "")
-            end = suite_status.get("endtime", "")
-            elapsed = _ts_diff_ms(start, end)
+            # RF 7+ uses start/elapsed (seconds float); older RF uses starttime/endtime
+            rf7_elapsed = suite_status.get("elapsed")
+            if rf7_elapsed is not None:
+                try:
+                    elapsed = max(0, int(float(rf7_elapsed) * 1000))
+                except (ValueError, TypeError):
+                    elapsed = 0
+            else:
+                start = suite_status.get("starttime", "")
+                end = suite_status.get("endtime", "")
+                elapsed = _ts_diff_ms(start, end)
 
         # Extract failure message from first failed test
         failure_message = None

@@ -1,7 +1,24 @@
 import asyncio
 import os
+import sys
 import tempfile
+from pathlib import Path
 from typing import Optional
+
+
+def _resolve_venv_python() -> str:
+    """Return the venv python.exe, falling back to sys.executable."""
+    backend_root = Path(__file__).parent.parent.parent
+    for candidate in [
+        backend_root / ".venv" / "Scripts" / "python.exe",  # Windows
+        backend_root / ".venv" / "bin" / "python",           # Unix/macOS
+    ]:
+        if candidate.exists():
+            return str(candidate)
+    return sys.executable
+
+
+_PYTHON_EXE = _resolve_venv_python()
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,9 +53,10 @@ class ExecutionService:
             await self._exec_repo.update_status(record.id, status="completed", passed_count=0, failed_count=0, total_count=0)
             return record
 
+        from datetime import datetime, timezone
         case_ids = [item.test_case_id for item in checklist.items]
         concurrency = max_workers if parallel_mode else 1
-        await self._exec_repo.update(record.id, status="running", total_count=len(case_ids))
+        await self._exec_repo.update(record.id, status="running", total_count=len(case_ids), started_at=datetime.now())
         await self._session.flush()
 
         asyncio.create_task(
@@ -47,8 +65,9 @@ class ExecutionService:
         return record
 
     async def run_trial(self, source_case_id: str) -> ExecutionRecord:
+        from datetime import datetime, timezone
         record = await self._exec_repo.create_for_trial_run(source_case_id=source_case_id)
-        await self._exec_repo.update(record.id, status="running", total_count=1)
+        await self._exec_repo.update(record.id, status="running", total_count=1, started_at=datetime.now())
         await self._session.flush()
         asyncio.create_task(
             ExecutionService._execute_trial_bg(record.id, source_case_id)
@@ -84,8 +103,9 @@ class ExecutionService:
 
         queue.put_nowait({"event": "case_started", "execution_id": execution_id, "case_id": source_case_id, "case_number": case_number})
 
+        _report_dest = os.path.join(settings.execution_reports_dir, execution_id)
         result = await ExecutionService._run_single_case_with_timeout(
-            case_id=source_case_id, robot_code=robot_code, timeout_sec=60, execution_id=execution_id
+            case_id=source_case_id, robot_code=robot_code, timeout_sec=60, report_dest=_report_dest
         )
 
         case_status = result.get("status", "error")
@@ -117,6 +137,7 @@ class ExecutionService:
         async with AsyncSessionLocal() as session:
             from src.models.case_result import CaseResult
             from src.models.base import generate_uuid
+            from datetime import datetime, timezone
             cr = CaseResult(
                 id=generate_uuid(),
                 execution_id=execution_id,
@@ -128,8 +149,13 @@ class ExecutionService:
                 position=0,
             )
             session.add(cr)
-            await ExecutionRepository(session).update_status(
-                execution_id, status=final_status, passed_count=passed, failed_count=failed, total_count=1
+            await ExecutionRepository(session).update(
+                execution_id,
+                status=final_status,
+                passed_count=passed,
+                failed_count=failed,
+                total_count=1,
+                finished_at=datetime.now(),
             )
             await session.commit()
 
@@ -167,8 +193,9 @@ class ExecutionService:
         except Exception as exc:
             queue.put_nowait({"event": "execution_error", "execution_id": execution_id, "message": str(exc), "__done__": True})
             async with AsyncSessionLocal() as session:
+                from datetime import datetime, timezone
                 exec_repo = ExecutionRepository(session)
-                await exec_repo.update_status(execution_id, status="error")
+                await exec_repo.update(execution_id, status="error", finished_at=datetime.now())
                 await session.commit()
             return
 
@@ -185,13 +212,15 @@ class ExecutionService:
         })
 
         async with AsyncSessionLocal() as session:
+            from datetime import datetime, timezone
             exec_repo = ExecutionRepository(session)
-            await exec_repo.update_status(
+            await exec_repo.update(
                 execution_id,
                 status=final_status,
                 passed_count=passed,
                 failed_count=failed,
                 total_count=total,
+                finished_at=datetime.now(),
             )
             await session.commit()
 
@@ -226,10 +255,14 @@ class ExecutionService:
                     with open(script_path, "r", encoding="utf-8") as f:
                         robot_code = f.read()
 
+            _report_dest = os.path.join(
+                settings.execution_reports_dir, execution_id, case_number or f"case_{idx}"
+            )
             result = await ExecutionService._run_single_case_with_timeout(
                 case_id=case_id,
                 robot_code=robot_code,
                 timeout_sec=300,
+                report_dest=_report_dest,
             )
 
             case_status = result.get("status", "error")
@@ -300,20 +333,21 @@ class ExecutionService:
             os.makedirs(output_dir, exist_ok=True)
             output_xml = os.path.join(output_dir, "output.xml")
 
+            import subprocess as _subprocess
             cmd = [
-                "python", "-m", "pabot",
+                _PYTHON_EXE, "-m", "pabot",
                 "--processes", str(max_workers),
                 "--outputdir", output_dir,
                 "--output", "output.xml",
                 "--nostatusrc",
             ] + robot_files
 
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+            loop = asyncio.get_event_loop()
+            _pabot_result = await loop.run_in_executor(
+                None,
+                lambda: _subprocess.run(cmd, capture_output=True, timeout=600),
             )
-            _, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=600)
+            stderr_bytes = _pabot_result.stderr
 
             if not os.path.exists(output_xml):
                 # pabot may have written partial output; try alternate location
@@ -397,7 +431,7 @@ class ExecutionService:
         case_id: str,
         robot_code: Optional[str],
         timeout_sec: float,
-        execution_id: Optional[str] = None,
+        report_dest: Optional[str] = None,
     ) -> dict:
         if robot_code is None:
             return {"status": "skipped", "elapsed_ms": 0, "failure_message": "No robot code available"}
@@ -411,16 +445,13 @@ class ExecutionService:
             try:
                 result = await asyncio.wait_for(
                     ExecutionService._execute_robot_subprocess(robot_file, output_xml, timeout_sec),
-                    timeout=timeout_sec,
+                    timeout=timeout_sec + 10,
                 )
             except asyncio.TimeoutError:
                 return {"status": "timeout", "elapsed_ms": int(timeout_sec * 1000), "failure_message": "Execution timed out"}
 
-            if execution_id:
+            if report_dest:
                 import shutil as _shutil
-                from src.core.config import get_settings as _get_settings
-                _settings = _get_settings()
-                report_dest = os.path.join(_settings.execution_reports_dir, execution_id)
                 _shutil.copytree(tmp_dir, report_dest, dirs_exist_ok=True)
 
             return result
@@ -431,25 +462,32 @@ class ExecutionService:
         output_xml: str,
         timeout_sec: float,
     ) -> dict:
+        import subprocess
         import time
         start_ms = int(time.time() * 1000)
 
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                "python", "-m", "robot",
-                "--outputdir", os.path.dirname(output_xml),
-                "--output", output_xml,
-                "--nostatusrc",
-                robot_file,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+        def _run_sync() -> subprocess.CompletedProcess:
+            return subprocess.run(
+                [_PYTHON_EXE, "-m", "robot",
+                 "--outputdir", os.path.dirname(output_xml),
+                 "--output", output_xml,
+                 "--nostatusrc",
+                 robot_file],
+                capture_output=True,
+                timeout=timeout_sec,
             )
-            await asyncio.wait_for(proc.communicate(), timeout=timeout_sec)
+
+        loop = asyncio.get_event_loop()
+        try:
+            completed = await asyncio.wait_for(
+                loop.run_in_executor(None, _run_sync),
+                timeout=timeout_sec + 10,
+            )
+            stderr_text = (completed.stderr or b"").decode("utf-8", errors="replace").strip()
         except asyncio.TimeoutError:
-            try:
-                proc.kill()
-            except Exception:
-                pass
+            elapsed = int(time.time() * 1000) - start_ms
+            return {"status": "timeout", "elapsed_ms": elapsed, "failure_message": "Execution timed out"}
+        except subprocess.TimeoutExpired:
             elapsed = int(time.time() * 1000) - start_ms
             return {"status": "timeout", "elapsed_ms": elapsed, "failure_message": "Execution timed out"}
         except Exception as exc:
@@ -459,7 +497,8 @@ class ExecutionService:
         elapsed = int(time.time() * 1000) - start_ms
 
         if not os.path.exists(output_xml):
-            return {"status": "error", "elapsed_ms": elapsed, "failure_message": "output.xml not generated"}
+            msg = f"output.xml not generated. stderr: {stderr_text[:500]}" if stderr_text else "output.xml not generated"
+            return {"status": "error", "elapsed_ms": elapsed, "failure_message": msg}
 
         from src.services.report_service import ReportService
         with open(output_xml, "r", encoding="utf-8") as f:
@@ -467,8 +506,11 @@ class ExecutionService:
 
         report = ReportService()
         parsed = report.parse_xml(xml_content)
+        failure_message = parsed.get("failure_message")
+        if not failure_message and parsed["status"] == "error" and stderr_text:
+            failure_message = f"RF initialization error: {stderr_text[:500]}"
         return {
             "status": parsed["status"],
             "elapsed_ms": parsed.get("elapsed_ms", elapsed),
-            "failure_message": parsed.get("failure_message"),
+            "failure_message": failure_message,
         }

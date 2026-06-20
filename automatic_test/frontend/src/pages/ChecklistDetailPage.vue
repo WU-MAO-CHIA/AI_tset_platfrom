@@ -52,9 +52,9 @@
         <tbody>
           <tr v-for="(item, idx) in checklist.items" :key="item.id">
             <td>{{ idx + 1 }}</td>
-            <td>{{ (item as any).test_case?.case_number ?? item.test_case_id }}</td>
-            <td>{{ (item as any).test_case?.name ?? '-' }}</td>
-            <td>{{ (item as any).test_case?.system_category ?? '-' }}</td>
+            <td>{{ item.test_case?.case_number ?? item.test_case_id }}</td>
+            <td>{{ item.test_case?.name ?? '-' }}</td>
+            <td>{{ item.test_case?.system_category ?? '-' }}</td>
           </tr>
         </tbody>
       </table>
@@ -120,7 +120,9 @@ import {
   getChecklist,
   updateChecklist,
   deleteChecklist,
+  getChecklistExecutions,
   type ChecklistDetail,
+  type ChecklistExecutionRecord,
 } from '../services/checklistApi'
 import { executeChecklist } from '../services/executionApi'
 
@@ -128,7 +130,7 @@ const route = useRoute()
 const router = useRouter()
 
 const checklist = ref<ChecklistDetail | null>(null)
-const executions = ref<any[]>([])
+const executions = ref<ChecklistExecutionRecord[]>([])
 const loading = ref(false)
 const errorMsg = ref('')
 const editModalOpen = ref(false)
@@ -138,8 +140,14 @@ const editCreatedBy = ref('')
 async function fetchChecklist() {
   loading.value = true
   errorMsg.value = ''
+  const id = route.params.id as string
   try {
-    checklist.value = await getChecklist(route.params.id as string)
+    const [cl, exHistory] = await Promise.all([
+      getChecklist(id),
+      getChecklistExecutions(id),
+    ])
+    checklist.value = cl
+    executions.value = exHistory.items
   } catch {
     checklist.value = null
   } finally {

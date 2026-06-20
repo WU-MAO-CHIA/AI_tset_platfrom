@@ -18,43 +18,20 @@
         <span>失敗：{{ execution.failed_count }}</span>
       </div>
 
-      <div class="main-tabs">
-        <button
-          v-for="tab in mainTabs"
-          :key="tab.id"
-          class="main-tab-btn"
-          :class="{ active: activeMainTab === tab.id }"
-          @click="activeMainTab = tab.id"
-        >{{ tab.label }}</button>
-      </div>
-
-      <div v-show="activeMainTab === 'results'" class="tab-content">
-        <ResultViewer :results="caseResults" />
-      </div>
-
-      <div v-show="activeMainTab === 'rf-report'" class="tab-content rf-report-tab">
+      <div class="rf-report-tab">
         <template v-if="execution && (execution.status === 'completed' || execution.status === 'failed')">
-          <div class="rf-sub-tabs">
-            <button
-              class="sub-tab-btn"
-              :class="{ active: activeRfSubTab === 'log' }"
-              @click="activeRfSubTab = 'log'"
-            >執行日誌 (log.html)</button>
-            <button
-              class="sub-tab-btn"
-              :class="{ active: activeRfSubTab === 'report' }"
-              @click="activeRfSubTab = 'report'"
-            >測試報告 (report.html)</button>
+          <!-- checklist 多案例時顯示案例選擇器 -->
+          <div v-if="!execution.source_case_id && caseResults.length > 1" class="case-selector">
+            <label>選擇案例：</label>
+            <select v-model="selectedReportCase">
+              <option v-for="cr in caseResults" :key="cr.case_number" :value="cr.case_number">
+                {{ cr.case_number }} — {{ cr.case_name }}
+              </option>
+            </select>
           </div>
           <iframe
-            v-if="activeRfSubTab === 'log'"
-            :src="`/api/v1/executions/${executionId}/rf-report/log.html`"
-            class="rf-iframe"
-            title="RF 執行日誌"
-          />
-          <iframe
-            v-if="activeRfSubTab === 'report'"
-            :src="`/api/v1/executions/${executionId}/rf-report/report.html`"
+            :key="`report-${rfReportPrefix}`"
+            :src="`/api/v1/executions/${executionId}/rf-report/${rfReportPrefix}report.html`"
             class="rf-iframe"
             title="RF 測試報告"
           />
@@ -71,7 +48,6 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getExecution, getExecutionResults, exportReport, type ExecutionRecord, type CaseResultItem } from '../services/executionApi'
-import ResultViewer from '../components/ResultViewer/index.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -79,15 +55,16 @@ const router = useRouter()
 const loading = ref(true)
 const execution = ref<ExecutionRecord | null>(null)
 const caseResults = ref<CaseResultItem[]>([])
-const activeMainTab = ref<'results' | 'rf-report'>('results')
-const activeRfSubTab = ref<'log' | 'report'>('log')
+const selectedReportCase = ref<string>('')
+
+// trial run → 報告在根目錄；checklist → 報告在 {case_number}/ 子目錄
+const rfReportPrefix = computed(() => {
+  if (execution.value?.source_case_id) return ''
+  const cn = selectedReportCase.value || caseResults.value[0]?.case_number || ''
+  return cn ? `${cn}/` : ''
+})
 
 const executionId = computed(() => route.params.id as string)
-
-const mainTabs = [
-  { id: 'results' as const, label: '執行結果' },
-  { id: 'rf-report' as const, label: 'RF 報告' },
-]
 
 async function fetchResults() {
   loading.value = true
@@ -145,58 +122,29 @@ onMounted(fetchResults)
   font-size: 14px;
   color: #555;
 }
-.main-tabs {
-  display: flex;
-  gap: 4px;
-  border-bottom: 2px solid #e0e0e0;
-  margin-bottom: 16px;
-}
-.main-tab-btn {
-  padding: 8px 20px;
-  border: none;
-  background: none;
-  cursor: pointer;
-  font-size: 14px;
-  color: #666;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -2px;
-}
-.main-tab-btn.active {
-  color: #1976d2;
-  border-bottom-color: #1976d2;
-  font-weight: 600;
-}
-.tab-content {
-  min-height: 200px;
-}
 .rf-report-tab {
   display: flex;
   flex-direction: column;
-}
-.rf-sub-tabs {
-  display: flex;
-  gap: 4px;
-  margin-bottom: 12px;
-}
-.sub-tab-btn {
-  padding: 6px 16px;
-  border: 1px solid #ccc;
-  background: #fff;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 13px;
-  color: #555;
-}
-.sub-tab-btn.active {
-  background: #1976d2;
-  color: #fff;
-  border-color: #1976d2;
 }
 .rf-iframe {
   width: 100%;
   height: 80vh;
   border: 1px solid #e0e0e0;
   border-radius: 4px;
+}
+.case-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 14px;
+  color: #555;
+}
+.case-selector select {
+  padding: 4px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
 }
 .rf-report-placeholder {
   padding: 40px;

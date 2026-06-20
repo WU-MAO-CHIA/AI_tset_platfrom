@@ -27,10 +27,17 @@ class ChecklistItemsUpdateRequest(BaseModel):
     case_ids: list[str]
 
 
+class ChecklistItemTestCaseInfo(BaseModel):
+    case_number: Optional[str] = None
+    name: Optional[str] = None
+    system_category: Optional[str] = None
+
+
 class ChecklistItemResponse(BaseModel):
     id: str
     test_case_id: str
     position: int
+    test_case: Optional[ChecklistItemTestCaseInfo] = None
 
 
 class ChecklistResponse(BaseModel):
@@ -45,6 +52,7 @@ class ChecklistDetailResponse(BaseModel):
     name: str
     created_by: str
     description: Optional[str] = None
+    created_at: Optional[str] = None
     items: list[ChecklistItemResponse]
 
 
@@ -131,11 +139,53 @@ async def get_checklist(
         name=checklist.name,
         created_by=checklist.created_by,
         description=checklist.description,
+        created_at=checklist.created_at.isoformat() if checklist.created_at else None,
         items=[
-            ChecklistItemResponse(id=item.id, test_case_id=item.test_case_id, position=item.position or 0)
-            for item in checklist.items
+            ChecklistItemResponse(
+                id=item.id,
+                test_case_id=item.test_case_id,
+                position=item.position or 0,
+                test_case=ChecklistItemTestCaseInfo(
+                    case_number=item.test_case.case_number if item.test_case else None,
+                    name=item.test_case.name if item.test_case else None,
+                    system_category=item.test_case.system_category if item.test_case else None,
+                ) if item.test_case else None,
+            )
+            for item in sorted(checklist.items, key=lambda x: x.position or 0)
         ],
     )
+
+
+@router.get("/{checklist_id}/executions")
+async def get_checklist_executions(
+    checklist_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    from src.repositories.execution_repo import ExecutionRepository
+    from src.repositories.checklist_repo import ChecklistRepository
+
+    cl_repo = ChecklistRepository(db)
+    checklist = await cl_repo.get(checklist_id)
+    if checklist is None:
+        raise HTTPException(status_code=404, detail={"error": "not_found"})
+
+    exec_repo = ExecutionRepository(db)
+    records = await exec_repo.get_history_for_checklist(checklist_id)
+    return {
+        "items": [
+            {
+                "id": r.id,
+                "status": r.status,
+                "passed_count": r.passed_count,
+                "failed_count": r.failed_count,
+                "total_count": r.total_count,
+                "started_at": r.started_at.isoformat() if r.started_at else None,
+                "finished_at": r.finished_at.isoformat() if r.finished_at else None,
+            }
+            for r in records
+        ],
+        "total": len(records),
+    }
 
 
 @router.put("/{checklist_id}", response_model=ChecklistResponse)

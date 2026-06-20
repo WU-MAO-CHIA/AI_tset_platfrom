@@ -124,12 +124,12 @@
             </div>
           </div>
         </section>
-        <section class="right-col">
-          <h2 style="font-size:16px;font-weight:600;margin-bottom:12px;">最新 RF 程式碼（唯讀）</h2>
+        <section class="right-col rf-panel">
+          <div class="rf-panel-header">最新 RF 程式碼（唯讀）</div>
           <div v-if="rfCode" class="rf-readonly">
             <pre class="rf-code">{{ rfCode }}</pre>
           </div>
-          <div v-else class="empty-chat">尚無 RF 程式碼（請先透過 AI 對話生成）</div>
+          <div v-else class="rf-empty">尚無 RF 程式碼（請先透過 AI 對話生成）</div>
         </section>
       </div>
     </template>
@@ -191,11 +191,19 @@ onMounted(async () => {
   const res = await caseApi.getCase(caseId)
   caseData.value = res.data
 
-  // Restore chat history and last RF code on page load
+  // Load saved RF script (DB / disk) — authoritative source
+  try {
+    const scriptRes = await caseApi.getRobotScript(caseId)
+    rfCode.value = scriptRes.data.rf_code
+  } catch {
+    // 404 = no script saved yet; fall through to chat history
+  }
+
+  // Load chat history; if rfCode still empty, try extracting from last assistant message
   try {
     const histRes = await caseApi.getChatHistory(caseId)
     chatMessages.value = histRes.data.messages ?? []
-    if (histRes.data.messages.length > 0) {
+    if (!rfCode.value && histRes.data.messages.length > 0) {
       const lastMessage = histRes.data.messages[histRes.data.messages.length - 1]
       if (lastMessage.role === 'assistant' && lastMessage.content.includes('---RF_CODE---')) {
         const rfIdx = lastMessage.content.indexOf('---RF_CODE---')
@@ -206,7 +214,7 @@ onMounted(async () => {
       }
     }
   } catch {
-    // Silently fail; rfCode remains empty if no chat history
+    // Silently fail
   }
 })
 
@@ -346,6 +354,9 @@ pre { white-space: pre-wrap; background: #f9f9f9; padding: 12px; border-radius: 
 .chat-bubble.assistant { background: #f9fafb; border: 1px solid #e5e7eb; align-self: flex-start; }
 .bubble-role { font-size: 11px; font-weight: 600; color: #6b7280; display: block; margin-bottom: 4px; }
 .empty-chat { color: #9ca3af; font-size: 14px; padding: 24px 0; }
-.rf-readonly { background: #1e1e1e; border-radius: 6px; padding: 16px; overflow: auto; max-height: calc(100vh - 300px); }
-.rf-code { color: #d4d4d4; font-family: 'Consolas', 'Monaco', monospace; font-size: 13px; white-space: pre-wrap; margin: 0; }
+.rf-panel { background: #1e1e2e; border-radius: 6px; padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+.rf-panel-header { background: rgba(0,0,0,0.25); color: #7c8097; font-size: 12px; font-weight: 600; letter-spacing: 0.5px; padding: 10px 16px; border-bottom: 1px solid rgba(255,255,255,0.06); flex-shrink: 0; }
+.rf-readonly { flex: 1; overflow: auto; padding: 12px; max-height: calc(100vh - 320px); }
+.rf-code { color: #cdd6f4; background: transparent; font-family: 'Courier New', monospace; font-size: 13px; white-space: pre-wrap; margin: 0; line-height: 1.6; }
+.rf-empty { color: #7c8097; font-size: 13px; padding: 24px 16px; }
 </style>
