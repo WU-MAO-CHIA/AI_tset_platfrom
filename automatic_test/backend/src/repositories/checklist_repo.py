@@ -66,11 +66,19 @@ class ChecklistRepository(BaseRepository[TestChecklist]):
         await self.session.flush()
         return await self.get_with_items(checklist_id)
 
+    _SORTABLE_COLUMNS = {
+        "name": lambda: TestChecklist.name,
+        "created_by": lambda: TestChecklist.created_by,
+        "created_at": lambda: TestChecklist.created_at,
+    }
+
     async def list_all(
         self,
         page: int = 1,
         page_size: int = 20,
         keyword: str | None = None,
+        sort_by: str = "created_at",
+        order: str = "desc",
     ) -> tuple[list[TestChecklist], int]:
         from sqlalchemy import func, and_
         conditions = []
@@ -78,8 +86,13 @@ class ChecklistRepository(BaseRepository[TestChecklist]):
             conditions.append(TestChecklist.name.ilike(f"%{keyword}%"))
 
         base_q = select(TestChecklist).where(and_(*conditions)) if conditions else select(TestChecklist)
+
+        col_factory = self._SORTABLE_COLUMNS.get(sort_by, self._SORTABLE_COLUMNS["created_at"])
+        col = col_factory()
+        order_expr = col.asc() if order == "asc" else col.desc()
+
         offset = (page - 1) * page_size
-        result = await self.session.execute(base_q.offset(offset).limit(page_size))
+        result = await self.session.execute(base_q.order_by(order_expr).offset(offset).limit(page_size))
         items = list(result.scalars().all())
 
         count_result = await self.session.execute(

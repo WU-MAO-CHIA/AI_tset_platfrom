@@ -25,10 +25,16 @@
     <table v-else class="checklist-table">
       <thead>
         <tr>
-          <th>清單名稱</th>
-          <th>建立人員</th>
+          <th class="sortable" @click="toggleSort('name')">
+            清單名稱 <span class="sort-indicator">{{ sortIndicator('name') }}</span>
+          </th>
+          <th class="sortable" @click="toggleSort('created_by')">
+            建立人員 <span class="sort-indicator">{{ sortIndicator('created_by') }}</span>
+          </th>
           <th>案例數</th>
-          <th>最後執行時間</th>
+          <th class="sortable" @click="toggleSort('created_at')">
+            建立時間 <span class="sort-indicator">{{ sortIndicator('created_at') }}</span>
+          </th>
           <th>狀態</th>
         </tr>
       </thead>
@@ -43,7 +49,7 @@
           <td class="cl-name">{{ cl.name }}</td>
           <td>{{ cl.created_by }}</td>
           <td>{{ cl.case_count ?? '-' }}</td>
-          <td>{{ cl.last_run_at ?? '-' }}</td>
+          <td>{{ cl.created_at ? new Date(cl.created_at).toLocaleDateString('zh-TW') : '-' }}</td>
           <td>
             <span v-if="cl.status" class="status-badge" :class="`status-${cl.status}`">
               {{ cl.status }}
@@ -90,6 +96,8 @@ const page = ref(1)
 const pageSize = 20
 const loading = ref(false)
 const keyword = ref('')
+const sortBy = ref('created_at')
+const sortOrder = ref<'asc' | 'desc'>('desc')
 
 const showCreate = ref(false)
 const newName = ref('')
@@ -105,10 +113,26 @@ function onSearch() {
   }, 300)
 }
 
+function toggleSort(col: string) {
+  if (sortBy.value === col) {
+    sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    sortBy.value = col
+    sortOrder.value = 'asc'
+  }
+  page.value = 1
+  fetchChecklists()
+}
+
+function sortIndicator(col: string): string {
+  if (sortBy.value !== col) return ''
+  return sortOrder.value === 'asc' ? '↑' : '↓'
+}
+
 async function fetchChecklists() {
   loading.value = true
   try {
-    const data = await listChecklists(page.value, pageSize, keyword.value || undefined)
+    const data = await listChecklists(page.value, pageSize, keyword.value || undefined, sortBy.value, sortOrder.value)
     checklists.value = data.items
     total.value = data.total
   } finally {
@@ -157,6 +181,9 @@ h1 { font-size: 22px; }
   font-weight: 600;
   color: #374151;
 }
+.sortable { cursor: pointer; user-select: none; }
+.sortable:hover { background: #e9eaf0; }
+.sort-indicator { display: inline-block; width: 12px; color: #4f46e5; font-weight: 700; }
 .checklist-table td {
   padding: 10px 12px;
   border-bottom: 1px solid #e5e7eb;

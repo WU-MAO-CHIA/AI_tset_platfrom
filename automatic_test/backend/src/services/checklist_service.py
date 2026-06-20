@@ -121,8 +121,8 @@ class ChecklistService:
         await self._validate_cases_exist(case_ids)
         return await self._cl_repo.update_items(checklist_id, case_ids)
 
-    async def list_all(self, page: int = 1, page_size: int = 20, keyword: str | None = None) -> tuple[list[TestChecklist], int]:
-        return await self._cl_repo.list_all(page=page, page_size=page_size, keyword=keyword)
+    async def list_all(self, page: int = 1, page_size: int = 20, keyword: str | None = None, sort_by: str = "created_at", order: str = "desc") -> tuple[list[TestChecklist], int]:
+        return await self._cl_repo.list_all(page=page, page_size=page_size, keyword=keyword, sort_by=sort_by, order=order)
 
     async def _validate_cases_exist(self, case_ids: list[str]) -> None:
         for case_id in case_ids:

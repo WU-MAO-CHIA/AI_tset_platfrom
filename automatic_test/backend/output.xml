@@ -1,0 +1,295 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<robot generator="Robot 7.4.2 (Python 3.13.1 on win32)" generated="2026-06-20T13:01:16.319349" rpa="false" schemaversion="5">
+<suite id="s1" name="Login-001" source="C:\Users\mark\Desktop\AI_Auto_test\automatic_test\backend\robot_scripts\login-001.robot">
+<test id="s1-t1" name="TC01 - 正常登入成功" line="14">
+<kw name="Fill In Login Form">
+<kw name="Open Login Page">
+<kw name="New Browser" owner="Browser">
+<arg>chromium</arg>
+<arg>headless=True</arg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Create a new playwright Browser with specified options.</doc>
+<status status="NOT RUN" start="2026-06-20T13:01:16.667149" elapsed="0.000348"/>
+</kw>
+<kw name="New Context" owner="Browser">
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Create a new BrowserContext with specified options.</doc>
+<status status="NOT RUN" start="2026-06-20T13:01:16.667632" elapsed="0.000256"/>
+</kw>
+<kw name="New Page" owner="Browser">
+<arg>${BASE_URL}</arg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Open a new Page.</doc>
+<status status="NOT RUN" start="2026-06-20T13:01:16.667990" elapsed="0.000247"/>
+</kw>
+<doc>開啟瀏覽器並導向登入頁面</doc>
+<status status="PASS" start="2026-06-20T13:01:16.666696" elapsed="0.001602"/>
+</kw>
+<kw name="Fill Text" owner="Browser">
+<arg>id=username</arg>
+<arg>${username}</arg>
+<tag>PageContent</tag>
+<tag>Setter</tag>
+<doc>Clears and fills the given ``txt`` into the text field found by ``selector``.</doc>
+<status status="NOT RUN" start="2026-06-20T13:01:16.668399" elapsed="0.000345"/>
+</kw>
+<kw name="Fill Text" owner="Browser">
+<arg>id=password</arg>
+<arg>${password}</arg>
+<tag>PageContent</tag>
+<tag>Setter</tag>
+<doc>Clears and fills the given ``txt`` into the text field found by ``selector``.</doc>
+<status status="NOT RUN" start="2026-06-20T13:01:16.668846" elapsed="0.000261"/>
+</kw>
+<kw name="Click" owner="Browser">
+<arg>id=submit</arg>
+<tag>PageContent</tag>
+<tag>Setter</tag>
+<doc>Simulates mouse click on the element found by ``selector``.</doc>
+<status status="NOT RUN" start="2026-06-20T13:01:16.669206" elapsed="0.000250"/>
+</kw>
+<arg>${USERNAME}</arg>
+<arg>${PASSWORD}</arg>
+<doc>填寫登入表單並送出</doc>
+<status status="PASS" start="2026-06-20T13:01:16.666383" elapsed="0.003132"/>
+</kw>
+<kw name="Wait For Elements State" owner="Browser">
+<arg>text=Logged In Successfully</arg>
+<arg>visible</arg>
+<tag>PageContent</tag>
+<tag>Wait</tag>
+<doc>Waits for the element found by ``selector`` to satisfy state option.</doc>
+<status status="NOT RUN" start="2026-06-20T13:01:16.669607" elapsed="0.000271"/>
+</kw>
+<kw name="Wait For Elements State" owner="Browser">
+<arg>text=Log out</arg>
+<arg>visible</arg>
+<tag>PageContent</tag>
+<tag>Wait</tag>
+<doc>Waits for the element found by ``selector`` to satisfy state option.</doc>
+<status status="NOT RUN" start="2026-06-20T13:01:16.669978" elapsed="0.000258"/>
+</kw>
+<kw name="Close Login Page" type="TEARDOWN">
+<kw name="Close Browser" owner="Browser">
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Closes the current browser.</doc>
+<status status="NOT RUN" start="2026-06-20T13:01:16.670608" elapsed="0.000240"/>
+</kw>
+<doc>關閉瀏覽器</doc>
+<status status="PASS" start="2026-06-20T13:01:16.670411" elapsed="0.000492"/>
+</kw>
+<doc>使用正確帳號與密碼登入，驗證成功進入後台頁面</doc>
+<tag>login</tag>
+<tag>positive</tag>
+<status status="PASS" start="2026-06-20T13:01:16.664739" elapsed="0.006208"/>
+</test>
+<test id="s1-t2" name="TC02 - 錯誤帳號登入失敗" line="21">
+<kw name="Fill In Login Form">
+<kw name="Open Login Page">
+<kw name="New Browser" owner="Browser">
+<arg>chromium</arg>
+<arg>headless=True</arg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Create a new playwright Browser with specified options.</doc>
+<status status="NOT RUN" start="2026-06-20T13:01:16.696307" elapsed="0.000321"/>
+</kw>
+<kw name="New Context" owner="Browser">
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Create a new BrowserContext with specified options.</doc>
+<status status="NOT RUN" start="2026-06-20T13:01:16.696737" elapsed="0.000237"/>
+</kw>
+<kw name="New Page" owner="Browser">
+<arg>${BASE_URL}</arg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Open a new Page.</doc>
+<status status="NOT RUN" start="2026-06-20T13:01:16.697068" elapsed="0.000245"/>
+</kw>
+<doc>開啟瀏覽器並導向登入頁面</doc>
+<status status="PASS" start="2026-06-20T13:01:16.696115" elapsed="0.001257"/>
+</kw>
+<kw name="Fill Text" owner="Browser">
+<arg>id=username</arg>
+<arg>${username}</arg>
+<tag>PageContent</tag>
+<tag>Setter</tag>
+<doc>Clears and fills the given ``txt`` into the text field found by ``selector``.</doc>
+<status status="NOT RUN" start="2026-06-20T13:01:16.697453" elapsed="0.000256"/>
+</kw>
+<kw name="Fill Text" owner="Browser">
+<arg>id=password</arg>
+<arg>${password}</arg>
+<tag>PageContent</tag>
+<tag>Setter</tag>
+<doc>Clears and fills the given ``txt`` into the text field found by ``selector``.</doc>
+<status status="NOT RUN" start="2026-06-20T13:01:16.697811" elapsed="0.000255"/>
+</kw>
+<kw name="Click" owner="Browser">
+<arg>id=submit</arg>
+<tag>PageContent</tag>
+<tag>Setter</tag>
+<doc>Simulates mouse click on the element found by ``selector``.</doc>
+<status status="NOT RUN" start="2026-06-20T13:01:16.698162" elapsed="0.000242"/>
+</kw>
+<arg>${WRONG_USER}</arg>
+<arg>${PASSWORD}</arg>
+<doc>填寫登入表單並送出</doc>
+<status status="PASS" start="2026-06-20T13:01:16.695869" elapsed="0.002591"/>
+</kw>
+<kw name="Wait For Elements State" owner="Browser">
+<arg>text=Your username is invalid!</arg>
+<arg>visible</arg>
+<tag>PageContent</tag>
+<tag>Wait</tag>
+<doc>Waits for the element found by ``selector`` to satisfy state option.</doc>
+<status status="NOT RUN" start="2026-06-20T13:01:16.698547" elapsed="0.000257"/>
+</kw>
+<kw name="Close Login Page" type="TEARDOWN">
+<kw name="Close Browser" owner="Browser">
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Closes the current browser.</doc>
+<status status="NOT RUN" start="2026-06-20T13:01:16.699164" elapsed="0.000233"/>
+</kw>
+<doc>關閉瀏覽器</doc>
+<status status="PASS" start="2026-06-20T13:01:16.698970" elapsed="0.000481"/>
+</kw>
+<doc>使用錯誤帳號登入，驗證頁面顯示帳號錯誤提示</doc>
+<tag>login</tag>
+<tag>negative</tag>
+<status status="PASS" start="2026-06-20T13:01:16.694950" elapsed="0.004543"/>
+</test>
+<test id="s1-t3" name="TC03 - 錯誤密碼登入失敗" line="27">
+<kw name="Fill In Login Form">
+<kw name="Open Login Page">
+<kw name="New Browser" owner="Browser">
+<arg>chromium</arg>
+<arg>headless=True</arg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Create a new playwright Browser with specified options.</doc>
+<status status="NOT RUN" start="2026-06-20T13:01:16.719796" elapsed="0.000312"/>
+</kw>
+<kw name="New Context" owner="Browser">
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Create a new BrowserContext with specified options.</doc>
+<status status="NOT RUN" start="2026-06-20T13:01:16.720224" elapsed="0.000248"/>
+</kw>
+<kw name="New Page" owner="Browser">
+<arg>${BASE_URL}</arg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Open a new Page.</doc>
+<status status="NOT RUN" start="2026-06-20T13:01:16.720566" elapsed="0.000246"/>
+</kw>
+<doc>開啟瀏覽器並導向登入頁面</doc>
+<status status="PASS" start="2026-06-20T13:01:16.719614" elapsed="0.001253"/>
+</kw>
+<kw name="Fill Text" owner="Browser">
+<arg>id=username</arg>
+<arg>${username}</arg>
+<tag>PageContent</tag>
+<tag>Setter</tag>
+<doc>Clears and fills the given ``txt`` into the text field found by ``selector``.</doc>
+<status status="NOT RUN" start="2026-06-20T13:01:16.720951" elapsed="0.000256"/>
+</kw>
+<kw name="Fill Text" owner="Browser">
+<arg>id=password</arg>
+<arg>${password}</arg>
+<tag>PageContent</tag>
+<tag>Setter</tag>
+<doc>Clears and fills the given ``txt`` into the text field found by ``selector``.</doc>
+<status status="NOT RUN" start="2026-06-20T13:01:16.721301" elapsed="0.000252"/>
+</kw>
+<kw name="Click" owner="Browser">
+<arg>id=submit</arg>
+<tag>PageContent</tag>
+<tag>Setter</tag>
+<doc>Simulates mouse click on the element found by ``selector``.</doc>
+<status status="NOT RUN" start="2026-06-20T13:01:16.721746" elapsed="0.000253"/>
+</kw>
+<arg>${USERNAME}</arg>
+<arg>${WRONG_PASS}</arg>
+<doc>填寫登入表單並送出</doc>
+<status status="PASS" start="2026-06-20T13:01:16.719376" elapsed="0.002679"/>
+</kw>
+<kw name="Wait For Elements State" owner="Browser">
+<arg>text=Your password is invalid!</arg>
+<arg>visible</arg>
+<tag>PageContent</tag>
+<tag>Wait</tag>
+<doc>Waits for the element found by ``selector`` to satisfy state option.</doc>
+<status status="NOT RUN" start="2026-06-20T13:01:16.722141" elapsed="0.000258"/>
+</kw>
+<kw name="Close Login Page" type="TEARDOWN">
+<kw name="Close Browser" owner="Browser">
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Closes the current browser.</doc>
+<status status="NOT RUN" start="2026-06-20T13:01:16.722829" elapsed="0.000241"/>
+</kw>
+<doc>關閉瀏覽器</doc>
+<status status="PASS" start="2026-06-20T13:01:16.722621" elapsed="0.000505"/>
+</kw>
+<doc>使用錯誤密碼登入，驗證頁面顯示密碼錯誤提示</doc>
+<tag>login</tag>
+<tag>negative</tag>
+<status status="PASS" start="2026-06-20T13:01:16.718502" elapsed="0.004666"/>
+</test>
+<status status="PASS" start="2026-06-20T13:01:16.320441" elapsed="0.422155"/>
+</suite>
+<statistics>
+<total>
+<stat pass="3" fail="0" skip="0">All Tests</stat>
+</total>
+<tag>
+<stat pass="3" fail="0" skip="0">login</stat>
+<stat pass="2" fail="0" skip="0">negative</stat>
+<stat pass="1" fail="0" skip="0">positive</stat>
+</tag>
+<suite>
+<stat name="Login-001" id="s1" pass="3" fail="0" skip="0">Login-001</stat>
+</suite>
+</statistics>
+<errors>
+<msg time="2026-06-20T13:01:16.694617" level="ERROR">Calling method '_end_test' of listener 'Browser' failed: 
+#############################################################
+#                                                           #
+#  RF-Browser dependencies not found in installation path!  #
+#           Run `rfbrowser init` to install.                #
+#                                                           #
+#############################################################
+Installation path: C:\Users\mark\Desktop\AI_Auto_test\automatic_test\backend\.venv\Lib\site-packages\Browser\wrapper</msg>
+<msg time="2026-06-20T13:01:16.718190" level="ERROR">Calling method '_end_test' of listener 'Browser' failed: 
+#############################################################
+#                                                           #
+#  RF-Browser dependencies not found in installation path!  #
+#           Run `rfbrowser init` to install.                #
+#                                                           #
+#############################################################
+Installation path: C:\Users\mark\Desktop\AI_Auto_test\automatic_test\backend\.venv\Lib\site-packages\Browser\wrapper</msg>
+<msg time="2026-06-20T13:01:16.742173" level="ERROR">Calling method '_end_test' of listener 'Browser' failed: 
+#############################################################
+#                                                           #
+#  RF-Browser dependencies not found in installation path!  #
+#           Run `rfbrowser init` to install.                #
+#                                                           #
+#############################################################
+Installation path: C:\Users\mark\Desktop\AI_Auto_test\automatic_test\backend\.venv\Lib\site-packages\Browser\wrapper</msg>
+<msg time="2026-06-20T13:01:16.761245" level="ERROR">Calling method '_end_suite' of listener 'Browser' failed: 
+#############################################################
+#                                                           #
+#  RF-Browser dependencies not found in installation path!  #
+#           Run `rfbrowser init` to install.                #
+#                                                           #
+#############################################################
+Installation path: C:\Users\mark\Desktop\AI_Auto_test\automatic_test\backend\.venv\Lib\site-packages\Browser\wrapper</msg>
+</errors>
+</robot>

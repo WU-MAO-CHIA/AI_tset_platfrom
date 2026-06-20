@@ -20,7 +20,9 @@
           <th class="sortable" @click="toggleSort('system_category')">
             系統別 <span class="sort-indicator">{{ sortIndicator('system_category') }}</span>
           </th>
-          <th>版本</th>
+          <th class="sortable" @click="toggleSort('version')">
+            版本 <span class="sort-indicator">{{ sortIndicator('version') }}</span>
+          </th>
           <th class="sortable" @click="toggleSort('updated_at')">
             更新時間 <span class="sort-indicator">{{ sortIndicator('updated_at') }}</span>
           </th>

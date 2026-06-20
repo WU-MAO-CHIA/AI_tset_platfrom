@@ -577,6 +577,29 @@ Phase 2 完成後：
 
 ---
 
+---
+
+## Phase 19: version 欄位排序 + checklists 列表排序（2026-06-20）
+
+**Purpose**: 依最新 clarification 實作 FR-003 第五排序欄（`version`）與 FR-006 清單列表後端排序（`name`、`created_by`、`created_at`）。
+
+### US1 — version 欄位排序（FR-003）
+
+- [X] T181 [US1] 在 `backend/src/api/cases.py` `GET /cases` 的 `sort_by` 允許值中新增 `"version"`；在 `backend/src/repositories/test_case_repo.py` `list()` 方法加入 `sort_by == "version"` → `TestCase.version` 欄位排序
+- [X] T182 [P] [US1] 更新 `frontend/src/pages/CasesPage.vue` 或 `frontend/src/components/TestCaseList/index.vue`：表格標題新增「版本」欄位（`sort_by: "version"`），與現有排序欄位保持相同的 ↑/↓ 指示符邏輯
+
+**Checkpoint**: `GET /cases?sort_by=version&order=asc` 回傳依版本遞增排序；CasesPage 版本欄標題可點擊並顯示排序指示符
+
+### US3 — checklists 列表後端排序（FR-006）
+
+- [X] T183 [US3] 在 `backend/src/api/checklists.py` `GET /checklists` 端點新增 `sort_by: str = "created_at"` 與 `order: str = "desc"` query 參數，傳入 service/repository；在 `backend/src/repositories/checklist_repo.py` 加入動態排序邏輯（支援 `name`、`created_by`、`created_at`；invalid column → fallback `created_at desc`）
+- [X] T184 [P] [US3] 更新 `frontend/src/services/checklistApi.ts` `listChecklists()` 新增 `sort_by?: string` 與 `order?: string` 參數
+- [X] T185 [US3] 更新 `frontend/src/pages/ChecklistsPage.vue`：表格標題「清單名稱」、「建立人員」、「建立時間」改為可點擊排序，顯示 ↑/↓ 指示符，重新呼叫 API 帶 `sort_by`/`order`；預設 `created_at desc`
+
+**Checkpoint**: `GET /checklists?sort_by=name&order=asc` 回傳依名稱排序；ChecklistsPage 三欄標題可點擊並顯示排序指示符
+
+---
+
 ## Notes
 
 - `[P]` = 不同檔案，無未完成依賴，可平行執行

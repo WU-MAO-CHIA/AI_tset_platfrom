@@ -50,9 +50,9 @@ export async function createChecklist(payload: {
   return res.data
 }
 
-export async function listChecklists(page = 1, pageSize = 20, keyword?: string): Promise<ChecklistListResponse> {
+export async function listChecklists(page = 1, pageSize = 20, keyword?: string, sort_by?: string, order?: string): Promise<ChecklistListResponse> {
   const res = await apiClient.get<ChecklistListResponse>('/checklists', {
-    params: { page, page_size: pageSize, ...(keyword ? { keyword } : {}) },
+    params: { page, page_size: pageSize, ...(keyword ? { keyword } : {}), ...(sort_by ? { sort_by } : {}), ...(order ? { order } : {}) },
   })
   return res.data
 }

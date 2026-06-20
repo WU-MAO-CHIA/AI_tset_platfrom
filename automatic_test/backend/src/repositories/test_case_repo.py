@@ -76,6 +76,7 @@ class TestCaseRepository(BaseRepository[TestCase]):
         "system_category": lambda: TestCase.system_category,
         "created_at": lambda: TestCase.created_at,
         "updated_at": lambda: TestCase.updated_at,
+        "version": lambda: TestCase.version,
     }
 
     async def list_with_filters(
