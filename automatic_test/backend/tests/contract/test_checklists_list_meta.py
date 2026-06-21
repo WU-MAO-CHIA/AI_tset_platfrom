@@ -32,3 +32,16 @@ class TestChecklistListMeta:
             assert isinstance(item["case_count"], int)
             assert "status" in item          # 未執行為 None
             assert "created_at" in item
+
+    @pytest.mark.parametrize("order", ["asc", "desc"])
+    async def test_sort_by_status(self, client, order):
+        token = await _admin_token(client)
+        r = await client.get(
+            f"/api/v1/checklists?page=1&page_size=10&sort_by=status&order={order}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert r.status_code == 200
+        statuses = [item["status"] for item in r.json()["items"]]
+        # 非空狀態應依序排列（None 視為空值集中於一端）
+        non_null = [s for s in statuses if s is not None]
+        assert non_null == sorted(non_null, reverse=(order == "desc"))

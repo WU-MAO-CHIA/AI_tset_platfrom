@@ -35,7 +35,9 @@
           <th class="sortable" @click="toggleSort('created_at')">
             建立時間 <span class="sort-indicator">{{ sortIndicator('created_at') }}</span>
           </th>
-          <th>狀態</th>
+          <th class="sortable" @click="toggleSort('status')">
+            狀態 <span class="sort-indicator">{{ sortIndicator('status') }}</span>
+          </th>
         </tr>
       </thead>
       <tbody>

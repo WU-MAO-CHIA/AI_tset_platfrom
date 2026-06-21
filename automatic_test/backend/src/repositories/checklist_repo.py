@@ -87,9 +87,22 @@ class ChecklistRepository(BaseRepository[TestChecklist]):
 
         base_q = select(TestChecklist).where(and_(*conditions)) if conditions else select(TestChecklist)
 
-        col_factory = self._SORTABLE_COLUMNS.get(sort_by, self._SORTABLE_COLUMNS["created_at"])
-        col = col_factory()
-        order_expr = col.asc() if order == "asc" else col.desc()
+        if sort_by == "status":
+            # 狀態為衍生欄位：以最新一筆（排除 deleted）清單執行的 status 排序
+            from src.models.execution_record import ExecutionRecord
+            order_col = (
+                select(ExecutionRecord.status)
+                .where(ExecutionRecord.checklist_id == TestChecklist.id)
+                .where(ExecutionRecord.status != "deleted")
+                .order_by(ExecutionRecord.created_at.desc())
+                .limit(1)
+                .correlate(TestChecklist)
+                .scalar_subquery()
+            )
+        else:
+            col_factory = self._SORTABLE_COLUMNS.get(sort_by, self._SORTABLE_COLUMNS["created_at"])
+            order_col = col_factory()
+        order_expr = order_col.asc() if order == "asc" else order_col.desc()
 
         offset = (page - 1) * page_size
         result = await self.session.execute(base_q.order_by(order_expr).offset(offset).limit(page_size))
