@@ -88,9 +88,10 @@ class ChecklistRepository(BaseRepository[TestChecklist]):
         base_q = select(TestChecklist).where(and_(*conditions)) if conditions else select(TestChecklist)
 
         if sort_by == "status":
-            # 狀態為衍生欄位：以最新一筆（排除 deleted）清單執行的 status 排序
+            # 狀態為衍生欄位：取最新一筆（排除 deleted）清單執行的 status
+            from sqlalchemy import case
             from src.models.execution_record import ExecutionRecord
-            order_col = (
+            latest_status = (
                 select(ExecutionRecord.status)
                 .where(ExecutionRecord.checklist_id == TestChecklist.id)
                 .where(ExecutionRecord.status != "deleted")
@@ -98,6 +99,15 @@ class ChecklistRepository(BaseRepository[TestChecklist]):
                 .limit(1)
                 .correlate(TestChecklist)
                 .scalar_subquery()
+            )
+            # 自訂優先序（asc 由上而下）：completed → pending → running → failed → error → 未執行
+            order_col = case(
+                (latest_status == "completed", 0),
+                (latest_status == "pending", 1),
+                (latest_status == "running", 2),
+                (latest_status == "failed", 3),
+                (latest_status == "error", 4),
+                else_=99,  # 未執行(NULL)或其他狀態排最後
             )
         else:
             col_factory = self._SORTABLE_COLUMNS.get(sort_by, self._SORTABLE_COLUMNS["created_at"])

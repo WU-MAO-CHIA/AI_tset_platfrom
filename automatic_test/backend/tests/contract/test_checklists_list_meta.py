@@ -34,14 +34,15 @@ class TestChecklistListMeta:
             assert "created_at" in item
 
     @pytest.mark.parametrize("order", ["asc", "desc"])
-    async def test_sort_by_status(self, client, order):
+    async def test_sort_by_status_custom_priority(self, client, order):
+        # 自訂優先序：completed → pending → running → failed → error → 未執行
+        rank = {"completed": 0, "pending": 1, "running": 2, "failed": 3, "error": 4}
         token = await _admin_token(client)
         r = await client.get(
-            f"/api/v1/checklists?page=1&page_size=10&sort_by=status&order={order}",
+            f"/api/v1/checklists?page=1&page_size=20&sort_by=status&order={order}",
             headers={"Authorization": f"Bearer {token}"},
         )
         assert r.status_code == 200
-        statuses = [item["status"] for item in r.json()["items"]]
-        # 非空狀態應依序排列（None 視為空值集中於一端）
-        non_null = [s for s in statuses if s is not None]
-        assert non_null == sorted(non_null, reverse=(order == "desc"))
+        ranks = [rank.get(item["status"], 99) for item in r.json()["items"]]
+        # asc：rank 由小到大（completed 在前）；desc：反之
+        assert ranks == sorted(ranks, reverse=(order == "desc"))
