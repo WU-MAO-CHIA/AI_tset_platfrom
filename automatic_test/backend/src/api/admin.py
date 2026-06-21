@@ -127,42 +127,13 @@ async def delete_system_category(category_id: str, db: AsyncSession = Depends(ge
 
 # ──────────────────────────── LLM API Key 管理 ────────────────────────────
 
-class SetLlmKeyRequest(BaseModel):
-    key: str
-
-
-class SetDefaultModelRequest(BaseModel):
-    model_config = {"protected_namespaces": ()}
-    model: str
-
+# LLM 金鑰與預設模型一律由 .env 配置，後台僅唯讀遮罩顯示（FR-027）。
 
 @router.get("/llm-keys", dependencies=[Depends(require_admin)])
-async def get_llm_key_status(db: AsyncSession = Depends(get_db)):
-    svc = AppSettingService(db)
-    return await svc.get_llm_keys()
-
-
-@router.put("/llm-keys/{provider}", dependencies=[Depends(require_admin)])
-async def set_llm_key(provider: str, body: SetLlmKeyRequest, db: AsyncSession = Depends(get_db)):
-    svc = AppSettingService(db)
-    await svc.set_llm_key(provider, body.key)
-    await db.commit()
-    return {"updated": True}
+async def get_llm_key_status():
+    return AppSettingService().get_llm_keys()
 
 
 @router.get("/llm-default-model", dependencies=[Depends(require_admin)])
-async def get_default_model(db: AsyncSession = Depends(get_db)):
-    svc = AppSettingService(db)
-    model = await svc.get_default_model()
-    if not model:
-        from src.core.config import get_settings
-        model = get_settings().default_llm_model
-    return {"model": model}
-
-
-@router.put("/llm-default-model", dependencies=[Depends(require_admin)])
-async def set_default_model(body: SetDefaultModelRequest, db: AsyncSession = Depends(get_db)):
-    svc = AppSettingService(db)
-    await svc.set_default_model(body.model)
-    await db.commit()
-    return {"updated": True}
+async def get_default_model():
+    return {"model": AppSettingService().get_default_model()}

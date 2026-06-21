@@ -56,6 +56,8 @@ export const deleteSystemCategory = (id: string): Promise<{ deleted: boolean; af
 
 // ──────────────── LLM API Key 管理 ────────────────
 
+// LLM 金鑰與預設模型由 .env 配置，後台僅唯讀顯示（FR-027）
+
 export interface LlmKeyStatus {
   anthropic_key_set: boolean
   anthropic_key_masked?: string
@@ -63,24 +65,8 @@ export interface LlmKeyStatus {
   openai_key_masked?: string
 }
 
-export interface LlmModel {
-  id: string
-  name: string
-  provider: string
-  requires_setup?: boolean
-}
-
 export const getLlmKeyStatus = (): Promise<LlmKeyStatus> =>
   apiClient.get('/admin/llm-keys').then((r) => r.data)
 
-export const setLlmKey = (provider: string, key: string): Promise<void> =>
-  apiClient.put(`/admin/llm-keys/${provider}`, { key }).then((r) => r.data)
-
 export const getDefaultModel = (): Promise<{ model: string }> =>
   apiClient.get('/admin/llm-default-model').then((r) => r.data)
-
-export const setDefaultModel = (model: string): Promise<void> =>
-  apiClient.put('/admin/llm-default-model', { model }).then((r) => r.data)
-
-export const getLlmModels = (): Promise<{ models: LlmModel[]; default: string }> =>
-  apiClient.get('/llm-models').then((r) => r.data)

@@ -122,48 +122,28 @@
       </div>
     </section>
 
-    <!-- LLM API Keys -->
+    <!-- LLM 設定（唯讀，來源 .env） -->
     <section v-if="activeTab === 'llm'" class="tab-content">
-      <h2>LLM API Keys</h2>
+      <h2>LLM 設定（唯讀）</h2>
+      <p class="hint">金鑰與預設模型由部署的 <code>.env</code> 配置；如需變更請修改 .env 並重啟服務。</p>
       <div class="llm-row">
         <div class="llm-card">
           <h3>Anthropic (Claude)</h3>
           <p>狀態：{{ llmStatus?.anthropic_key_set ? '✅ 已設定' : '❌ 未設定' }}</p>
-          <p v-if="llmStatus?.anthropic_key_set" class="masked-key">目前：{{ llmStatus?.anthropic_key_masked }}</p>
-          <div class="field">
-            <label>覆寫 API Key</label>
-            <input v-model="anthropicKey" type="password" placeholder="sk-ant-..." />
-          </div>
-          <button class="primary" :disabled="!anthropicKey" @click="submitLlmKey('anthropic', anthropicKey)">儲存</button>
+          <p v-if="llmStatus?.anthropic_key_set" class="masked-key">{{ llmStatus?.anthropic_key_masked }}</p>
         </div>
 
         <div class="llm-card">
           <h3>OpenAI (GPT)</h3>
           <p>狀態：{{ llmStatus?.openai_key_set ? '✅ 已設定' : '❌ 未設定' }}</p>
-          <p v-if="llmStatus?.openai_key_set" class="masked-key">目前：{{ llmStatus?.openai_key_masked }}</p>
-          <div class="field">
-            <label>覆寫 API Key</label>
-            <input v-model="openaiKey" type="password" placeholder="sk-..." />
-          </div>
-          <button class="primary" :disabled="!openaiKey" @click="submitLlmKey('openai', openaiKey)">儲存</button>
+          <p v-if="llmStatus?.openai_key_set" class="masked-key">{{ llmStatus?.openai_key_masked }}</p>
         </div>
       </div>
 
       <div class="llm-default-model">
         <h3>全域預設模型</h3>
-        <p class="hint">所有 AI 補齊／RF 代碼生成將使用此模型；僅列出已設定 API Key 的可用模型。</p>
-        <select
-          data-testid="default-model-select"
-          :value="defaultModel"
-          @change="onDefaultModelChange(($event.target as HTMLSelectElement).value)"
-        >
-          <option v-for="m in availableModels" :key="m.id" :value="m.id">
-            {{ m.name }}（{{ m.provider }}）
-          </option>
-        </select>
+        <p class="masked-key" data-testid="default-model">{{ defaultModel || '—' }}</p>
       </div>
-
-      <p v-if="llmMsg" class="success-msg">{{ llmMsg }}</p>
     </section>
   </div>
 </template>
@@ -171,7 +151,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import * as adminApi from '../services/adminApi'
-import type { UserRecord, SystemCategory, LlmModel } from '../services/adminApi'
+import type { UserRecord, SystemCategory } from '../services/adminApi'
 
 const tabs = [
   { key: 'users', label: '帳號管理' },
@@ -282,42 +262,21 @@ async function onDeleteCat(c: SystemCategory) {
   await loadCategories()
 }
 
-// ─── LLM Key 管理 ───
+// ─── LLM 設定（唯讀，來源 .env）───
 const llmStatus = ref<adminApi.LlmKeyStatus | null>(null)
-const anthropicKey = ref('')
-const openaiKey = ref('')
-const llmMsg = ref('')
 const defaultModel = ref('')
-const availableModels = ref<LlmModel[]>([])
 
 async function loadLlmStatus() {
   llmStatus.value = await adminApi.getLlmKeyStatus()
 }
 
-async function loadLlmModels() {
-  const [list, def] = await Promise.all([adminApi.getLlmModels(), adminApi.getDefaultModel()])
-  availableModels.value = list.models.filter((m) => !m.requires_setup)
+async function loadDefaultModel() {
+  const def = await adminApi.getDefaultModel()
   defaultModel.value = def.model
 }
 
-async function onDefaultModelChange(model: string) {
-  defaultModel.value = model
-  await adminApi.setDefaultModel(model)
-  llmMsg.value = `全域預設模型已更新為 ${model}`
-  setTimeout(() => { llmMsg.value = '' }, 3000)
-}
-
-async function submitLlmKey(provider: string, key: string) {
-  await adminApi.setLlmKey(provider, key)
-  llmMsg.value = `${provider} API Key 已更新`
-  if (provider === 'anthropic') anthropicKey.value = ''
-  else openaiKey.value = ''
-  await loadLlmStatus()
-  setTimeout(() => { llmMsg.value = '' }, 3000)
-}
-
 onMounted(async () => {
-  await Promise.all([loadUsers(), loadCategories(), loadLlmStatus(), loadLlmModels()])
+  await Promise.all([loadUsers(), loadCategories(), loadLlmStatus(), loadDefaultModel()])
 })
 </script>
 

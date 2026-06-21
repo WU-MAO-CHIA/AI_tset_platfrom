@@ -116,42 +116,43 @@ automatic_test/
 
 **驗收條件**：測試清單無案例時，點擊「執行測試」後顯示警示訊息「測試清單為空，請先新增案例」，瀏覽器 Network tab 無 POST 請求發出。
 
-### Phase 23：LLM API Key 帶出遮罩 + 全域預設模型（FR-027 / FR-012）
+### Phase 23：LLM 設定 env-only + 後台唯讀遮罩（FR-027 / FR-012）
+
+> **設計修訂（2026-06-21）**：原規劃「DB 持久化全域預設模型 + /admin 下拉編輯 + 即時生效」，經評估後改為 **env-only**：金鑰與預設模型一律由 `.env` 配置，後台僅唯讀遮罩顯示。理由：LLM 呼叫金鑰本即讀 `.env`（`get_provider` 用 `settings.*_api_key`），DB 那層從未被實際使用；env-only 更簡單（KISS/YAGNI），且避免「寫檔到 .env」的明文落地、設定注入、並發覆蓋、重啟等風險。
 
 **目標**：
-1. `/admin` LLM 分頁載入時「帶出」各 provider 目前已儲存的 API Key，以**遮罩**呈現（前 7 字元 + 末 4 碼），**禁回傳明文**。
-2. `/admin` 新增「**全域預設模型**」下拉選擇，持久化於 `app_setting`，覆蓋 env `default_llm_model`，立即生效、無需重啟。
-3. 建立案例頁移除寫死的 `'claude-sonnet-4-6'`，改讀全域預設模型；模型切換僅於 `/admin`，表單不提供選擇器。
+1. `/admin` LLM 分頁**唯讀**顯示各 provider 的設定狀態與遮罩值（前 7 字元 + `****…` + 末 4 碼），來源為 `.env`。
+2. `/admin` 唯讀顯示目前全域預設模型（`.env` 的 `DEFAULT_LLM_MODEL`）；不提供編輯。
+3. 建立案例頁移除寫死的 `'claude-sonnet-4-6'`，改讀 `/llm-models` 的 `default`（其值來自 env）。
 
 **設計決策**：
-- 全域預設模型沿用既有 `AppSetting`（key=`default_llm_model`，存於 `encrypted_value` 欄）儲存，**不需 Alembic migration**；雖非機密，沿用加密欄可避免 schema 變更。
-- 遮罩採後端產生：解密後僅輸出「前 7 字元 + `****…` + 末 4 碼」（如 `sk-ant-****…dF3a`；金鑰長度 < 12 時整串 `****`），API 永不回傳完整金鑰（符合 FR-027 / FR-007 加密原則）。
-- 全域預設模型下拉僅列出對應 provider 已設定 API Key 的可用模型（`requires_setup=false`），避免選到無 Key 的模型導致 AI 補齊失敗。
-- 依 constitution III（Test-First, NON-NEGOTIABLE）：Phase 23 先寫 contract/unit test（確認 RED）再實作。
-- `/llm-models` 的 `default` 改為 **DB 優先**（讀 `app_setting.default_llm_model`），無則 fallback 至 env。
+- 金鑰與預設模型來源唯一 = `.env`；變更需修改 `.env` 並**重啟服務**生效。後台與 API **永不回傳完整明文**。
+- 遮罩採後端產生：`_mask()` 輸出「前 7 字元 + `****…` + 末 4 碼」（如 `sk-ant-****…dF3a`；長度 < 12 整串 `****`）；金鑰來源為 `settings.*_api_key`。
+- 不使用 DB（`app_setting`）儲存金鑰或模型，無 migration、無寫入端點。
+- 依 constitution III（Test-First, NON-NEGOTIABLE）：先寫 contract/unit test（確認 RED）再實作。
 
 **後端修改範圍**：
 
 | 檔案 | 變更 |
 |------|------|
-| `services/app_setting_service.py` | `get_llm_keys()` 改回傳含遮罩值（`*_key_set` 保留 + 新增 `*_key_masked`）；新增 `get_default_model()` / `set_default_model()`；新增 `_mask(key)` helper |
-| `api/admin.py` | `GET /llm-keys` 回傳遮罩值；新增 `GET /admin/llm-default-model`、`PUT /admin/llm-default-model` |
-| `api/llm_models.py` | `default` 改讀 `app_setting`（DB）優先，無則 fallback `settings.default_llm_model` |
-| LLM 呼叫端（AI 補齊 / Chat / RF 代碼生成 service） | 未顯式指定模型時，改用全域預設模型（DB） |
+| `services/app_setting_service.py` | 改為純讀 env：`_mask()` helper、`get_llm_keys()` 回傳 `*_key_set`＋`*_key_masked`（讀 `settings.*_api_key`）、`get_default_model()` 回 `settings.default_llm_model`；移除所有 DB/寫入 |
+| `api/admin.py` | 唯讀 `GET /llm-keys`（遮罩）、`GET /admin/llm-default-model`；移除 `PUT /llm-keys/{provider}` 與 `PUT/GET(DB) llm-default-model` 寫入端點 |
+| `api/llm_models.py` | `default` 直接回 `settings.default_llm_model`（還原 sync，無 DB） |
+| LLM 呼叫端（cases.py） | 維持 `body.llm_model or settings.default_llm_model`（env fallback） |
 
 **前端修改範圍**：
 
 | 檔案 | 變更 |
 |------|------|
-| `services/adminApi.ts` | `LlmKeyStatus` 增 `*_key_masked`；新增 `getDefaultModel()` / `setDefaultModel(modelId)` 與型別 |
-| `pages/AdminPage.vue` | LLM 分頁顯示遮罩 key（已設定時於狀態列呈現 `sk-ant-****…dF3a`）；新增「全域預設模型」下拉（選項來源 `/llm-models`），儲存呼叫 `setDefaultModel` |
-| `pages/CaseCreatePage.vue` | 移除寫死 `selectedModel = ref('claude-sonnet-4-6')`，改於 `onMounted` 讀 `/llm-models` 的 `default` |
+| `services/adminApi.ts` | `LlmKeyStatus` 含 `*_key_masked`；唯讀 `getLlmKeyStatus()` / `getDefaultModel()`；移除 `setLlmKey` / `setDefaultModel` / `getLlmModels` |
+| `pages/AdminPage.vue` | LLM 分頁改**唯讀**：顯示遮罩 key 與目前預設模型；移除金鑰輸入/儲存與模型下拉 |
+| `pages/CaseCreatePage.vue` | 移除寫死 `selectedModel`，改於 `onMounted` 讀 `/llm-models` 的 `default` |
 | 死碼移除 | 刪除 `components/StepsEditor/` 與 `components/LLMModelSelector/`（全前端零引用） |
 
 **驗收條件**：
-- `/admin` LLM 分頁載入即顯示已設定 key 的遮罩（如 `sk-ant-****…dF3a`）；未設定顯示「未設定」；API 回應不含完整金鑰。
-- `/admin` 切換全域預設模型並儲存後，新建案例的 AI 補齊／RF 生成即採用該模型，無需重啟。
-- 建立案例頁不再寫死模型，畫面無模型選擇器；`/llm-models` 的 `default` 反映 DB 設定值。
+- `/admin` LLM 分頁載入即唯讀顯示已設定 key 的遮罩（如 `sk-ant-****…cwAA`）；未設定顯示「未設定」；API 回應不含完整金鑰。
+- `/admin` 唯讀顯示目前全域預設模型；無編輯下拉；`PUT /admin/llm-default-model` 不存在（405）。
+- 建立案例頁不再寫死模型，畫面無模型選擇器；`/llm-models` 的 `default` 反映 `.env` 設定值。
 
 ### Phase 20：登入畫面 + 管理後台（FR-024〜FR-027）
 

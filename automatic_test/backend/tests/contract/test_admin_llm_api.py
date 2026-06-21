@@ -1,5 +1,6 @@
-"""Contract tests for /api/v1/admin LLM key 遮罩 + 全域預設模型端點（Phase 23）。
-RED: 在 masked llm-keys + llm-default-model 端點實作前應失敗。
+"""Contract tests for /api/v1/admin LLM 唯讀端點（Phase 23 / env-only）。
+
+金鑰與預設模型由 .env 配置；後台僅唯讀遮罩顯示，無編輯端點。
 """
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -27,7 +28,7 @@ class TestLlmKeysMasked:
         data = r.json()
         for f in ("anthropic_key_set", "anthropic_key_masked", "openai_key_set", "openai_key_masked"):
             assert f in data
-        # 已設定者遮罩值需含 ****；未設定者為空，皆不得含完整明文
+        # 已設定者遮罩需含 ****；皆不得含完整明文
         for f in ("anthropic_key_masked", "openai_key_masked"):
             if data[f]:
                 assert "****" in data[f]
@@ -37,16 +38,20 @@ class TestLlmKeysMasked:
         assert r.status_code == 401
 
 
-class TestDefaultModelEndpoint:
-    async def test_put_then_get_default_model(self, client):
+class TestDefaultModelReadOnly:
+    async def test_get_default_model(self, client):
         token = await _admin_token(client)
-        h = {"Authorization": f"Bearer {token}"}
-        put = await client.put("/api/v1/admin/llm-default-model", headers=h, json={"model": "claude-opus-4-7"})
-        assert put.status_code == 200
-        get = await client.get("/api/v1/admin/llm-default-model", headers=h)
-        assert get.status_code == 200
-        assert get.json()["model"] == "claude-opus-4-7"
+        r = await client.get("/api/v1/admin/llm-default-model", headers={"Authorization": f"Bearer {token}"})
+        assert r.status_code == 200
+        assert "model" in r.json()
 
     async def test_default_model_requires_auth(self, client):
         r = await client.get("/api/v1/admin/llm-default-model")
         assert r.status_code == 401
+
+    async def test_no_write_endpoint(self, client):
+        """env-only：不應存在 PUT 寫入端點。"""
+        token = await _admin_token(client)
+        h = {"Authorization": f"Bearer {token}"}
+        r = await client.put("/api/v1/admin/llm-default-model", headers=h, json={"model": "gpt-4o"})
+        assert r.status_code in (404, 405)

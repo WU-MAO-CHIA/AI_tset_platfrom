@@ -667,9 +667,11 @@ Phase 2 完成後：
 
 ---
 
-## Phase 23: LLM API Key 帶出遮罩 + 全域預設模型（FR-027 / FR-012）（2026-06-21）
+## Phase 23: LLM 設定 env-only + 後台唯讀遮罩（FR-027 / FR-012）（2026-06-21）
 
-**Purpose**: `/admin` LLM 分頁帶出遮罩 key 並提供全域預設模型選擇；模型集中於後台管理，建立案例表單改用全域預設值
+**Purpose**: `/admin` LLM 分頁唯讀顯示金鑰遮罩與目前預設模型；金鑰與預設模型一律由 `.env` 配置，建立案例表單採用全域預設值
+
+> **設計修訂（2026-06-21，env-only）**：本 Phase 最終實作改為 **env-only**——金鑰與預設模型皆由 `.env` 配置、後台**唯讀**遮罩顯示，**移除** DB 持久化、模型下拉、金鑰寫入與所有 PUT 端點。下列 T212–T224 任務描述中涉及「DB / app_setting 持久化、set_default_model、模型下拉、PUT 端點」之部分，已依此修訂簡化；最終以程式碼與 plan.md Phase 23（env-only）為準。對應測試亦已調整為 env-only（唯讀端點、讀 env 遮罩、不存在 PUT）。
 
 ### TDD 測試（先寫、確認 RED）
 

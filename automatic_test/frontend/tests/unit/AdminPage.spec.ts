@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import AdminPage from '../../src/pages/AdminPage.vue'
-import * as adminApi from '../../src/services/adminApi'
 
 vi.mock('../../src/services/adminApi', () => ({
   listUsers: vi.fn().mockResolvedValue([]),
@@ -12,19 +11,10 @@ vi.mock('../../src/services/adminApi', () => ({
     openai_key_set: false,
     openai_key_masked: '',
   }),
-  setLlmKey: vi.fn().mockResolvedValue(undefined),
   getDefaultModel: vi.fn().mockResolvedValue({ model: 'claude-sonnet-4-6' }),
-  setDefaultModel: vi.fn().mockResolvedValue(undefined),
-  getLlmModels: vi.fn().mockResolvedValue({
-    models: [
-      { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', provider: 'anthropic' },
-      { id: 'claude-opus-4-7', name: 'Claude Opus 4.7', provider: 'anthropic' },
-    ],
-    default: 'claude-sonnet-4-6',
-  }),
 }))
 
-describe('AdminPage — LLM 分頁（遮罩 + 全域預設模型）', () => {
+describe('AdminPage — LLM 設定（唯讀，來源 .env）', () => {
   beforeEach(() => vi.clearAllMocks())
 
   async function mountLlmTab() {
@@ -46,12 +36,12 @@ describe('AdminPage — LLM 分頁（遮罩 + 全域預設模型）', () => {
     expect(wrapper.text()).toContain('未設定')
   })
 
-  it('變更全域預設模型下拉後呼叫 setDefaultModel', async () => {
+  it('唯讀顯示全域預設模型，且無編輯下拉', async () => {
     const wrapper = await mountLlmTab()
-    const select = wrapper.find('[data-testid="default-model-select"]')
-    expect(select.exists()).toBe(true)
-    await select.setValue('claude-opus-4-7')
-    await flushPromises()
-    expect(adminApi.setDefaultModel).toHaveBeenCalledWith('claude-opus-4-7')
+    const model = wrapper.find('[data-testid="default-model"]')
+    expect(model.exists()).toBe(true)
+    expect(model.text()).toContain('claude-sonnet-4-6')
+    // env-only：不應有可編輯的模型下拉
+    expect(wrapper.find('[data-testid="default-model-select"]').exists()).toBe(false)
   })
 })
