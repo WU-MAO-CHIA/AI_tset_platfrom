@@ -6,10 +6,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_db
+from src.core.dependencies import get_current_user
 from src.models.db_connection import DBConnection
 from src.services.db_connect_service import DBConnectionService
 
-router = APIRouter(prefix="/db-connections", tags=["db-connections"])
+router = APIRouter(prefix="/db-connections", tags=["db-connections"], dependencies=[Depends(get_current_user)])
 
 
 class DBConnectionCreateRequest(BaseModel):

@@ -9,13 +9,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.database import get_db
 from src.core.config import get_settings
 from src.core.llm_provider import get_provider
+from src.core.dependencies import get_current_user, require_editor_or_above
 from src.repositories.test_case_repo import TestCaseRepository
 from src.repositories.execution_repo import ExecutionRepository
 from src.services.case_service import CaseService
 from src.services.media_service import MediaService
 from src.services.ai_service import AIService
 
-router = APIRouter(prefix="/cases", tags=["cases"])
+router = APIRouter(prefix="/cases", tags=["cases"], dependencies=[Depends(get_current_user)])
 
 
 # ─── Schemas ────────────────────────────────────────────────────────────────
@@ -111,7 +112,7 @@ def serialize_case_detail(case) -> dict:
 
 # ─── Endpoints ───────────────────────────────────────────────────────────────
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, dependencies=[Depends(require_editor_or_above)])
 async def create_case(
     body: CaseCreateRequest,
     service: CaseService = Depends(get_case_service),
@@ -196,7 +197,7 @@ async def get_case_execution_history(
     return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
-@router.put("/{case_id}")
+@router.put("/{case_id}", dependencies=[Depends(require_editor_or_above)])
 async def update_case(
     case_id: str,
     body: CaseUpdateRequest,
@@ -220,7 +221,7 @@ async def update_case(
     return serialize_case_detail(case)
 
 
-@router.delete("/{case_id}")
+@router.delete("/{case_id}", dependencies=[Depends(require_editor_or_above)])
 async def delete_case(
     case_id: str,
     body: CaseDeleteRequest,
@@ -372,7 +373,7 @@ async def get_chat_history(
     }
 
 
-@router.post("/{case_id}/attachments", status_code=201)
+@router.post("/{case_id}/attachments", status_code=201, dependencies=[Depends(require_editor_or_above)])
 async def upload_attachment(
     case_id: str,
     file: Optional[UploadFile] = File(None),
@@ -443,7 +444,7 @@ async def confirm_import_test_data(
     return {"imported_count": 0, "message": "Import confirmed (token-based storage not yet implemented)"}
 
 
-@router.put("/{case_id}/robot-script")
+@router.put("/{case_id}/robot-script", dependencies=[Depends(require_editor_or_above)])
 async def save_robot_script(
     case_id: str,
     body: RobotScriptRequest,

@@ -28,6 +28,9 @@ from src.models.case_result import CaseResult  # noqa: E402, F401
 from src.models.execution_media import ExecutionMedia  # noqa: E402, F401
 from src.models.case_chat_message import CaseChatMessage  # noqa: E402, F401
 from src.models.robot_script import RobotScript  # noqa: E402, F401
+from src.models.user import User  # noqa: E402, F401
+from src.models.system_category import SystemCategory  # noqa: E402, F401
+from src.models.app_setting import AppSetting  # noqa: E402, F401
 
 target_metadata = Base.metadata
 

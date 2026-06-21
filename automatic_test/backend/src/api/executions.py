@@ -9,13 +9,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import AsyncSessionLocal, get_db
+from src.core.dependencies import get_current_user
 from src.models.case_result import CaseResult
 from src.models.execution_media import ExecutionMedia
 from src.models.execution_record import ExecutionRecord
 from src.repositories.execution_repo import ExecutionRepository
 from src.services.report_service import ReportService
 
-router = APIRouter(prefix="/executions", tags=["executions"])
+router = APIRouter(prefix="/executions", tags=["executions"], dependencies=[Depends(get_current_user)])
 
 
 @router.get("/{execution_id}")

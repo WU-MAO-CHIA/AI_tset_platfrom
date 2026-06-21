@@ -608,46 +608,46 @@ Phase 2 完成後：
 
 ### 後端基礎層（安全模組 + 模型 + 遷移）
 
-- [ ] T186 更新 `backend/requirements.txt` 加入 `python-jose[cryptography]` 與 `passlib[bcrypt]`；更新 `backend/.env.example` 新增 `JWT_SECRET_KEY`、`JWT_EXPIRE_HOURS=8`、`ADMIN_USERNAME`、`ADMIN_PASSWORD`；更新 `backend/src/core/config.py` Settings 暴露這四個欄位
-- [ ] T187 建立 `backend/src/core/security.py`：`create_access_token(sub, role)` → HS256 JWT（`python-jose`）；`decode_token(token)` → payload dict；`hash_password(plain)` / `verify_password(plain, hashed)` → passlib bcrypt；`OAuth2PasswordBearerCustom` scheme（token from Authorization header）
-- [ ] T188 建立 `backend/src/models/user.py`（User ORM：id UUID, username VARCHAR UNIQUE NOT NULL, hashed_password TEXT NOT NULL, role ENUM('admin','editor','viewer') DEFAULT 'viewer', is_active BOOL DEFAULT TRUE, created_at）；在 `backend/alembic/env.py` import User
-- [ ] T189 [P] 建立 `backend/src/models/system_category.py`（SystemCategory ORM：id UUID, name VARCHAR UNIQUE NOT NULL, is_deleted BOOL DEFAULT FALSE, created_at）；在 `backend/alembic/env.py` import SystemCategory
-- [ ] T190 [P] 建立 `backend/src/models/app_setting.py`（AppSetting ORM：id UUID, key VARCHAR UNIQUE NOT NULL, encrypted_value TEXT, updated_at）；在 `backend/alembic/env.py` import AppSetting
-- [ ] T191 執行 `alembic revision --autogenerate -m "add_user_system_category_app_setting"` 並驗證 migration upgrade 正常（新增 users / system_categories / app_settings 三張表）
+- [X] T186 更新 `backend/requirements.txt` 加入 `python-jose[cryptography]` 與 `passlib[bcrypt]`；更新 `backend/.env.example` 新增 `JWT_SECRET_KEY`、`JWT_EXPIRE_HOURS=8`、`ADMIN_USERNAME`、`ADMIN_PASSWORD`；更新 `backend/src/core/config.py` Settings 暴露這四個欄位
+- [X] T187 建立 `backend/src/core/security.py`：`create_access_token(sub, role)` → HS256 JWT（`python-jose`）；`decode_token(token)` → payload dict；`hash_password(plain)` / `verify_password(plain, hashed)` → passlib bcrypt；`OAuth2PasswordBearerCustom` scheme（token from Authorization header）
+- [X] T188 建立 `backend/src/models/user.py`（User ORM：id UUID, username VARCHAR UNIQUE NOT NULL, hashed_password TEXT NOT NULL, role ENUM('admin','editor','viewer') DEFAULT 'viewer', is_active BOOL DEFAULT TRUE, created_at）；在 `backend/alembic/env.py` import User
+- [X] T189 [P] 建立 `backend/src/models/system_category.py`（SystemCategory ORM：id UUID, name VARCHAR UNIQUE NOT NULL, is_deleted BOOL DEFAULT FALSE, created_at）；在 `backend/alembic/env.py` import SystemCategory
+- [X] T190 [P] 建立 `backend/src/models/app_setting.py`（AppSetting ORM：id UUID, key VARCHAR UNIQUE NOT NULL, encrypted_value TEXT, updated_at）；在 `backend/alembic/env.py` import AppSetting
+- [X] T191 執行 `alembic revision --autogenerate -m "add_user_system_category_app_setting"` 並驗證 migration upgrade 正常（新增 users / system_categories / app_settings 三張表）
 
 ### 後端 Repository + Service + Dependency
 
-- [ ] T192 建立 `backend/src/repositories/user_repo.py`：`get_by_username(username)`, `get(id)`, `list_all()`, `create(username, hashed_pw, role)`, `update(id, **fields)`, `set_active(id, is_active)`
-- [ ] T193 [P] 建立 `backend/src/repositories/system_category_repo.py`：`list_active()`, `get_by_name(name)`, `create(name)`, `update_name(id, name)`, `soft_delete(id)`, `count_cases_using(name)` (query TestCase.system_category == name where not is_deleted)
-- [ ] T194 [P] 建立 `backend/src/repositories/app_setting_repo.py`：`get(key)`, `set(key, value)` — value 以 `security.py` 的 AES-256（`cryptography` Fernet）加密後存入 encrypted_value
-- [ ] T195 更新 `backend/src/core/dependencies.py` 新增三個 dependency：`get_current_user(token=Depends(oauth2_scheme), db=Depends(get_db)) -> User`（decode JWT → 查 DB → 驗 is_active）；`require_admin(user=Depends(get_current_user)) -> User`（role != 'admin' → 403）；`require_editor_or_above(user=Depends(get_current_user)) -> User`（role == 'viewer' → 403）
-- [ ] T196 建立 `backend/src/services/auth_service.py`：`login(username, password, db)` → 查 User → verify_password → create_access_token → 回傳 `{access_token, token_type, role, username}`
-- [ ] T197 [P] 建立 `backend/src/services/user_service.py`：`create(username, plain_pw, role)` → hash_password → user_repo.create；`update_role(id, role)`；`set_active(id, is_active)`；`reset_password(id, new_pw)` → hash + update；`list_all()`；`delete(id)`（硬刪除，須先確認非當前登入使用者）
-- [ ] T198 [P] 建立 `backend/src/services/system_category_service.py`：`list()`, `create(name)`（重複 name → ValueError）, `rename(id, name)`, `delete(id)` → 先 `count_cases_using` 回傳影響數量，再 `soft_delete`；回傳 `{deleted: bool, affected_case_count: int}`
-- [ ] T199 [P] 建立 `backend/src/services/app_setting_service.py`：`get_llm_keys()` → 回傳 `{anthropic_key_set: bool, openai_key_set: bool}`（不回傳明文）；`set_llm_key(provider: "anthropic"|"openai", key: str)` → encrypt + upsert；`get_decrypted_key(provider)` → 供 LLMProvider 取用
+- [X] T192 建立 `backend/src/repositories/user_repo.py`：`get_by_username(username)`, `get(id)`, `list_all()`, `create(username, hashed_pw, role)`, `update(id, **fields)`, `set_active(id, is_active)`
+- [X] T193 [P] 建立 `backend/src/repositories/system_category_repo.py`：`list_active()`, `get_by_name(name)`, `create(name)`, `update_name(id, name)`, `soft_delete(id)`, `count_cases_using(name)` (query TestCase.system_category == name where not is_deleted)
+- [X] T194 [P] 建立 `backend/src/repositories/app_setting_repo.py`：`get(key)`, `set(key, value)` — value 以 `security.py` 的 AES-256（`cryptography` Fernet）加密後存入 encrypted_value
+- [X] T195 更新 `backend/src/core/dependencies.py` 新增三個 dependency：`get_current_user(token=Depends(oauth2_scheme), db=Depends(get_db)) -> User`（decode JWT → 查 DB → 驗 is_active）；`require_admin(user=Depends(get_current_user)) -> User`（role != 'admin' → 403）；`require_editor_or_above(user=Depends(get_current_user)) -> User`（role == 'viewer' → 403）
+- [X] T196 建立 `backend/src/services/auth_service.py`：`login(username, password, db)` → 查 User → verify_password → create_access_token → 回傳 `{access_token, token_type, role, username}`
+- [X] T197 [P] 建立 `backend/src/services/user_service.py`：`create(username, plain_pw, role)` → hash_password → user_repo.create；`update_role(id, role)`；`set_active(id, is_active)`；`reset_password(id, new_pw)` → hash + update；`list_all()`；`delete(id)`（硬刪除，須先確認非當前登入使用者）
+- [X] T198 [P] 建立 `backend/src/services/system_category_service.py`：`list()`, `create(name)`（重複 name → ValueError）, `rename(id, name)`, `delete(id)` → 先 `count_cases_using` 回傳影響數量，再 `soft_delete`；回傳 `{deleted: bool, affected_case_count: int}`
+- [X] T199 [P] 建立 `backend/src/services/app_setting_service.py`：`get_llm_keys()` → 回傳 `{anthropic_key_set: bool, openai_key_set: bool}`（不回傳明文）；`set_llm_key(provider: "anthropic"|"openai", key: str)` → encrypt + upsert；`get_decrypted_key(provider)` → 供 LLMProvider 取用
 
 ### 後端 API 路由
 
-- [ ] T200 建立 `backend/src/api/auth.py`：`POST /auth/login` body `{username, password}` → 呼叫 auth_service.login → 回傳 `{access_token, token_type: "bearer", role, username}`；無 `Depends(get_current_user)`（公開端點）；掛載於 `backend/src/main.py` prefix `/api/v1`
-- [ ] T201 建立 `backend/src/api/admin.py`（所有端點均 `Depends(require_admin)`）：帳號管理 `GET /admin/users`, `POST /admin/users`, `PUT /admin/users/{id}`, `DELETE /admin/users/{id}`；系統別管理 `GET /admin/system-categories`, `POST /admin/system-categories`, `PUT /admin/system-categories/{id}`, `DELETE /admin/system-categories/{id}`（response 含 `affected_case_count`）；LLM Key 管理 `GET /admin/llm-keys`, `PUT /admin/llm-keys/{provider}`；掛載於 `backend/src/main.py` prefix `/api/v1`
-- [ ] T202 在 `backend/src/api/cases.py`、`backend/src/api/checklists.py`、`backend/src/api/executions.py`、`backend/src/api/db_connections.py` 的各端點 Depends 中加入 `current_user: User = Depends(get_current_user)`；寫入/刪除操作額外加入 `Depends(require_editor_or_above)`
+- [X] T200 建立 `backend/src/api/auth.py`：`POST /auth/login` body `{username, password}` → 呼叫 auth_service.login → 回傳 `{access_token, token_type: "bearer", role, username}`；無 `Depends(get_current_user)`（公開端點）；掛載於 `backend/src/main.py` prefix `/api/v1`
+- [X] T201 建立 `backend/src/api/admin.py`（所有端點均 `Depends(require_admin)`）：帳號管理 `GET /admin/users`, `POST /admin/users`, `PUT /admin/users/{id}`, `DELETE /admin/users/{id}`；系統別管理 `GET /admin/system-categories`, `POST /admin/system-categories`, `PUT /admin/system-categories/{id}`, `DELETE /admin/system-categories/{id}`（response 含 `affected_case_count`）；LLM Key 管理 `GET /admin/llm-keys`, `PUT /admin/llm-keys/{provider}`；掛載於 `backend/src/main.py` prefix `/api/v1`
+- [X] T202 在 `backend/src/api/cases.py`、`backend/src/api/checklists.py`、`backend/src/api/executions.py`、`backend/src/api/db_connections.py` 的各端點 Depends 中加入 `current_user: User = Depends(get_current_user)`；寫入/刪除操作額外加入 `Depends(require_editor_or_above)`
 
 ### 後端 Seed Script
 
-- [ ] T203 建立 `backend/scripts/seed_admin.py`（`python -m scripts.seed_admin`）：讀取 `settings.ADMIN_USERNAME` / `settings.ADMIN_PASSWORD` → 檢查 username 是否已存在 → 不存在則建立 role='admin' 帳號；輸出成功或跳過訊息
+- [X] T203 建立 `backend/scripts/seed_admin.py`（`python -m scripts.seed_admin`）：讀取 `settings.ADMIN_USERNAME` / `settings.ADMIN_PASSWORD` → 檢查 username 是否已存在 → 不存在則建立 role='admin' 帳號；輸出成功或跳過訊息
 
 ### 前端認證層
 
-- [ ] T204 建立 `automatic_test/frontend/src/stores/authStore.ts`（Pinia）：state: `token: string|null`, `role: string|null`, `username: string|null`；actions: `login(username, password)` → POST /auth/login → 儲存 token/role/username 至 localStorage；`logout()` → 清除 localStorage + 跳轉 /login；`initFromStorage()` → 頁面載入時從 localStorage 還原 state；getter: `isAdmin`, `isEditor`, `isLoggedIn`
-- [ ] T205 更新 `automatic_test/frontend/src/services/apiClient.ts`：request interceptor 從 authStore 取 token，加入 `Authorization: Bearer {token}` header；response interceptor 攔截 401 → 呼叫 authStore.logout()（自動跳至 /login）
-- [ ] T206 建立 `automatic_test/frontend/src/pages/LoginPage.vue`：username + password input、登入按鈕、錯誤訊息（帳號或密碼錯誤）；成功後 authStore.login() 並導向 `/`；頁面無需 auth guard（/login 為公開頁）
-- [ ] T207 更新 `automatic_test/frontend/src/router/index.ts`：新增 `/login` 路由（component: LoginPage, meta: { requiresAuth: false }）；新增 `/admin` 路由（component: AdminPage, meta: { requiresAuth: true, requiresAdmin: true }）；`beforeEach` guard：無 token → 導向 /login；有 token 但 role != 'admin' 且目的地有 requiresAdmin → 導向 /（403 提示）；`authStore.initFromStorage()` 在 app 初始化時呼叫（`frontend/src/main.ts`）
+- [X] T204 建立 `automatic_test/frontend/src/stores/authStore.ts`（Pinia）：state: `token: string|null`, `role: string|null`, `username: string|null`；actions: `login(username, password)` → POST /auth/login → 儲存 token/role/username 至 localStorage；`logout()` → 清除 localStorage + 跳轉 /login；`initFromStorage()` → 頁面載入時從 localStorage 還原 state；getter: `isAdmin`, `isEditor`, `isLoggedIn`
+- [X] T205 更新 `automatic_test/frontend/src/services/apiClient.ts`：request interceptor 從 authStore 取 token，加入 `Authorization: Bearer {token}` header；response interceptor 攔截 401 → 呼叫 authStore.logout()（自動跳至 /login）
+- [X] T206 建立 `automatic_test/frontend/src/pages/LoginPage.vue`：username + password input、登入按鈕、錯誤訊息（帳號或密碼錯誤）；成功後 authStore.login() 並導向 `/`；頁面無需 auth guard（/login 為公開頁）
+- [X] T207 更新 `automatic_test/frontend/src/router/index.ts`：新增 `/login` 路由（component: LoginPage, meta: { requiresAuth: false }）；新增 `/admin` 路由（component: AdminPage, meta: { requiresAuth: true, requiresAdmin: true }）；`beforeEach` guard：無 token → 導向 /login；有 token 但 role != 'admin' 且目的地有 requiresAdmin → 導向 /（403 提示）；`authStore.initFromStorage()` 在 app 初始化時呼叫（`frontend/src/main.ts`）
 
 ### 前端管理後台
 
-- [ ] T208 建立 `automatic_test/frontend/src/services/adminApi.ts`：帳號 CRUD（listUsers, createUser, updateUser, deleteUser）；系統別 CRUD（listSystemCategories, createSystemCategory, renameSystemCategory, deleteSystemCategory）；LLM Key（getLlmKeyStatus, setLlmKey）
-- [ ] T209 建立 `automatic_test/frontend/src/pages/AdminPage.vue`：三個 Tab（「帳號管理」、「系統別管理」、「LLM API Keys」）；帳號管理 Tab：可新增帳號（username/password/role）、修改角色、重設密碼、停用/啟用、刪除；系統別管理 Tab：顯示所有系統別、可新增、重新命名、刪除（刪除前顯示影響案例數）；LLM API Keys Tab：顯示 anthropic/openai key 是否已設定（遮罩），可輸入新 key 覆寫
-- [ ] T210 更新 `automatic_test/frontend/src/App.vue`（全域導覽列）：右側新增使用者名稱顯示與「登出」按鈕（呼叫 authStore.logout()）；若 isAdmin 則顯示「管理後台」導覽連結（指向 /admin）
+- [X] T208 建立 `automatic_test/frontend/src/services/adminApi.ts`：帳號 CRUD（listUsers, createUser, updateUser, deleteUser）；系統別 CRUD（listSystemCategories, createSystemCategory, renameSystemCategory, deleteSystemCategory）；LLM Key（getLlmKeyStatus, setLlmKey）
+- [X] T209 建立 `automatic_test/frontend/src/pages/AdminPage.vue`：三個 Tab（「帳號管理」、「系統別管理」、「LLM API Keys」）；帳號管理 Tab：可新增帳號（username/password/role）、修改角色、重設密碼、停用/啟用、刪除；系統別管理 Tab：顯示所有系統別、可新增、重新命名、刪除（刪除前顯示影響案例數）；LLM API Keys Tab：顯示 anthropic/openai key 是否已設定（遮罩），可輸入新 key 覆寫
+- [X] T210 更新 `automatic_test/frontend/src/App.vue`（全域導覽列）：右側新增使用者名稱顯示與「登出」按鈕（呼叫 authStore.logout()）；若 isAdmin 則顯示「管理後台」導覽連結（指向 /admin）
 
 **Checkpoint**: 未登入時所有頁面導向 /login；登入後顯示使用者名稱與登出按鈕；admin 可存取 /admin 並完成帳號 / 系統別 / LLM Key 管理；viewer 登入後只能瀏覽與執行測試，無法新增/編輯
 

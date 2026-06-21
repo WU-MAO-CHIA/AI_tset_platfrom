@@ -5,10 +5,11 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_db
+from src.core.dependencies import get_current_user, require_editor_or_above
 from src.services.checklist_service import ChecklistService
 from src.services.execution_service import ExecutionService
 
-router = APIRouter(prefix="/checklists", tags=["checklists"])
+router = APIRouter(prefix="/checklists", tags=["checklists"], dependencies=[Depends(get_current_user)])
 
 
 class ChecklistCreateRequest(BaseModel):
@@ -79,7 +80,7 @@ class ReorderCasesRequest(BaseModel):
     case_ids: list[str]
 
 
-@router.post("", status_code=status.HTTP_201_CREATED, response_model=ChecklistResponse)
+@router.post("", status_code=status.HTTP_201_CREATED, response_model=ChecklistResponse, dependencies=[Depends(require_editor_or_above)])
 async def create_checklist(
     body: ChecklistCreateRequest,
     db: AsyncSession = Depends(get_db),
@@ -190,7 +191,7 @@ async def get_checklist_executions(
     }
 
 
-@router.put("/{checklist_id}", response_model=ChecklistResponse)
+@router.put("/{checklist_id}", response_model=ChecklistResponse, dependencies=[Depends(require_editor_or_above)])
 async def update_checklist(
     checklist_id: str,
     body: ChecklistUpdateRequest,
@@ -208,7 +209,7 @@ async def update_checklist(
     )
 
 
-@router.delete("/{checklist_id}")
+@router.delete("/{checklist_id}", dependencies=[Depends(require_editor_or_above)])
 async def delete_checklist(
     checklist_id: str,
     db: AsyncSession = Depends(get_db),
@@ -242,7 +243,7 @@ async def get_checklist_cases(
     return {"items": items, "total": len(items)}
 
 
-@router.post("/{checklist_id}/cases", status_code=status.HTTP_201_CREATED)
+@router.post("/{checklist_id}/cases", status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_editor_or_above)])
 async def add_case_to_checklist(
     checklist_id: str,
     body: AddCaseRequest,
@@ -263,7 +264,7 @@ async def add_case_to_checklist(
     return result
 
 
-@router.delete("/{checklist_id}/cases/{case_id}")
+@router.delete("/{checklist_id}/cases/{case_id}", dependencies=[Depends(require_editor_or_above)])
 async def remove_case_from_checklist(
     checklist_id: str,
     case_id: str,
@@ -280,7 +281,7 @@ async def remove_case_from_checklist(
     return {"success": True}
 
 
-@router.patch("/{checklist_id}/cases/{case_id}")
+@router.patch("/{checklist_id}/cases/{case_id}", dependencies=[Depends(require_editor_or_above)])
 async def patch_checklist_case_item(
     checklist_id: str,
     case_id: str,
@@ -302,7 +303,7 @@ async def patch_checklist_case_item(
     return result
 
 
-@router.put("/{checklist_id}/cases/reorder")
+@router.put("/{checklist_id}/cases/reorder", dependencies=[Depends(require_editor_or_above)])
 async def reorder_checklist_cases(
     checklist_id: str,
     body: ReorderCasesRequest,
@@ -348,7 +349,7 @@ async def execute_checklist(
     }
 
 
-@router.put("/{checklist_id}/items", response_model=ChecklistDetailResponse)
+@router.put("/{checklist_id}/items", response_model=ChecklistDetailResponse, dependencies=[Depends(require_editor_or_above)])
 async def update_checklist_items(
     checklist_id: str,
     body: ChecklistItemsUpdateRequest,

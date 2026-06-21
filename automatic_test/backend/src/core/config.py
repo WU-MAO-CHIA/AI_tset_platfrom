@@ -15,6 +15,11 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     default_llm_model: str = "claude-sonnet-4-6"
 
+    jwt_secret_key: str = "dev-secret-key-change-in-production"
+    jwt_expire_hours: int = 8
+    admin_username: str = "admin"
+    admin_password: str = "admin"
+
 
 @lru_cache
 def get_settings() -> Settings:
