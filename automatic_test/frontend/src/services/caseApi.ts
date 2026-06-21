@@ -163,4 +163,8 @@ export const caseApi = {
   getRobotScript(caseId: string) {
     return apiClient.get<{ rf_code: string; case_number: string }>(`/cases/${caseId}/robot-script`)
   },
+
+  listCategories() {
+    return apiClient.get<{ items: string[] }>('/cases/categories')
+  },
 }

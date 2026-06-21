@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <h1>測試清單</h1>
-      <button class="btn-primary" @click="showCreate = true">+ 建立清單</button>
+      <button v-if="authStore.isEditor" class="btn-primary" @click="showCreate = true">+ 建立清單</button>
     </div>
 
     <!-- 搜尋欄 -->
@@ -87,6 +87,9 @@
 import { ref, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { listChecklists, createChecklist, type Checklist } from '../services/checklistApi'
+import { useAuthStore } from '../stores/authStore'
+
+const authStore = useAuthStore()
 
 const router = useRouter()
 

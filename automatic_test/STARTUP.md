@@ -63,7 +63,22 @@ alembic upgrade head
 
 > 資料庫檔案會建立在 `data/autotest.db`
 
-### 6. （選用）安裝 Playwright 瀏覽器
+### 6. 初始管理員帳號
+
+資料庫初始化完成後，系統會自動建立預設管理員帳號：
+
+| 欄位 | 值 |
+|------|-----|
+| 帳號 | `admin` |
+| 密碼 | `admin` |
+| 角色 | `admin`（最高權限）|
+
+> **建議**：首次登入後請至後台（/admin → 帳號管理）修改預設密碼。  
+> 帳號密碼也可透過 `.env` 中的 `ADMIN_USERNAME` / `ADMIN_PASSWORD` 在初始化前預先設定。
+
+---
+
+### 7. （選用）安裝 Playwright 瀏覽器
 
 Robot Framework Browser 執行真實瀏覽器測試需要此步驟：
 
@@ -73,7 +88,7 @@ rfbrowser init
 
 > 僅首次安裝需執行。會下載 Chromium 約 300MB。
 
-### 7. 啟動 API Server
+### 8. 啟動 API Server
 
 ```powershell
 uvicorn src.main:app --reload --host 0.0.0.0 --port 8000

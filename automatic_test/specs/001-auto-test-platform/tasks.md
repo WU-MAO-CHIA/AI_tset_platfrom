@@ -667,6 +667,38 @@ Phase 2 完成後：
 
 ---
 
+## Phase 23: LLM API Key 帶出遮罩 + 全域預設模型（FR-027 / FR-012）（2026-06-21）
+
+**Purpose**: `/admin` LLM 分頁帶出遮罩 key 並提供全域預設模型選擇；模型集中於後台管理，建立案例表單改用全域預設值
+
+### TDD 測試（先寫、確認 RED）
+
+- [X] T212 [P] 寫 unit test：`automatic_test/backend/tests/unit/test_app_setting_service.py`：`_mask()` 規則（前 7 字元 + `****…` + 末 4 碼；`len < 12` 整串 `****`；空值/None 處理）、`get_llm_keys()` 回傳遮罩且**不含完整明文**、`get_default_model()` / `set_default_model()` round-trip
+- [X] T213 [P] 寫 contract test：`automatic_test/backend/tests/contract/test_admin_llm_api.py`：`GET /llm-keys` 回傳 `{*_key_set, *_key_masked}` 且無明文；`PUT /admin/llm-default-model` 寫入後 `GET` 取回一致；`GET`/`PUT` 非 admin → 403
+- [X] T214 [P] 寫 unit test：`automatic_test/backend/tests/unit/test_llm_models_default.py`：`/llm-models` 的 `default` 在 app_setting 有值時回 DB 值、無值時 fallback `settings.default_llm_model`
+- [X] T215 [P] 寫 frontend unit test：`automatic_test/frontend/tests/unit/AdminPage.spec.ts`：LLM 分頁已設定時顯示遮罩值、未設定顯示「未設定」、全域預設模型下拉變更後呼叫 `setDefaultModel`
+
+### 後端實作
+
+- [X] T216 [P] 修改 `automatic_test/backend/src/services/app_setting_service.py`：新增 `_mask(key: str) -> str` helper（輸出**前 7 字元 + `****…` + 末 4 碼**，如 `sk-ant-****…dF3a`；`len(key) < 12` 時整串以 `****` 取代；空值回空字串）；修改 `get_llm_keys()` 解密後回傳 `{anthropic_key_set, anthropic_key_masked, openai_key_set, openai_key_masked}`，**嚴禁回傳完整明文**
+- [X] T217 修改 `automatic_test/backend/src/services/app_setting_service.py`：新增 `get_default_model() -> str | None`（讀 key=`default_llm_model`，沿用 `repo.get_decrypted`）與 `set_default_model(model_id: str)`（沿用 `repo.set`，存於 `encrypted_value`，無需 migration；加結構化日誌記錄變更，符合 constitution「Structured logging」）
+- [X] T218 修改 `automatic_test/backend/src/api/admin.py`：`GET /llm-keys` 回傳含遮罩值（沿用 T216 結構）；新增 `GET /admin/llm-default-model`（無設定則回 env 預設）與 `PUT /admin/llm-default-model`（body `{model: str}`，呼叫 `set_default_model` 並 `commit`），均加 `Depends(require_admin)`
+- [X] T219 修改 `automatic_test/backend/src/api/llm_models.py`：`list_llm_models` 改為 `async` 並注入 `Depends(get_db)`；回傳的 `default` 改為 **DB 優先**（讀 `AppSettingService.get_default_model()`），無值時 fallback 至 `settings.default_llm_model`
+- [X] T220 修改 LLM 呼叫端（AI 補齊 / Chat / RF 代碼生成 service，先 grep 定位所有後端呼叫點）：當請求未顯式指定模型時，改以全域預設模型（`AppSettingService.get_default_model()`，無則 env）為準
+
+### 前端實作
+
+- [X] T221 [P] 修改 `automatic_test/frontend/src/services/adminApi.ts`：`LlmKeyStatus` 型別新增 `anthropic_key_masked?: string`、`openai_key_masked?: string`；新增 `getDefaultModel(): Promise<{ model: string }>` 與 `setDefaultModel(model: string): Promise<void>`（對應 T218 端點）
+- [X] T222 修改 `automatic_test/frontend/src/pages/AdminPage.vue` LLM 分頁：已設定時於狀態列顯示遮罩值（如 `目前：sk-ant-****…dF3a`），未設定顯示「未設定」；新增「全域預設模型」下拉（選項來源 `/llm-models`，**僅列 `requires_setup=false` 的可用模型**，標示目前值），變更後呼叫 `adminApi.setDefaultModel` 儲存並顯示成功訊息
+- [X] T223 修改 `automatic_test/frontend/src/pages/CaseCreatePage.vue`：移除寫死的 `const selectedModel = ref('claude-sonnet-4-6')`，改於 `onMounted` 呼叫 `/llm-models` 取得 `default` 後賦值；表單不新增任何模型選擇器
+- [X] T224 [P] 刪除前端死碼：移除 `automatic_test/frontend/src/components/StepsEditor/` 與 `automatic_test/frontend/src/components/LLMModelSelector/`（全前端零引用，先以 grep 確認無 import 後刪除）
+
+**Checkpoint**: TDD 測試（T212–T215）先寫並確認 RED；實作後 `/admin` LLM 分頁載入即顯示已設定 key 的遮罩、API 回應不含明文；切換全域預設模型並儲存後新建案例的 AI 補齊即採用該模型（無需重啟）；建立案例頁無模型選擇器且不再寫死模型
+
+**Dependencies**: TDD（T212–T215）先寫並確認 RED → 再實作。T218 依賴 T216+T217；T219、T220 依賴 T217；T222 依賴 T221+T218；T223 依賴 T219。可平行起步：T212–T215（測試）、T216/T221/T224
+
+---
+
 ## Notes
 
 - `[P]` = 不同檔案，無未完成依賴，可平行執行

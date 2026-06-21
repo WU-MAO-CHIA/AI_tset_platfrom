@@ -131,6 +131,11 @@ class SetLlmKeyRequest(BaseModel):
     key: str
 
 
+class SetDefaultModelRequest(BaseModel):
+    model_config = {"protected_namespaces": ()}
+    model: str
+
+
 @router.get("/llm-keys", dependencies=[Depends(require_admin)])
 async def get_llm_key_status(db: AsyncSession = Depends(get_db)):
     svc = AppSettingService(db)
@@ -141,5 +146,23 @@ async def get_llm_key_status(db: AsyncSession = Depends(get_db)):
 async def set_llm_key(provider: str, body: SetLlmKeyRequest, db: AsyncSession = Depends(get_db)):
     svc = AppSettingService(db)
     await svc.set_llm_key(provider, body.key)
+    await db.commit()
+    return {"updated": True}
+
+
+@router.get("/llm-default-model", dependencies=[Depends(require_admin)])
+async def get_default_model(db: AsyncSession = Depends(get_db)):
+    svc = AppSettingService(db)
+    model = await svc.get_default_model()
+    if not model:
+        from src.core.config import get_settings
+        model = get_settings().default_llm_model
+    return {"model": model}
+
+
+@router.put("/llm-default-model", dependencies=[Depends(require_admin)])
+async def set_default_model(body: SetDefaultModelRequest, db: AsyncSession = Depends(get_db)):
+    svc = AppSettingService(db)
+    await svc.set_default_model(body.model)
     await db.commit()
     return {"updated": True}

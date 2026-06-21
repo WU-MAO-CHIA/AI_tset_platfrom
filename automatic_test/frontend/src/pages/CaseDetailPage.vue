@@ -3,8 +3,8 @@
     <div class="page-header">
       <h1>{{ caseData.case_number }} — {{ caseData.name }}</h1>
       <div class="actions">
-        <button v-if="!editing" @click="startEdit">編輯</button>
-        <template v-else>
+        <button v-if="!editing && authStore.isEditor" @click="startEdit">編輯</button>
+        <template v-else-if="editing">
           <button class="btn-save-edit" @click="saveFromPageHeader">儲存案例</button>
           <button class="btn-cancel" @click="cancelEdit">取消</button>
         </template>
@@ -168,6 +168,9 @@ import FileImporter from '../components/FileImporter/index.vue'
 import TestCaseForm from '../components/TestCaseForm/index.vue'
 import AIChatPanel from '../components/AIChatPanel/index.vue'
 import RFCodePreview from '../components/RFCodePreview/index.vue'
+import { useAuthStore } from '../stores/authStore'
+
+const authStore = useAuthStore()
 
 const route = useRoute()
 const router = useRouter()

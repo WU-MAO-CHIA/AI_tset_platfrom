@@ -129,6 +129,7 @@
         <div class="llm-card">
           <h3>Anthropic (Claude)</h3>
           <p>狀態：{{ llmStatus?.anthropic_key_set ? '✅ 已設定' : '❌ 未設定' }}</p>
+          <p v-if="llmStatus?.anthropic_key_set" class="masked-key">目前：{{ llmStatus?.anthropic_key_masked }}</p>
           <div class="field">
             <label>覆寫 API Key</label>
             <input v-model="anthropicKey" type="password" placeholder="sk-ant-..." />
@@ -139,6 +140,7 @@
         <div class="llm-card">
           <h3>OpenAI (GPT)</h3>
           <p>狀態：{{ llmStatus?.openai_key_set ? '✅ 已設定' : '❌ 未設定' }}</p>
+          <p v-if="llmStatus?.openai_key_set" class="masked-key">目前：{{ llmStatus?.openai_key_masked }}</p>
           <div class="field">
             <label>覆寫 API Key</label>
             <input v-model="openaiKey" type="password" placeholder="sk-..." />
@@ -146,6 +148,21 @@
           <button class="primary" :disabled="!openaiKey" @click="submitLlmKey('openai', openaiKey)">儲存</button>
         </div>
       </div>
+
+      <div class="llm-default-model">
+        <h3>全域預設模型</h3>
+        <p class="hint">所有 AI 補齊／RF 代碼生成將使用此模型；僅列出已設定 API Key 的可用模型。</p>
+        <select
+          data-testid="default-model-select"
+          :value="defaultModel"
+          @change="onDefaultModelChange(($event.target as HTMLSelectElement).value)"
+        >
+          <option v-for="m in availableModels" :key="m.id" :value="m.id">
+            {{ m.name }}（{{ m.provider }}）
+          </option>
+        </select>
+      </div>
+
       <p v-if="llmMsg" class="success-msg">{{ llmMsg }}</p>
     </section>
   </div>
@@ -154,7 +171,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import * as adminApi from '../services/adminApi'
-import type { UserRecord, SystemCategory } from '../services/adminApi'
+import type { UserRecord, SystemCategory, LlmModel } from '../services/adminApi'
 
 const tabs = [
   { key: 'users', label: '帳號管理' },
@@ -270,9 +287,24 @@ const llmStatus = ref<adminApi.LlmKeyStatus | null>(null)
 const anthropicKey = ref('')
 const openaiKey = ref('')
 const llmMsg = ref('')
+const defaultModel = ref('')
+const availableModels = ref<LlmModel[]>([])
 
 async function loadLlmStatus() {
   llmStatus.value = await adminApi.getLlmKeyStatus()
+}
+
+async function loadLlmModels() {
+  const [list, def] = await Promise.all([adminApi.getLlmModels(), adminApi.getDefaultModel()])
+  availableModels.value = list.models.filter((m) => !m.requires_setup)
+  defaultModel.value = def.model
+}
+
+async function onDefaultModelChange(model: string) {
+  defaultModel.value = model
+  await adminApi.setDefaultModel(model)
+  llmMsg.value = `全域預設模型已更新為 ${model}`
+  setTimeout(() => { llmMsg.value = '' }, 3000)
 }
 
 async function submitLlmKey(provider: string, key: string) {
@@ -285,7 +317,7 @@ async function submitLlmKey(provider: string, key: string) {
 }
 
 onMounted(async () => {
-  await Promise.all([loadUsers(), loadCategories(), loadLlmStatus()])
+  await Promise.all([loadUsers(), loadCategories(), loadLlmStatus(), loadLlmModels()])
 })
 </script>
 
@@ -476,5 +508,39 @@ onMounted(async () => {
   margin: 0 0 12px;
   font-size: 0.875rem;
   color: #374151;
+}
+
+.masked-key {
+  font-family: monospace;
+  color: #6b7280;
+  font-size: 0.8rem;
+}
+
+.llm-default-model {
+  margin-top: 24px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.llm-default-model h3 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.llm-default-model .hint {
+  margin: 0 0 12px;
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.llm-default-model select {
+  width: 100%;
+  max-width: 360px;
+  padding: 7px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 0.875rem;
 }
 </style>

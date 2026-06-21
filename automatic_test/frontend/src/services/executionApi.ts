@@ -44,7 +44,8 @@ export async function getExecutionResults(
 }
 
 export function streamExecution(executionId: string, onEvent: (data: unknown) => void): EventSource {
-  const evtSource = new EventSource(`/api/v1/executions/${executionId}/stream`)
+  const token = localStorage.getItem('access_token') ?? ''
+  const evtSource = new EventSource(`/api/v1/executions/${executionId}/stream?token=${encodeURIComponent(token)}`)
   evtSource.onmessage = (e) => {
     try {
       const data = JSON.parse(e.data)
@@ -55,6 +56,10 @@ export function streamExecution(executionId: string, onEvent: (data: unknown) =>
     } catch {
       // ignore parse errors
     }
+  }
+  evtSource.onerror = () => {
+    evtSource.close()
+    onEvent({ event: 'execution_error', message: 'SSE connection failed' })
   }
   return evtSource
 }

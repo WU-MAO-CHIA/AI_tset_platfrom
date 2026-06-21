@@ -26,7 +26,7 @@
           <th class="sortable" @click="toggleSort('updated_at')">
             更新時間 <span class="sort-indicator">{{ sortIndicator('updated_at') }}</span>
           </th>
-          <th>操作</th>
+          <th v-if="authStore.isEditor">操作</th>
         </tr>
       </thead>
       <tbody>
@@ -36,7 +36,7 @@
           <td>{{ c.system_category || '-' }}</td>
           <td>v{{ c.version }}</td>
           <td>{{ formatDate(c.updated_at) }}</td>
-          <td>
+          <td v-if="authStore.isEditor">
             <button @click.stop="$emit('edit', c)">編輯</button>
             <button @click.stop="$emit('delete', c)" class="danger">刪除</button>
           </td>
@@ -58,6 +58,9 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { caseApi, type TestCaseSummary } from '../../services/caseApi'
+import { useAuthStore } from '../../stores/authStore'
+
+const authStore = useAuthStore()
 
 defineEmits<{
   (e: 'select', c: TestCaseSummary): void
@@ -70,7 +73,7 @@ const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 const loading = ref(false)
-const categories = ref<string[]>(['auth', 'order', 'product', 'payment'])
+const categories = ref<string[]>([])
 
 const filters = reactive({ keyword: '', system_category: '' })
 const sortBy = ref('created_at')
@@ -121,7 +124,15 @@ function formatDate(iso: string | null) {
   return new Date(iso).toLocaleDateString('zh-TW')
 }
 
-onMounted(load)
+onMounted(async () => {
+  try {
+    const res = await caseApi.listCategories()
+    categories.value = res.data.items
+  } catch {
+    // silently ignore; filter will have no categories
+  }
+  load()
+})
 
 defineExpose({ load })
 </script>

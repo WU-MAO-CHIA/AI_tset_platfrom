@@ -1,6 +1,9 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import get_settings
+from src.core.database import get_db
+from src.services.app_setting_service import AppSettingService
 
 router = APIRouter(prefix="/llm-models", tags=["llm-models"])
 
@@ -22,7 +25,7 @@ def _is_valid_key(key: str) -> bool:
 
 
 @router.get("")
-async def list_llm_models():
+async def list_llm_models(db: AsyncSession = Depends(get_db)):
     settings = get_settings()
     available = []
 
@@ -39,4 +42,8 @@ async def list_llm_models():
             m["requires_setup"] = True
         available = all_models
 
-    return {"models": available, "default": settings.default_llm_model}
+    # 全域預設模型：DB（app_setting）優先，無值則 fallback env
+    svc = AppSettingService(db)
+    default_model = await svc.get_default_model() or settings.default_llm_model
+
+    return {"models": available, "default": default_model}

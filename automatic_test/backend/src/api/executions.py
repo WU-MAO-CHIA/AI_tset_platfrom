@@ -16,10 +16,12 @@ from src.models.execution_record import ExecutionRecord
 from src.repositories.execution_repo import ExecutionRepository
 from src.services.report_service import ReportService
 
-router = APIRouter(prefix="/executions", tags=["executions"], dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/executions", tags=["executions"])
+
+_auth = [Depends(get_current_user)]
 
 
-@router.get("/{execution_id}")
+@router.get("/{execution_id}", dependencies=_auth)
 async def get_execution(execution_id: str, db: AsyncSession = Depends(get_db)):
     repo = ExecutionRepository(db)
     record = await repo.get(execution_id)
@@ -38,7 +40,7 @@ async def get_execution(execution_id: str, db: AsyncSession = Depends(get_db)):
     }
 
 
-@router.get("/{execution_id}/results")
+@router.get("/{execution_id}/results", dependencies=_auth)
 async def get_execution_results(execution_id: str, db: AsyncSession = Depends(get_db)):
     repo = ExecutionRepository(db)
     record = await repo.get(execution_id)
@@ -81,7 +83,27 @@ async def get_execution_results(execution_id: str, db: AsyncSession = Depends(ge
 
 
 @router.get("/{execution_id}/stream")
-async def stream_execution(execution_id: str, db: AsyncSession = Depends(get_db)):
+async def stream_execution(execution_id: str, token: str | None = None, db: AsyncSession = Depends(get_db)):
+    # SSE cannot send Authorization header; accept token as query param
+    if token:
+        from src.core.security import decode_token
+        from src.repositories.user_repo import UserRepository
+        from jose import JWTError
+        try:
+            payload = decode_token(token)
+            username = payload.get("sub")
+            if username:
+                repo_u = UserRepository(db)
+                user = await repo_u.get_by_username(username)
+                if not user or not user.is_active:
+                    raise HTTPException(status_code=401, detail="Invalid token")
+            else:
+                raise HTTPException(status_code=401, detail="Invalid token")
+        except JWTError:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    else:
+        raise HTTPException(status_code=401, detail="Token required")
+
     repo = ExecutionRepository(db)
     record = await repo.get(execution_id)
     if record is None:
@@ -132,7 +154,7 @@ async def stream_execution(execution_id: str, db: AsyncSession = Depends(get_db)
     )
 
 
-@router.get("/{execution_id}/export")
+@router.get("/{execution_id}/export", dependencies=_auth)
 async def export_report(execution_id: str, db: AsyncSession = Depends(get_db)):
     repo = ExecutionRepository(db)
     record = await repo.get(execution_id)

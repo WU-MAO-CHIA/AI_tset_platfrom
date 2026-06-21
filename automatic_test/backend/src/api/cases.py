@@ -15,8 +15,17 @@ from src.repositories.execution_repo import ExecutionRepository
 from src.services.case_service import CaseService
 from src.services.media_service import MediaService
 from src.services.ai_service import AIService
+from src.services.app_setting_service import AppSettingService
 
 router = APIRouter(prefix="/cases", tags=["cases"], dependencies=[Depends(get_current_user)])
+
+
+async def _resolve_model(requested: Optional[str], session: AsyncSession, settings) -> str:
+    """解析使用模型：顯式指定優先；否則採全域預設模型（app_setting）→ env fallback。"""
+    if requested:
+        return requested
+    default = await AppSettingService(session).get_default_model()
+    return default or settings.default_llm_model
 
 
 # ─── Schemas ────────────────────────────────────────────────────────────────
@@ -111,6 +120,14 @@ def serialize_case_detail(case) -> dict:
 
 
 # ─── Endpoints ───────────────────────────────────────────────────────────────
+
+@router.get("/categories")
+async def list_categories(session: AsyncSession = Depends(get_db)):
+    from src.repositories.system_category_repo import SystemCategoryRepository
+    repo = SystemCategoryRepository(session)
+    cats = await repo.list_active()
+    return {"items": [c.name for c in cats]}
+
 
 @router.post("", status_code=201, dependencies=[Depends(require_editor_or_above)])
 async def create_case(
@@ -247,7 +264,7 @@ async def delete_case(
 
 
 @router.post("/preview-rf")
-async def preview_rf_code(body: PreviewRFRequest):
+async def preview_rf_code(body: PreviewRFRequest, session: AsyncSession = Depends(get_db)):
     """Generate Robot Framework code preview from steps without creating execution records."""
     if not body.main_steps or not body.main_steps.strip():
         raise HTTPException(422, detail={"error": "empty_steps", "message": "main_steps must not be empty"})
@@ -255,7 +272,7 @@ async def preview_rf_code(body: PreviewRFRequest):
         raise HTTPException(422, detail={"error": "steps_too_long", "message": "main_steps exceeds 10000 characters"})
 
     settings = get_settings()
-    model = body.llm_model or settings.default_llm_model
+    model = await _resolve_model(body.llm_model, session, settings)
     provider = get_provider(model, settings)
     ai_service = AIService(provider)
     rf_code = await ai_service.preview_robot_code(
@@ -271,10 +288,11 @@ async def preview_rf_code(body: PreviewRFRequest):
 @router.post("/ai-complete")
 async def ai_complete_steps_preview(
     body: AICompleteRequest,
+    session: AsyncSession = Depends(get_db),
 ):
     """AI complete without a saved case — no media context."""
     settings = get_settings()
-    model = body.llm_model or settings.default_llm_model
+    model = await _resolve_model(body.llm_model, session, settings)
     provider = get_provider(model, settings)
     ai_service = AIService(provider=provider)
     completed = await ai_service.complete_steps(
@@ -292,7 +310,7 @@ async def ai_complete_steps(
     session: AsyncSession = Depends(get_db),
 ):
     settings = get_settings()
-    model = body.llm_model or settings.default_llm_model
+    model = await _resolve_model(body.llm_model, session, settings)
     provider = get_provider(model, settings)
     ai_service = AIService(provider=provider)
 
@@ -333,7 +351,7 @@ async def chat_with_ai(
     messages = [{"role": m.role, "content": m.content} for m in history]
 
     settings = get_settings()
-    model = body.llm_model or settings.default_llm_model
+    model = await _resolve_model(body.llm_model, session, settings)
     provider = get_provider(model, settings)
     ai_service = AIService(provider=provider)
 

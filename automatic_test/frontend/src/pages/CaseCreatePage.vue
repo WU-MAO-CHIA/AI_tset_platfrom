@@ -58,8 +58,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import apiClient from '../services/apiClient'
 import TestCaseForm from '../components/TestCaseForm/index.vue'
 import AIChatPanel from '../components/AIChatPanel/index.vue'
 import RFCodePreview from '../components/RFCodePreview/index.vue'
@@ -67,10 +68,20 @@ import RFCodePreview from '../components/RFCodePreview/index.vue'
 const router = useRouter()
 const activeTab = ref<'basic' | 'steps'>('basic')
 const mainSteps = ref('')
-const selectedModel = ref('claude-sonnet-4-6')
+// 模型集中於 /admin 管理：建立案例頁採用全域預設模型（FR-012 / FR-027），不提供選擇器
+const selectedModel = ref('')
 const rfCode = ref('')
 const savedCaseId = ref('')
 const formRef = ref<InstanceType<typeof TestCaseForm> | null>(null)
+
+onMounted(async () => {
+  try {
+    const { data } = await apiClient.get('/llm-models')
+    selectedModel.value = data.default
+  } catch {
+    selectedModel.value = 'claude-sonnet-4-6'
+  }
+})
 
 function saveFromTab2() {
   const submitBtn = formRef.value?.$el?.querySelector('button[type="submit"]') as HTMLButtonElement | null

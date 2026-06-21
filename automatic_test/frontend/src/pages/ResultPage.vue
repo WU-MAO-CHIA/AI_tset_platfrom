@@ -2,6 +2,11 @@
   <div class="result-page">
     <div v-if="loading" class="loading">載入中...</div>
 
+    <div v-else-if="fetchError" class="fetch-error">
+      <p>{{ fetchError }}</p>
+      <button class="btn-secondary" @click="fetchResults">重試</button>
+    </div>
+
     <template v-else>
       <div class="page-header">
         <h1>執行結果</h1>
@@ -53,6 +58,7 @@ const route = useRoute()
 const router = useRouter()
 
 const loading = ref(true)
+const fetchError = ref<string | null>(null)
 const execution = ref<ExecutionRecord | null>(null)
 const caseResults = ref<CaseResultItem[]>([])
 const selectedReportCase = ref<string>('')
@@ -68,10 +74,16 @@ const executionId = computed(() => route.params.id as string)
 
 async function fetchResults() {
   loading.value = true
+  fetchError.value = null
   try {
     execution.value = await getExecution(executionId.value)
     const data = await getExecutionResults(executionId.value)
     caseResults.value = data.items
+  } catch (e: any) {
+    if (e.message !== 'Unauthorized') {
+      fetchError.value = e.message || '載入失敗'
+    }
+    // 401 由 apiClient 攔截後跳轉 /login，不需額外處理
   } finally {
     loading.value = false
   }
@@ -161,6 +173,14 @@ onMounted(fetchResults)
   border: none;
   border-radius: 4px;
   cursor: pointer;
+}
+.fetch-error {
+  padding: 40px;
+  text-align: center;
+  color: #dc2626;
+}
+.fetch-error button {
+  margin-top: 12px;
 }
 .btn-secondary {
   padding: 8px 16px;

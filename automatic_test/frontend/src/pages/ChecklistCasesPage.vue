@@ -15,7 +15,7 @@
     <!-- 已加入案例列表 -->
     <div class="section">
       <h2>已加入案例（{{ items.length }} 筆）</h2>
-      <div v-if="items.length === 0" class="empty">尚無案例，請從下方搜尋加入</div>
+      <div v-if="items.length === 0" class="empty">尚無案例{{ authStore.isEditor ? '，請從下方搜尋加入' : '' }}</div>
       <table v-else class="case-table">
         <thead>
           <tr>
@@ -23,7 +23,7 @@
             <th>案例編號</th>
             <th>名稱</th>
             <th>備註</th>
-            <th>操作</th>
+            <th v-if="authStore.isEditor">操作</th>
           </tr>
         </thead>
         <tbody>
@@ -33,13 +33,15 @@
             <td>{{ item.name ?? '-' }}</td>
             <td>
               <input
+                v-if="authStore.isEditor"
                 class="notes-input"
                 :value="item.notes ?? ''"
                 placeholder="加入備註..."
                 @blur="onNotesBlur(item, ($event.target as HTMLInputElement).value)"
               />
+              <span v-else>{{ item.notes || '-' }}</span>
             </td>
-            <td>
+            <td v-if="authStore.isEditor">
               <button class="btn-up" @click="moveUp(idx)" :disabled="idx === 0">↑</button>
               <button class="btn-down" @click="moveDown(idx)" :disabled="idx === items.length - 1">↓</button>
               <button class="btn-danger-sm" @click="onRemove(item.test_case_id)">移除</button>
@@ -47,13 +49,13 @@
           </tr>
         </tbody>
       </table>
-      <button v-if="reorderDirty" class="btn-primary save-order-btn" @click="saveOrder">
+      <button v-if="reorderDirty && authStore.isEditor" class="btn-primary save-order-btn" @click="saveOrder">
         儲存排序
       </button>
     </div>
 
-    <!-- 搜尋並加入案例 -->
-    <div class="section">
+    <!-- 搜尋並加入案例（僅 editor 以上） -->
+    <div v-if="authStore.isEditor" class="section">
       <h2>搜尋案例</h2>
       <div class="search-row">
         <input v-model="searchKeyword" class="search-input" placeholder="輸入案例名稱或編號..." @input="onSearch" />
@@ -94,6 +96,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import { useAuthStore } from '../stores/authStore'
 import {
   getChecklistCases,
   addCaseToChecklist,
@@ -105,6 +108,7 @@ import {
 } from '../services/checklistApi'
 import { caseApi } from '../services/caseApi'
 
+const authStore = useAuthStore()
 const route = useRoute()
 const checklistId = route.params.id as string
 

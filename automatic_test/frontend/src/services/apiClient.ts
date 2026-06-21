@@ -16,14 +16,21 @@ apiClient.interceptors.request.use((config) => {
   return config
 })
 
+let _redirectingToLogin = false
+
 apiClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError<{ error: string; message: string }>) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('access_token')
-      localStorage.removeItem('user_role')
-      localStorage.removeItem('username')
-      window.location.href = '/login'
+      if (!_redirectingToLogin) {
+        _redirectingToLogin = true
+        localStorage.removeItem('access_token')
+        localStorage.removeItem('user_role')
+        localStorage.removeItem('username')
+        window.location.href = '/login'
+        // reset flag after navigation (2s buffer)
+        setTimeout(() => { _redirectingToLogin = false }, 2000)
+      }
       return Promise.reject(new Error('Unauthorized'))
     }
     const message = error.response?.data?.message ?? error.message

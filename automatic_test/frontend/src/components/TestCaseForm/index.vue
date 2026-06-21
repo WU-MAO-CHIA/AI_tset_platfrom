@@ -13,7 +13,10 @@
 
     <div class="field">
       <label>系統別</label>
-      <input v-model="form.system_category" placeholder="auth, order, ..." />
+      <select v-model="form.system_category">
+        <option value="">（不指定）</option>
+        <option v-for="cat in categories" :key="cat" :value="cat">{{ cat }}</option>
+      </select>
     </div>
 
     <div class="field">
@@ -91,8 +94,15 @@ const form = reactive({
 const saving = ref(false)
 const saveError = ref('')
 const trialRunning = ref(false)
+const categories = ref<string[]>([])
 
-onMounted(() => {
+onMounted(async () => {
+  try {
+    const res = await caseApi.listCategories()
+    categories.value = res.data.items
+  } catch {
+    // silently ignore; select will be empty
+  }
   if (props.initialData) {
     Object.assign(form, props.initialData)
     if (!externalSteps.value && props.initialData.main_steps) {

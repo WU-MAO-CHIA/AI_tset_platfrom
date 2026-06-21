@@ -21,7 +21,7 @@ const routes: RouteRecordRaw[] = [
     path: '/cases/new',
     name: 'CaseCreate',
     component: () => import('../pages/CaseCreatePage.vue'),
-    meta: { requiresAuth: true },
+    meta: { requiresAuth: true, requiresEditor: true },
   },
   {
     path: '/cases/:id',
@@ -45,7 +45,7 @@ const routes: RouteRecordRaw[] = [
     path: '/checklists/:id/cases',
     name: 'ChecklistCases',
     component: () => import('../pages/ChecklistCasesPage.vue'),
-    meta: { requiresAuth: true },
+    meta: { requiresAuth: true, requiresEditor: true },
   },
   {
     path: '/executions/:id',
@@ -87,6 +87,10 @@ router.beforeEach((to) => {
   }
 
   if (to.meta.requiresAdmin && userRole !== 'admin') {
+    return '/'
+  }
+
+  if (to.meta.requiresEditor && userRole === 'viewer') {
     return '/'
   }
 

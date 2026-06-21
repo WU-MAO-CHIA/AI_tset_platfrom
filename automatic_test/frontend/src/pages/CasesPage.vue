@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <h1>測試案例管理</h1>
-      <RouterLink to="/cases/new">
+      <RouterLink v-if="authStore.isEditor" to="/cases/new">
         <button class="primary">+ 建立案例</button>
       </RouterLink>
     </div>
@@ -32,6 +32,9 @@ import { ref } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
 import TestCaseList from '../components/TestCaseList/index.vue'
 import { caseApi, type TestCaseSummary } from '../services/caseApi'
+import { useAuthStore } from '../stores/authStore'
+
+const authStore = useAuthStore()
 
 const router = useRouter()
 const listRef = ref<InstanceType<typeof TestCaseList> | null>(null)
