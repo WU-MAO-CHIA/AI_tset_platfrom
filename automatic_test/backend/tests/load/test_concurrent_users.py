@@ -14,9 +14,19 @@ CONCURRENT_USERS = 10
 P95_THRESHOLD_MS = 2000
 
 
-async def fetch_cases(client: httpx.AsyncClient) -> float:
+async def _login(client: httpx.AsyncClient) -> dict[str, str]:
+    """登入取得 JWT，回傳 Authorization header。"""
+    resp = await client.post(
+        f"{BASE_URL}/api/v1/auth/login",
+        json={"username": "admin", "password": "admin"},
+    )
+    assert resp.status_code == 200, f"登入失敗: {resp.status_code} {resp.text[:200]}"
+    return {"Authorization": f"Bearer {resp.json()['access_token']}"}
+
+
+async def fetch_cases(client: httpx.AsyncClient, headers: dict[str, str]) -> float:
     start = time.perf_counter()
-    response = await client.get(f"{BASE_URL}/cases")
+    response = await client.get(f"{BASE_URL}/api/v1/cases", headers=headers)
     elapsed_ms = (time.perf_counter() - start) * 1000
     assert response.status_code == 200, f"Unexpected status: {response.status_code}"
     return elapsed_ms
@@ -26,7 +36,8 @@ async def fetch_cases(client: httpx.AsyncClient) -> float:
 async def test_concurrent_users_p95_response_time():
     """SC-006: 10 位並發使用者的 p95 回應時間應 ≤ 2000ms。"""
     async with httpx.AsyncClient(timeout=30.0) as client:
-        tasks = [fetch_cases(client) for _ in range(CONCURRENT_USERS)]
+        headers = await _login(client)
+        tasks = [fetch_cases(client, headers) for _ in range(CONCURRENT_USERS)]
         response_times = await asyncio.gather(*tasks)
 
     sorted_times = sorted(response_times)
@@ -48,7 +59,8 @@ async def test_concurrent_users_p95_response_time():
 async def test_all_concurrent_requests_succeed():
     """SC-006: 10 個並發請求均應返回 200，無請求失敗。"""
     async with httpx.AsyncClient(timeout=30.0) as client:
-        tasks = [fetch_cases(client) for _ in range(CONCURRENT_USERS)]
+        headers = await _login(client)
+        tasks = [fetch_cases(client, headers) for _ in range(CONCURRENT_USERS)]
         response_times = await asyncio.gather(*tasks, return_exceptions=True)
 
     failures = [r for r in response_times if isinstance(r, Exception)]

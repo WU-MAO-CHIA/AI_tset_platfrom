@@ -15,6 +15,7 @@ from httpx import ASGITransport
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_db
+from src.core.dependencies import get_current_user
 from src.main import app
 from src.repositories.execution_repo import ExecutionRepository
 
@@ -85,6 +86,8 @@ def _build_mock_session(case_result, media_items) -> AsyncMock:
             result_mock.scalar_one_or_none.return_value = None
 
         result_mock.scalars.return_value = scalars_mock
+        # 端點對 CaseResult 查詢使用 result.unique().scalars().all()（因 joinedload）
+        result_mock.unique.return_value = result_mock
         return result_mock
 
     session = AsyncMock(spec=AsyncSession)
@@ -104,6 +107,7 @@ async def test_results_page_with_50_media_within_10s():
         yield mock_session
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = lambda: {"username": "load-test", "role": "admin"}
 
     async def mock_repo_get(self, id: str):
         return execution_record if id == EXECUTION_ID else None
@@ -138,6 +142,7 @@ async def test_results_page_with_50_media_within_10s():
         )
     finally:
         app.dependency_overrides.pop(get_db, None)
+        app.dependency_overrides.pop(get_current_user, None)
 
 
 @pytest.mark.asyncio
@@ -151,6 +156,7 @@ async def test_results_page_returns_404_for_unknown_execution():
         yield mock_session
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = lambda: {"username": "load-test", "role": "admin"}
 
     async def mock_repo_get(self, id: str):
         return None
@@ -166,3 +172,4 @@ async def test_results_page_returns_404_for_unknown_execution():
         )
     finally:
         app.dependency_overrides.pop(get_db, None)
+        app.dependency_overrides.pop(get_current_user, None)

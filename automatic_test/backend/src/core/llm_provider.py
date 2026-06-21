@@ -1,5 +1,7 @@
 from typing import Protocol, runtime_checkable
 
+import httpx
+
 
 @runtime_checkable
 class LLMProvider(Protocol):
@@ -135,7 +137,45 @@ class OpenAIProvider:
         return response.choices[0].message.content or ""
 
 
+class OllamaProvider:
+    """本地 Ollama 原生 API（POST /api/chat，stream:false）。
+
+    模型名去除 `ollama:` 前綴後送出；vision 退化為純文字（本地模型多無視覺能力）。
+    """
+
+    def __init__(self, base_url: str, model: str = "llama3", timeout: float = 120.0) -> None:
+        self.base_url = (base_url or "").rstrip("/")
+        # 去除 ollama: 前綴，Ollama 端只認得裸模型名
+        self.model = model[len("ollama:"):] if model.startswith("ollama:") else model
+        self._timeout = timeout
+
+    async def _chat(self, messages: list[dict]) -> str:
+        async with httpx.AsyncClient(timeout=self._timeout) as client:
+            resp = await client.post(
+                f"{self.base_url}/api/chat",
+                json={"model": self.model, "messages": messages, "stream": False},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        return (data.get("message") or {}).get("content", "")
+
+    async def complete(self, prompt: str) -> str:
+        return await self._chat([{"role": "user", "content": prompt}])
+
+    async def complete_with_vision(self, prompt: str, media_list: list) -> str:
+        # 本地模型多不支援視覺；退化為純文字
+        return await self.complete(prompt)
+
+    async def complete_with_messages(self, messages: list[dict], system: str = "") -> str:
+        all_messages = messages
+        if system:
+            all_messages = [{"role": "system", "content": system}] + messages
+        return await self._chat(all_messages)
+
+
 def get_provider(model_id: str, settings) -> LLMProvider:
+    if model_id.startswith("ollama:"):
+        return OllamaProvider(base_url=settings.ollama_base_url, model=model_id)
     if model_id.startswith("claude"):
         return AnthropicProvider(api_key=settings.anthropic_api_key, model=model_id)
     return OpenAIProvider(api_key=settings.openai_api_key, model=model_id)

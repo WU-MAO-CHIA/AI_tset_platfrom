@@ -151,8 +151,60 @@ automatic_test/
 
 **驗收條件**：
 - `/admin` LLM 分頁載入即唯讀顯示已設定 key 的遮罩（如 `sk-ant-****…cwAA`）；未設定顯示「未設定」；API 回應不含完整金鑰。
-- `/admin` 唯讀顯示目前全域預設模型；無編輯下拉；`PUT /admin/llm-default-model` 不存在（405）。
-- 建立案例頁不再寫死模型，畫面無模型選擇器；`/llm-models` 的 `default` 反映 `.env` 設定值。
+- `/admin` 唯讀顯示目前全域預設模型；無編輯下拉；`PUT /admin/llm-default-model` 不存在（405）。〔**模型部分已由 Phase 24 取代**：後台改為可切換「目前使用模型」下拉並存 DB；本條僅適用 Phase 23 當時狀態。金鑰仍維持 `.env` 唯讀。〕
+- 建立案例頁不再寫死模型，畫面無模型選擇器；`/llm-models` 的 `default` 反映 `.env` 設定值（Phase 24 起 `default` = DB 啟用模型，未選時 fallback `.env`）。
+
+### Phase 24：本地 Ollama 整合 + 後台「目前啟用模型」可切換（FR-012 / FR-027）
+
+> **與 Phase 23 的關係**：Phase 23 將模型設為 env-only 唯讀。Phase 24 依新釐清**部分修訂**——金鑰／`OLLAMA_BASE_URL` 維持 `.env` 唯讀（不變、機密不落地），但「目前啟用模型」改存 DB（`app_setting`）、後台改回可選下拉、即時生效；並新增本地 Ollama provider。
+
+**目標**：
+1. 新增本地 **Ollama** provider（原生 `POST /api/chat`，`stream:false`），可用模型動態查 `GET /api/tags`，id 前綴 `ollama:`。
+2. 後台「目前使用模型」下拉（跨 Claude／OpenAI／Ollama，僅列可用），存 DB、即時生效；未選 fallback `.env DEFAULT_LLM_MODEL`。
+3. 三方 provider 路由。
+
+**設計決策**：
+- **Provider 路由**：`get_provider(model_id)` ── `startswith("ollama:")` → `OllamaProvider`（去前綴取真實模型名）；`startswith("claude")` → Anthropic；其餘 → OpenAI（保留 OpenAI 為 fallback）。
+- **OllamaProvider**：以 `httpx` POST `{OLLAMA_BASE_URL}/api/chat`（`stream:false`），解析 `message.content`；實作 `complete` / `complete_with_messages`；`complete_with_vision` 多數本地模型為純文字，退化為純文字 prompt（見 Deferred）。
+- **模型清單**：`/llm-models` 整合三來源——Anthropic／OpenAI（env 金鑰有效時列硬編清單）、Ollama（`GET /api/tags` 動態，逾時/連線失敗則略過）；每模型帶 `id`、`provider`、`requires_setup`（Ollama id 為 `ollama:<name>`）。
+- **目前啟用模型（DB）**：沿用既有 `AppSettingRepository`（key=`active_llm_model`，存於既有 `encrypted_value` 欄、Fernet 加密），**零 schema 變更/無 migration**；模型 id 雖非機密，但沿用既有加密欄避免新增明文路徑。`get_active_model()` = DB 值 or `.env DEFAULT_LLM_MODEL`；`set_active_model()` 寫入即時生效、免重啟。
+- **AppSettingService 角色（C3）**：Phase 23 曾改為純讀 env；Phase 24 恢復 `db`/`AppSettingRepository`，服務變為**混合式**——金鑰仍讀 `.env`（唯讀），「啟用模型」讀寫 DB。
+- **可用性過濾**：後台下拉只列 `requires_setup=false`（雲端金鑰已設／Ollama 可連）的模型。
+- 金鑰／連線維持 `.env` 唯讀（Phase 23 不變）；僅「啟用模型」為 DB 可寫。
+- 依 constitution III（Test-First）：先寫 contract/unit test（確認 RED）再實作。
+
+**後端修改範圍**：
+
+| 檔案 | 變更 |
+|------|------|
+| `core/config.py` | 新增 `ollama_base_url: str = ""`（env `OLLAMA_BASE_URL`） |
+| `core/llm_provider.py` | 新增 `OllamaProvider`（httpx `/api/chat`）；`get_provider` 改三方路由 |
+| `api/llm_models.py` | 整合 Ollama `GET /api/tags`（async httpx，逾時 fallback 空清單）；每模型標 `provider`/`requires_setup`；`default` 改回傳 `get_active_model()` |
+| `services/app_setting_service.py` | 恢復 `db`/`AppSettingRepository`（混合式）；新增 `get_active_model()`／`set_active_model(model_id)`（沿用 repo 加密 `app_setting` key=`active_llm_model`，無 migration）；`get_llm_keys` 增列 Ollama 連線狀態 |
+| `api/admin.py` | 新增 `GET /admin/active-model`、`PUT /admin/active-model`（`require_admin`；PUT 寫 DB 即時生效） |
+| `api/cases.py` | LLM 呼叫未指定模型時改用 `get_active_model()`（取代 `settings.default_llm_model`） |
+| `.env` / `.env.example` | 新增 `OLLAMA_BASE_URL=http://localhost:11434` |
+
+**前端修改範圍**：
+
+| 檔案 | 變更 |
+|------|------|
+| `services/adminApi.ts` | 新增 `getActiveModel()`／`setActiveModel(id)`／`getLlmModels()`（含 provider 分組與 `requires_setup`） |
+| `pages/AdminPage.vue` | LLM 分頁：金鑰維持唯讀遮罩 + 顯示 Ollama 連線狀態；新增「目前使用模型」下拉（只列可用、依 provider 分組），變更即呼叫 `setActiveModel` 並提示成功 |
+| `pages/CaseCreatePage.vue` | 改讀啟用模型（`/llm-models` 的 `default` 即 active model；維持 `onMounted` 載入） |
+
+**測試（先 RED）**：
+- `test_ollama_provider`：mock httpx `/api/chat` 回應解析（`message.content`）
+- `test_llm_models_ollama`：`/api/tags` 整合、逾時 fallback 空、`provider`/`requires_setup` 欄位
+- `test_active_model_api`：`GET/PUT /admin/active-model`、非 admin → 403、PUT 後 GET 一致、`/llm-models` `default` 反映
+- 前端 `AdminPage.spec`：下拉切換呼叫 `setActiveModel`；金鑰仍唯讀
+
+**驗收條件**：
+- `.env` 設 `OLLAMA_BASE_URL` 後，`/llm-models` 列出 `ollama:*` 已安裝模型；Ollama 離線則略過、雲端不受影響。
+- 後台選任一可用模型（含 `ollama:gemma4:e4b`）→ 即時生效，新建案例 AI 補齊採用之，無需重啟。
+- 金鑰仍 `.env` 唯讀、後台不可編輯；完整明文不外洩。
+
+**Deferred（暫不實作，待需求）**：Ollama 多模態/視覺；本地模型較慢之**程式逾時值調整**（目前沿用 35s；SC-007/SC-010 時間門檻已豁免本地 Ollama，見 spec）；後台顯示 Ollama 已安裝模型數。
 
 ### Phase 20：登入畫面 + 管理後台（FR-024〜FR-027）
 

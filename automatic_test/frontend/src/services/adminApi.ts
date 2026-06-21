@@ -54,15 +54,24 @@ export const renameSystemCategory = (id: string, name: string): Promise<SystemCa
 export const deleteSystemCategory = (id: string): Promise<{ deleted: boolean; affected_case_count: number }> =>
   apiClient.delete(`/admin/system-categories/${id}`).then((r) => r.data)
 
-// ──────────────── LLM API Key 管理 ────────────────
+// ──────────────── LLM 設定 ────────────────
 
-// LLM 金鑰與預設模型由 .env 配置，後台僅唯讀顯示（FR-027）
+// 金鑰／連線由 .env 配置，後台唯讀顯示；「目前啟用模型」存 DB、後台可切換（FR-027）
 
 export interface LlmKeyStatus {
   anthropic_key_set: boolean
   anthropic_key_masked?: string
   openai_key_set: boolean
   openai_key_masked?: string
+  ollama_base_url?: string
+  ollama_configured?: boolean
+}
+
+export interface LlmModel {
+  id: string
+  name: string
+  provider: string
+  requires_setup: boolean
 }
 
 export const getLlmKeyStatus = (): Promise<LlmKeyStatus> =>
@@ -70,3 +79,12 @@ export const getLlmKeyStatus = (): Promise<LlmKeyStatus> =>
 
 export const getDefaultModel = (): Promise<{ model: string }> =>
   apiClient.get('/admin/llm-default-model').then((r) => r.data)
+
+export const getLlmModels = (): Promise<{ models: LlmModel[]; default: string }> =>
+  apiClient.get('/llm-models').then((r) => r.data)
+
+export const getActiveModel = (): Promise<{ model: string }> =>
+  apiClient.get('/admin/active-model').then((r) => r.data)
+
+export const setActiveModel = (model: string): Promise<{ model: string }> =>
+  apiClient.put('/admin/active-model', { model }).then((r) => r.data)

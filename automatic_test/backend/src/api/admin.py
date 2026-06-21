@@ -137,3 +137,21 @@ async def get_llm_key_status():
 @router.get("/llm-default-model", dependencies=[Depends(require_admin)])
 async def get_default_model():
     return {"model": AppSettingService().get_default_model()}
+
+
+# ─── 目前啟用模型（可切換，存 DB，即時生效；FR-027 / Phase 24）───
+
+class SetActiveModelRequest(BaseModel):
+    model: str
+
+
+@router.get("/active-model", dependencies=[Depends(require_admin)])
+async def get_active_model(db: AsyncSession = Depends(get_db)):
+    return {"model": await AppSettingService(db).get_active_model()}
+
+
+@router.put("/active-model", dependencies=[Depends(require_admin)])
+async def set_active_model(body: SetActiveModelRequest, db: AsyncSession = Depends(get_db)):
+    await AppSettingService(db).set_active_model(body.model)
+    await db.commit()
+    return {"model": body.model}

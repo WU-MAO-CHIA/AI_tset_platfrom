@@ -122,10 +122,10 @@
       </div>
     </section>
 
-    <!-- LLM 設定（唯讀，來源 .env） -->
+    <!-- LLM 設定（金鑰唯讀 + 啟用模型可切換） -->
     <section v-if="activeTab === 'llm'" class="tab-content">
-      <h2>LLM 設定（唯讀）</h2>
-      <p class="hint">金鑰與預設模型由部署的 <code>.env</code> 配置；如需變更請修改 .env 並重啟服務。</p>
+      <h2>LLM 設定</h2>
+      <p class="hint">金鑰與連線由部署的 <code>.env</code> 配置（唯讀）；「目前使用模型」可於此切換並即時生效。</p>
       <div class="llm-row">
         <div class="llm-card">
           <h3>Anthropic (Claude)</h3>
@@ -138,20 +138,36 @@
           <p>狀態：{{ llmStatus?.openai_key_set ? '✅ 已設定' : '❌ 未設定' }}</p>
           <p v-if="llmStatus?.openai_key_set" class="masked-key">{{ llmStatus?.openai_key_masked }}</p>
         </div>
+
+        <div class="llm-card">
+          <h3>本地 Ollama</h3>
+          <p>狀態：{{ llmStatus?.ollama_configured ? '✅ 已設定' : '❌ 未設定' }}</p>
+          <p v-if="llmStatus?.ollama_configured" class="masked-key">{{ llmStatus?.ollama_base_url }}</p>
+        </div>
       </div>
 
       <div class="llm-default-model">
-        <h3>全域預設模型</h3>
-        <p class="masked-key" data-testid="default-model">{{ defaultModel || '—' }}</p>
+        <h3>目前使用模型</h3>
+        <p class="hint">套用於所有 AI 補齊／預覽／對話；切換後立即生效，無需重啟。</p>
+        <select
+          data-testid="active-model-select"
+          :value="activeModel"
+          @change="onActiveModelChange(($event.target as HTMLSelectElement).value)"
+        >
+          <optgroup v-for="group in groupedModels" :key="group.provider" :label="group.label">
+            <option v-for="m in group.models" :key="m.id" :value="m.id">{{ m.name }}</option>
+          </optgroup>
+        </select>
+        <p v-if="activeModelSaved" class="success-msg">✅ 已切換為 {{ activeModel }}</p>
       </div>
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import * as adminApi from '../services/adminApi'
-import type { UserRecord, SystemCategory } from '../services/adminApi'
+import type { UserRecord, SystemCategory, LlmModel } from '../services/adminApi'
 
 const tabs = [
   { key: 'users', label: '帳號管理' },
@@ -262,21 +278,62 @@ async function onDeleteCat(c: SystemCategory) {
   await loadCategories()
 }
 
-// ─── LLM 設定（唯讀，來源 .env）───
+// ─── LLM 設定（金鑰唯讀 + 啟用模型可切換）───
 const llmStatus = ref<adminApi.LlmKeyStatus | null>(null)
-const defaultModel = ref('')
+const availableModels = ref<LlmModel[]>([])
+const activeModel = ref('')
+const activeModelSaved = ref(false)
+
+const PROVIDER_LABELS: Record<string, string> = {
+  anthropic: 'Anthropic (Claude)',
+  openai: 'OpenAI (GPT)',
+  ollama: '本地 Ollama',
+}
+
+// 僅列可用模型（requires_setup=false），依 provider 分組
+const groupedModels = computed(() => {
+  const groups: { provider: string; label: string; models: LlmModel[] }[] = []
+  for (const m of availableModels.value) {
+    if (m.requires_setup) continue
+    let g = groups.find((x) => x.provider === m.provider)
+    if (!g) {
+      g = { provider: m.provider, label: PROVIDER_LABELS[m.provider] || m.provider, models: [] }
+      groups.push(g)
+    }
+    g.models.push(m)
+  }
+  return groups
+})
 
 async function loadLlmStatus() {
   llmStatus.value = await adminApi.getLlmKeyStatus()
 }
 
-async function loadDefaultModel() {
-  const def = await adminApi.getDefaultModel()
-  defaultModel.value = def.model
+async function loadLlmModels() {
+  const res = await adminApi.getLlmModels()
+  availableModels.value = res.models
+}
+
+async function loadActiveModel() {
+  const res = await adminApi.getActiveModel()
+  activeModel.value = res.model
+}
+
+async function onActiveModelChange(model: string) {
+  await adminApi.setActiveModel(model)
+  activeModel.value = model
+  activeModelSaved.value = true
+  setTimeout(() => (activeModelSaved.value = false), 2500)
 }
 
 onMounted(async () => {
-  await Promise.all([loadUsers(), loadCategories(), loadLlmStatus(), loadDefaultModel()])
+  await Promise.all([
+    loadUsers(),
+    loadCategories(),
+    loadLlmStatus(),
+    loadLlmModels(),
+    loadActiveModel(),
+  ])
 })
 </script>
 
@@ -498,5 +555,14 @@ onMounted(async () => {
   margin: 0 0 8px;
   font-size: 0.95rem;
   font-weight: 600;
+}
+
+.llm-default-model select {
+  width: 100%;
+  max-width: 360px;
+  padding: 7px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 0.875rem;
 }
 </style>

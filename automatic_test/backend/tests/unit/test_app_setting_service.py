@@ -25,9 +25,12 @@ class TestMask:
         assert _mask(None) == ""
 
 
-def _settings(anthropic="", openai="", default="claude-sonnet-4-6"):
+def _settings(anthropic="", openai="", default="claude-sonnet-4-6", ollama=""):
     return SimpleNamespace(
-        anthropic_api_key=anthropic, openai_api_key=openai, default_llm_model=default
+        anthropic_api_key=anthropic,
+        openai_api_key=openai,
+        default_llm_model=default,
+        ollama_base_url=ollama,
     )
 
 

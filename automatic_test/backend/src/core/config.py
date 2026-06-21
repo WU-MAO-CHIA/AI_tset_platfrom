@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     openai_api_key: str = ""
     default_llm_model: str = "claude-sonnet-4-6"
+    # 本地 Ollama 原生 API base URL（空字串＝未啟用本地模型）
+    ollama_base_url: str = ""
 
     jwt_secret_key: str = "dev-secret-key-change-in-production"
     # 168h = 7 天，避免測試人員每天重新登入而觸發 token 過期 401

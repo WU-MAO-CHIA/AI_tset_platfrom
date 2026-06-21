@@ -701,6 +701,41 @@ Phase 2 完成後：
 
 ---
 
+## Phase 24: 本地 Ollama 整合 + 後台「目前啟用模型」可切換（FR-012 / FR-027）（2026-06-21）
+
+**Purpose**: 新增本地 Ollama provider（原生 `/api/chat`）；後台改為可選「目前使用模型」（跨 Claude/OpenAI/Ollama、僅列可用、存 DB 即時生效）；金鑰／連線維持 `.env` 唯讀
+
+> **與 Phase 23 關係**：金鑰／`OLLAMA_BASE_URL` 維持 `.env` 唯讀；僅「目前啟用模型」由唯讀改回 DB 可切換（部分修訂 Phase 23）。
+
+### TDD 測試（先寫、確認 RED）
+
+- [X] T225 [P] 寫 unit test：`automatic_test/backend/tests/unit/test_ollama_provider.py`：mock `httpx` `POST {base}/api/chat`（`stream:false`）回應，驗證 `OllamaProvider.complete` / `complete_with_messages` 正確解析 `message.content`、模型名去除 `ollama:` 前綴
+- [X] T226 [P] 寫 test：`automatic_test/backend/tests/unit/test_llm_models_ollama.py`：mock `GET {base}/api/tags`，驗證 `/llm-models` 列出 `ollama:<name>` 並帶 `provider="ollama"`、`requires_setup=false`；Ollama 連線失敗/逾時時 Ollama 區塊為空且不影響雲端模型
+- [X] T227 [P] 寫 contract test：`automatic_test/backend/tests/contract/test_active_model_api.py`：`GET /admin/active-model`、`PUT /admin/active-model` 寫入後 `GET` 一致且 `/llm-models` 的 `default` 反映；非 admin → 403；未帶 token → 401
+- [X] T228 [P] 更新 frontend unit test：`automatic_test/frontend/tests/unit/AdminPage.spec.ts`：金鑰維持唯讀遮罩；新增「目前使用模型」下拉，變更後呼叫 `setActiveModel`；下拉僅含可用模型
+
+### 後端實作
+
+- [X] T229 修改 `automatic_test/backend/src/core/config.py`：新增 `ollama_base_url: str = ""`（對應 env `OLLAMA_BASE_URL`）
+- [X] T230 修改 `automatic_test/backend/src/core/llm_provider.py`：新增 `OllamaProvider`（以 `httpx.AsyncClient` POST `{ollama_base_url}/api/chat`，`stream:false`，解析 `message.content`；實作 `complete`/`complete_with_messages`；`complete_with_vision` 退化為純文字）；`get_provider` 改三方路由：`startswith("ollama:")`→`OllamaProvider`（去前綴）、`startswith("claude")`→Anthropic、其餘→OpenAI
+- [X] T231 修改 `automatic_test/backend/src/services/app_setting_service.py`：恢復 `db`/`AppSettingRepository`（混合式：金鑰仍讀 env、啟用模型讀寫 DB）；新增 `get_active_model()`（沿用 `repo.get_decrypted(key="active_llm_model")`；無則回 `settings.default_llm_model`）與 `set_active_model(model_id)`（`repo.set(...)`，沿用既有加密欄、無 migration）；`get_llm_keys` 增列 Ollama 連線狀態欄位（`ollama_base_url` + 是否設定）
+- [X] T232 修改 `automatic_test/backend/src/api/llm_models.py`：以 async `httpx` 查 `{ollama_base_url}/api/tags`（設定逾時、失敗則略過），將已安裝模型併入清單（id=`ollama:<name>`, provider="ollama", requires_setup=false）；雲端模型標 `provider`/`requires_setup`；`default` 改回傳 `AppSettingService(db).get_active_model()`
+- [X] T233 修改 `automatic_test/backend/src/api/admin.py`：新增 `GET /admin/active-model`（回目前啟用模型）與 `PUT /admin/active-model`（body `{model}`→`set_active_model`+`commit`，即時生效），均 `Depends(require_admin)`
+- [X] T234 修改 `automatic_test/backend/src/api/cases.py`：4 處 LLM 呼叫未指定模型時改用 `AppSettingService(session).get_active_model()`（取代 `settings.default_llm_model`）
+- [X] T235 修改 `automatic_test/backend/.env` 與 `.env.example`：新增 `OLLAMA_BASE_URL=http://localhost:11434`（含註解）
+
+### 前端實作
+
+- [X] T236 [P] 修改 `automatic_test/frontend/src/services/adminApi.ts`：新增 `getActiveModel()`、`setActiveModel(model)`、`getLlmModels()`（回 `{ models:[{id,name,provider,requires_setup}], default }`）
+- [X] T237 修改 `automatic_test/frontend/src/pages/AdminPage.vue` LLM 分頁：金鑰維持唯讀遮罩並顯示 Ollama 連線狀態；新增「目前使用模型」下拉（依 provider 分組、僅列 `requires_setup=false`），變更即呼叫 `setActiveModel` 並提示成功
+- [X] T238 修改 `automatic_test/frontend/src/pages/CaseCreatePage.vue`：確認 `onMounted` 讀 `/llm-models` 的 `default`（即目前啟用模型）；無需模型選擇器
+
+**Checkpoint**: TDD（T225–T228）先 RED；`.env` 設 `OLLAMA_BASE_URL` 後 `/llm-models` 列出 `ollama:*`，Ollama 離線則略過、雲端不受影響；後台選任一可用模型（含 `ollama:gemma4:e4b`）即時生效、新建案例 AI 補齊採用之、無需重啟；金鑰仍 `.env` 唯讀、後台不可編輯
+
+**Dependencies**: TDD（T225–T228）先寫確認 RED → 再實作。T230 依賴 T229；T232 依賴 T230+T231；T233、T234 依賴 T231；T237 依賴 T236+T232+T233。可平行起步：T225–T228（測試）、T229/T236
+
+---
+
 ## Notes
 
 - `[P]` = 不同檔案，無未完成依賴，可平行執行
