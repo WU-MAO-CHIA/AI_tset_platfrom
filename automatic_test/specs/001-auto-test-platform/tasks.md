@@ -653,6 +653,20 @@ Phase 2 完成後：
 
 ---
 
+---
+
+## Phase 22: 執行前空清單驗證（FR-009 pre-flight）（2026-06-21）
+
+**Purpose**: 點擊「執行測試」前，前端驗證清單是否有案例；若為空顯示警示並阻擋請求
+
+### 實作
+
+- [X] T211 [US3] 修改 `automatic_test/frontend/src/pages/ChecklistDetailPage.vue` 的「執行測試」按鈕 click handler：執行前先讀取目前清單的案例數量（`checklist.items?.length` 或已載入的 `caseItems.length`），若 `=== 0` 則呼叫 `alert('測試清單為空，請先新增案例')` 並 `return`，不觸發 `executeChecklist` API 呼叫
+
+**Checkpoint**: 清單無案例時點擊「執行測試」顯示 alert，Network tab 無 POST `/execute` 請求；清單有案例時行為不變
+
+---
+
 ## Notes
 
 - `[P]` = 不同檔案，無未完成依賴，可平行執行

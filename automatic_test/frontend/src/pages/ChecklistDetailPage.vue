@@ -8,11 +8,11 @@
       </div>
       <div class="actions">
         <button class="btn-secondary" @click="$router.push('/checklists')">← 返回</button>
-        <button class="btn-secondary" @click="$router.push(`/checklists/${checklist.id}/cases`)">
+        <button v-if="authStore.isEditor" class="btn-secondary" @click="$router.push(`/checklists/${checklist.id}/cases`)">
           管理案例
         </button>
-        <button class="btn-secondary" @click="openEditModal">編輯</button>
-        <button class="btn-danger" @click="handleDelete">刪除</button>
+        <button v-if="authStore.isEditor" class="btn-secondary" @click="openEditModal">編輯</button>
+        <button v-if="authStore.isEditor" class="btn-danger" @click="handleDelete">刪除</button>
         <button
           data-testid="btn-execute"
           class="btn-primary"
@@ -125,6 +125,9 @@ import {
   type ChecklistExecutionRecord,
 } from '../services/checklistApi'
 import { executeChecklist } from '../services/executionApi'
+import { useAuthStore } from '../stores/authStore'
+
+const authStore = useAuthStore()
 
 const route = useRoute()
 const router = useRouter()
@@ -193,6 +196,10 @@ async function handleDelete() {
 
 async function handleExecute() {
   if (!checklist.value) return
+  if (checklist.value.items.length === 0) {
+    alert('測試清單為空，請先新增案例')
+    return
+  }
   errorMsg.value = ''
   try {
     const { execution_id } = await executeChecklist(checklist.value.id, {
