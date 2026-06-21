@@ -470,9 +470,21 @@ onMounted(async () => {
 }
 
 .masked-key {
-  font-family: monospace;
+  margin: 0;
+  font-size: 0.875rem;
   color: #6b7280;
+}
+
+.hint {
+  margin: 0 0 16px;
   font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.hint code {
+  background: #f3f4f6;
+  padding: 1px 5px;
+  border-radius: 3px;
 }
 
 .llm-default-model {
@@ -486,20 +498,5 @@ onMounted(async () => {
   margin: 0 0 8px;
   font-size: 0.95rem;
   font-weight: 600;
-}
-
-.llm-default-model .hint {
-  margin: 0 0 12px;
-  font-size: 0.8rem;
-  color: #6b7280;
-}
-
-.llm-default-model select {
-  width: 100%;
-  max-width: 360px;
-  padding: 7px 10px;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
-  font-size: 0.875rem;
 }
 </style>
