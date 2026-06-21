@@ -117,9 +117,44 @@ async def list_checklists(
 ):
     service = ChecklistService(db)
     items, total = await service.list_all(page=page, page_size=page_size, keyword=keyword, sort_by=sort_by, order=order)
+
+    # 補上案例數與最新執行狀態（分組查詢，避免 N+1）
+    from sqlalchemy import select, func
+    from src.models.checklist_item import ChecklistItem
+    from src.models.execution_record import ExecutionRecord
+
+    ids = [c.id for c in items]
+    case_counts: dict[str, int] = {}
+    statuses: dict[str, str] = {}
+    if ids:
+        cc = await db.execute(
+            select(ChecklistItem.checklist_id, func.count())
+            .where(ChecklistItem.checklist_id.in_(ids))
+            .group_by(ChecklistItem.checklist_id)
+        )
+        case_counts = {row[0]: row[1] for row in cc.all()}
+
+        ex = await db.execute(
+            select(ExecutionRecord.checklist_id, ExecutionRecord.status)
+            .where(ExecutionRecord.checklist_id.in_(ids))
+            .where(ExecutionRecord.status != "deleted")
+            .order_by(ExecutionRecord.created_at.desc())
+        )
+        for cl_id, status in ex.all():
+            if cl_id not in statuses:  # 第一筆即最新（created_at desc）
+                statuses[cl_id] = status
+
     return {
         "items": [
-            {"id": c.id, "name": c.name, "created_by": c.created_by, "description": c.description}
+            {
+                "id": c.id,
+                "name": c.name,
+                "created_by": c.created_by,
+                "description": c.description,
+                "case_count": case_counts.get(c.id, 0),
+                "status": statuses.get(c.id),
+                "created_at": c.created_at.isoformat() if c.created_at else None,
+            }
             for c in items
         ],
         "total": total,

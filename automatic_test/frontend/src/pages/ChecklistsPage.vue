@@ -200,9 +200,10 @@ h1 { font-size: 22px; }
   border-radius: 9999px;
   font-size: 12px;
 }
-.status-passed { background: #dcfce7; color: #166534; }
-.status-failed { background: #fee2e2; color: #991b1b; }
+.status-passed, .status-completed { background: #dcfce7; color: #166534; }
+.status-failed, .status-error { background: #fee2e2; color: #991b1b; }
 .status-running { background: #dbeafe; color: #1e40af; }
+.status-pending { background: #fef3c7; color: #92400e; }
 .status-none { background: #f3f4f6; color: #6b7280; }
 
 .loading { padding: 40px; text-align: center; color: #6b7280; }
