@@ -105,32 +105,60 @@
           <h2>主要步驟</h2>
           <pre>{{ caseData.main_steps }}</pre>
         </div>
+        <div class="section">
+          <h2>媒體附件</h2>
+          <ul v-if="attachments.length" class="attachment-list">
+            <li v-for="att in attachments" :key="att.id">
+              <a v-if="att.attachment_type === 'url'" :href="att.url ?? undefined" target="_blank" rel="noopener">
+                🔗 {{ att.url }}
+              </a>
+              <a
+                v-else-if="att.file_path"
+                :href="`/api/v1/media/attachments/${caseId}/${attachmentFilename(att.file_path)}`"
+                target="_blank"
+                rel="noopener"
+                :download="att.filename ?? undefined"
+              >
+                {{ att.attachment_type === 'video' ? '🎬' : '📷' }} {{ att.filename }}
+              </a>
+              <span v-else>📎 {{ att.filename }}</span>
+            </li>
+          </ul>
+          <p v-else class="empty">（無）</p>
+        </div>
       </div>
 
-      <!-- Tab 2：測試步驟（唯讀：AI 對話歷史 + RF 程式碼預覽） -->
-      <div v-show="viewTab === 'steps'" class="tab-content split-layout">
-        <section class="left-col">
-          <h2 style="font-size:16px;font-weight:600;margin-bottom:12px;">AI 對話歷史</h2>
-          <div v-if="chatMessages.length === 0" class="empty-chat">尚無對話紀錄</div>
-          <div v-else class="chat-history">
-            <div
-              v-for="(msg, idx) in chatMessages"
-              :key="idx"
-              class="chat-bubble"
-              :class="msg.role"
-            >
-              <span class="bubble-role">{{ msg.role === 'user' ? '使用者' : 'AI' }}</span>
-              <p>{{ chatDisplayText(msg) }}</p>
+      <!-- Tab 2：測試步驟（唯讀）：左右分欄，各自有滾輪 -->
+      <div v-show="viewTab === 'steps'" class="tab-content steps-split">
+        <!-- 左：AI 對話歷史 -->
+        <div class="steps-left">
+          <div class="steps-panel-header">AI 對話歷史</div>
+          <div class="steps-panel-body">
+            <div v-if="chatMessages.length === 0" class="empty-chat">尚無對話紀錄</div>
+            <div v-else class="chat-history">
+              <div
+                v-for="(msg, idx) in chatMessages"
+                :key="idx"
+                class="chat-bubble"
+                :class="msg.role"
+              >
+                <span class="bubble-role">{{ msg.role === 'user' ? '使用者' : 'AI' }}</span>
+                <p>{{ chatDisplayText(msg) }}</p>
+              </div>
             </div>
           </div>
-        </section>
-        <section class="right-col rf-panel">
+        </div>
+
+        <!-- 右：RF 程式碼 -->
+        <div class="steps-right rf-panel">
           <div class="rf-panel-header">最新 RF 程式碼（唯讀）</div>
-          <div v-if="rfCode" class="rf-readonly">
-            <pre class="rf-code">{{ rfCode }}</pre>
+          <div class="steps-panel-body">
+            <div v-if="rfCode" class="rf-readonly">
+              <pre class="rf-code">{{ rfCode }}</pre>
+            </div>
+            <div v-else class="rf-empty">尚無 RF 程式碼（請先透過 AI 對話生成）</div>
           </div>
-          <div v-else class="rf-empty">尚無 RF 程式碼（請先透過 AI 對話生成）</div>
-        </section>
+        </div>
       </div>
     </template>
 
@@ -163,7 +191,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { caseApi, type TestCaseDetail } from '../services/caseApi'
+import { caseApi, type TestCaseDetail, type AttachmentRecord } from '../services/caseApi'
 import FileImporter from '../components/FileImporter/index.vue'
 import TestCaseForm from '../components/TestCaseForm/index.vue'
 import AIChatPanel from '../components/AIChatPanel/index.vue'
@@ -187,12 +215,23 @@ const mainSteps = ref('')
 const selectedModel = ref('claude-sonnet-4-6')
 const rfCode = ref('')
 const chatMessages = ref<Array<{ role: string; content: string; created_at: string }>>([])
+const attachments = ref<AttachmentRecord[]>([])
+
+async function loadAttachments() {
+  try {
+    const res = await caseApi.listAttachments(caseId)
+    attachments.value = res.data.items
+  } catch {
+    attachments.value = []
+  }
+}
 
 const editInitialData = computed(() => caseData.value ? { ...caseData.value } : undefined)
 
 onMounted(async () => {
   const res = await caseApi.getCase(caseId)
   caseData.value = res.data
+  await loadAttachments()
 
   // Load saved RF script (DB / disk) — authoritative source
   try {
@@ -225,7 +264,6 @@ function startEdit() {
   mainSteps.value = caseData.value?.main_steps ?? ''
   editTab.value = 'basic'
   editing.value = true
-  // rfCode was already restored from chat history in onMounted; keep it.
 }
 
 function cancelEdit() {
@@ -235,6 +273,7 @@ function cancelEdit() {
 async function onSaved(_id: string) {
   const res = await caseApi.getCase(caseId)
   caseData.value = res.data
+  await loadAttachments()
   editing.value = false
 }
 
@@ -262,6 +301,10 @@ function chatDisplayText(msg: { role: string; content: string }) {
   if (msg.role !== 'assistant') return msg.content
   const rfIdx = msg.content.indexOf('---RF_CODE---')
   return rfIdx !== -1 ? msg.content.slice(0, rfIdx).trim() : msg.content
+}
+
+function attachmentFilename(filePath: string): string {
+  return filePath.replace(/\\/g, '/').split('/').pop() ?? filePath
 }
 
 function saveFromPageHeader() {
@@ -306,18 +349,62 @@ h1 { font-size: 20px; }
 
 .tab-content { min-height: 400px; }
 
+/* 編輯模式：測試步驟 split */
 .split-layout {
   display: grid;
   grid-template-columns: 1fr 1.2fr;
   gap: 24px;
-  align-items: start;
   height: calc(100vh - 220px);
+  overflow: hidden;
 }
 
 .left-col, .right-col {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.right-col {
+  overflow-y: auto;
+}
+
+/* 檢視模式：測試步驟 split（各自獨立滾輪） */
+.steps-split {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 24px;
+  height: calc(100vh - 220px);
+}
+
+.steps-left,
+.steps-right {
+  display: flex;
+  flex-direction: column;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  min-height: 0;
+}
+
+.steps-right.rf-panel {
+  border-color: transparent;
+}
+
+.steps-panel-header {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  padding: 10px 16px;
+  background: #f3f4f6;
+  border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.steps-panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
 }
 
 .btn-save-edit {
@@ -331,13 +418,10 @@ h1 { font-size: 20px; }
   font-weight: 500;
 }
 
-.btn-save-edit:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
+.btn-save-edit:disabled { opacity: 0.6; cursor: not-allowed; }
 
 @media (max-width: 767px) {
-  .split-layout { grid-template-columns: 1fr; height: auto; }
+  .split-layout, .steps-split { grid-template-columns: 1fr; height: auto; }
 }
 
 .section { margin-bottom: 32px; }
@@ -350,16 +434,22 @@ pre { white-space: pre-wrap; background: #f9f9f9; padding: 12px; border-radius: 
 .clickable { cursor: pointer; }
 .clickable:hover { background: #f0f4ff; }
 .empty { color: #888; }
+.attachment-list { list-style: none; padding: 0; margin: 0; }
+.attachment-list li { padding: 4px 0; font-size: 14px; }
+.attachment-list a { color: #4f46e5; text-decoration: none; }
+.attachment-list a:hover { text-decoration: underline; }
 
-.chat-history { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; max-height: calc(100vh - 300px); }
+.chat-history { display: flex; flex-direction: column; gap: 12px; }
 .chat-bubble { padding: 10px 14px; border-radius: 8px; max-width: 90%; font-size: 14px; }
 .chat-bubble.user { background: #eff6ff; align-self: flex-end; }
 .chat-bubble.assistant { background: #f9fafb; border: 1px solid #e5e7eb; align-self: flex-start; }
 .bubble-role { font-size: 11px; font-weight: 600; color: #6b7280; display: block; margin-bottom: 4px; }
-.empty-chat { color: #9ca3af; font-size: 14px; padding: 24px 0; }
-.rf-panel { background: #1e1e2e; border-radius: 6px; padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+.empty-chat { color: #9ca3af; font-size: 14px; }
+
+.rf-panel { background: #1e1e2e; }
 .rf-panel-header { background: rgba(0,0,0,0.25); color: #7c8097; font-size: 12px; font-weight: 600; letter-spacing: 0.5px; padding: 10px 16px; border-bottom: 1px solid rgba(255,255,255,0.06); flex-shrink: 0; }
-.rf-readonly { flex: 1; overflow: auto; padding: 12px; max-height: calc(100vh - 320px); }
+.rf-panel .steps-panel-body { background: #1e1e2e; }
+.rf-readonly { }
 .rf-code { color: #cdd6f4; background: transparent; font-family: 'Courier New', monospace; font-size: 13px; white-space: pre-wrap; margin: 0; line-height: 1.6; }
-.rf-empty { color: #7c8097; font-size: 13px; padding: 24px 16px; }
+.rf-empty { color: #7c8097; font-size: 13px; }
 </style>

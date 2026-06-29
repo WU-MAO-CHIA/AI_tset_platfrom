@@ -41,6 +41,16 @@ export interface UpdateCaseRequest {
   created_by: string
 }
 
+export interface AttachmentRecord {
+  id: string
+  attachment_type: string
+  filename: string | null
+  url: string | null
+  file_path: string | null
+  file_size_bytes: number | null
+  mime_type: string | null
+}
+
 export interface CaseListResponse {
   items: TestCaseSummary[]
   total: number
@@ -126,6 +136,14 @@ export const caseApi = {
 
   uploadAttachmentUrl(id: string, url: string) {
     return apiClient.post(`/cases/${id}/attachments`, null, { params: { url } })
+  },
+
+  listAttachments(id: string) {
+    return apiClient.get<{ items: AttachmentRecord[] }>(`/cases/${id}/attachments`)
+  },
+
+  deleteAttachment(id: string, attachmentId: string) {
+    return apiClient.delete(`/cases/${id}/attachments/${attachmentId}`)
   },
 
   trialRun(id: string) {

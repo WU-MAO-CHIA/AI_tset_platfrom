@@ -13,6 +13,29 @@ RF 腳本必須遵守以下規則：
 - 等待請用 Wait For Elements State 或 Browser library 內建 auto-wait；禁止使用 Sleep 同步 UI
 - 每個 *** Test Cases *** 條目必須含 [Documentation] 與 [Tags]
 - 切勿混用 SeleniumLibrary 與 Browser library
+
+CAPTCHA 處理規則（當測試頁面可能出現圖形驗證碼時必須遵守）：
+- Settings 區塊額外匯入 CaptchaSolverLibrary（與 Browser library 並列）：
+    Library    ${{CURDIR}}/../libs/CaptchaSolverLibrary.py
+- 在 *** Keywords *** 區塊定義「處理圖形驗證碼（如存在）」keyword，範本如下
+  （請將 <CAPTCHA圖片selector> / <CAPTCHA輸入欄selector> 替換為實際 selector）：
+
+處理圖形驗證碼（如存在）
+    [Documentation]    若頁面存在圖形驗證碼，截圖後以 Claude Vision 辨識並填入
+    ${{captcha_visible}}=    Run Keyword And Return Status
+    ...    Wait For Elements State    <CAPTCHA圖片selector>    visible    timeout=3s
+    IF    ${{captcha_visible}}
+        ${{captcha_path}}=    Take Screenshot
+        ...    filename=${{OUTPUT DIR}}/captcha_${{TEST NAME}}.png
+        ...    selector=<CAPTCHA圖片selector>
+        ...    fullPage=False
+        ${{captcha_text}}=    Solve Captcha From File    ${{captcha_path}}
+        Log    CAPTCHA 辨識結果：${{captcha_text}}
+        Fill Text    <CAPTCHA輸入欄selector>    ${{captcha_text}}
+    END
+
+- 在填完帳號密碼後、點擊送出按鈕前，呼叫：處理圖形驗證碼（如存在）
+- 此 keyword 採「若存在才處理」設計：若頁面無 CAPTCHA 元素則自動略過，不影響正常流程
 """
 
 _CHAT_SYSTEM_PROMPT = f"""\
