@@ -416,8 +416,59 @@ async def upload_attachment(
         "id": attachment.id,
         "attachment_type": attachment.attachment_type,
         "filename": attachment.filename,
+        "url": attachment.url,
         "file_size_bytes": attachment.file_size_bytes,
     }
+
+
+def _serialize_attachment(a) -> dict:
+    return {
+        "id": a.id,
+        "attachment_type": a.attachment_type,
+        "filename": a.filename,
+        "url": a.url,
+        "file_path": a.file_path,
+        "file_size_bytes": a.file_size_bytes,
+        "mime_type": a.mime_type,
+    }
+
+
+@router.get("/{case_id}/attachments")
+async def list_attachments(case_id: str, session: AsyncSession = Depends(get_db)):
+    from sqlalchemy import select
+    from src.models.media_attachment import MediaAttachment
+
+    result = await session.execute(
+        select(MediaAttachment)
+        .where(MediaAttachment.test_case_id == case_id)
+        .order_by(MediaAttachment.created_at)
+    )
+    items = result.scalars().all()
+    return {"items": [_serialize_attachment(a) for a in items]}
+
+
+@router.delete("/{case_id}/attachments/{attachment_id}", dependencies=[Depends(require_editor_or_above)])
+async def delete_attachment(
+    case_id: str,
+    attachment_id: str,
+    session: AsyncSession = Depends(get_db),
+    media_service: MediaService = Depends(get_media_service),
+):
+    from src.models.media_attachment import MediaAttachment
+
+    attachment = await session.get(MediaAttachment, attachment_id)
+    if not attachment or attachment.test_case_id != case_id:
+        raise HTTPException(404, detail={"error": "not_found", "message": "附件不存在"})
+
+    if attachment.file_path:
+        try:
+            await media_service.delete_attachment(attachment.file_path)
+        except Exception:
+            pass  # 檔案可能已不存在；仍移除 DB 紀錄
+
+    await session.delete(attachment)
+    await session.flush()
+    return {"deleted": True}
 
 
 @router.post("/{case_id}/import-test-data")

@@ -43,7 +43,7 @@
 
     <div class="field">
       <label>媒體附件</label>
-      <MediaUploader :case-id="caseId" @uploaded="onAttachmentUploaded" />
+      <MediaUploader ref="mediaUploaderRef" :case-id="caseId" @uploaded="onAttachmentUploaded" />
     </div>
 
     <div class="actions">
@@ -95,6 +95,7 @@ const saving = ref(false)
 const saveError = ref('')
 const trialRunning = ref(false)
 const categories = ref<string[]>([])
+const mediaUploaderRef = ref<InstanceType<typeof MediaUploader> | null>(null)
 
 onMounted(async () => {
   try {
@@ -121,6 +122,8 @@ async function onSubmit() {
       emit('saved', props.caseId)
     } else {
       const res = await caseApi.createCase(payload)
+      // 建立案例前暫存的媒體附件／網址，於此一併上傳到新案例
+      await mediaUploaderRef.value?.flushPending(res.data.id)
       emit('saved', res.data.id)
     }
   } catch (e: any) {
