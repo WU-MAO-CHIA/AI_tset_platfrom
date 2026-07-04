@@ -4,12 +4,17 @@ from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Body
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_db
 from src.core.config import get_settings
 from src.core.llm_provider import get_provider
 from src.core.dependencies import get_current_user, require_editor_or_above
+from src.models.test_case import TestCase
+from src.models.test_data import TestData
+from src.models.base import generate_uuid
 from src.repositories.test_case_repo import TestCaseRepository
 from src.repositories.execution_repo import ExecutionRepository
 from src.services.case_service import CaseService
@@ -41,6 +46,7 @@ class CaseUpdateRequest(BaseModel):
     system_category: Optional[str] = None
     tags: Optional[list[str]] = None
     created_by: str  # used as modified_by
+    test_data: Optional[list[dict]] = None  # full-replace; None = no change
 
 
 class CaseDeleteRequest(BaseModel):
@@ -93,7 +99,20 @@ def serialize_case_summary(case) -> dict:
     }
 
 
+def serialize_test_data_item(td) -> dict:
+    return {
+        "id": td.id,
+        "field_name": td.field_name,
+        "rf_variable": td.rf_variable,
+        "field_value": td.field_value,
+        "description": td.description,
+        "row_index": td.row_index,
+        "source": td.source,
+    }
+
+
 def serialize_case_detail(case) -> dict:
+    test_data = sorted(case.test_data, key=lambda td: td.row_index or 0) if case.test_data else []
     return {
         "id": case.id,
         "case_number": case.case_number,
@@ -108,6 +127,7 @@ def serialize_case_detail(case) -> dict:
         "modified_by": case.modified_by,
         "created_at": case.created_at.isoformat() if case.created_at else None,
         "updated_at": case.updated_at.isoformat() if case.updated_at else None,
+        "test_data": [serialize_test_data_item(td) for td in test_data],
     }
 
 
@@ -125,6 +145,7 @@ async def list_categories(session: AsyncSession = Depends(get_db)):
 async def create_case(
     body: CaseCreateRequest,
     service: CaseService = Depends(get_case_service),
+    session: AsyncSession = Depends(get_db),
 ):
     try:
         case = await service.create(
@@ -138,6 +159,22 @@ async def create_case(
         )
     except ValueError as e:
         raise HTTPException(400, detail={"error": "validation_error", "message": str(e)})
+
+    if body.test_data:
+        for idx, td_item in enumerate(body.test_data):
+            td = TestData(
+                id=generate_uuid(),
+                test_case_id=case.id,
+                field_name=td_item.get("field_name", ""),
+                rf_variable=td_item.get("rf_variable"),
+                field_value=td_item.get("field_value"),
+                description=td_item.get("description"),
+                source=td_item.get("source", "manual"),
+                row_index=td_item.get("row_index", idx),
+            )
+            session.add(td)
+        await session.flush()
+
     return {
         "id": case.id,
         "case_number": case.case_number,
@@ -175,10 +212,14 @@ async def list_cases(
 
 
 @router.get("/{case_id}")
-async def get_case(case_id: str, service: CaseService = Depends(get_case_service)):
-    try:
-        case = await service.get(case_id)
-    except ValueError:
+async def get_case(case_id: str, session: AsyncSession = Depends(get_db)):
+    result = await session.execute(
+        select(TestCase)
+        .where(TestCase.id == case_id, TestCase.is_deleted.is_(False))
+        .options(selectinload(TestCase.test_data))
+    )
+    case = result.scalar_one_or_none()
+    if not case:
         raise HTTPException(404, detail={"error": "not_found", "message": "案例不存在"})
     return serialize_case_detail(case)
 
@@ -211,9 +252,10 @@ async def update_case(
     case_id: str,
     body: CaseUpdateRequest,
     service: CaseService = Depends(get_case_service),
+    session: AsyncSession = Depends(get_db),
 ):
     try:
-        case = await service.update(
+        await service.update(
             case_id,
             modified_by=body.created_by,
             name=body.name,
@@ -227,6 +269,32 @@ async def update_case(
         if "not_found" in str(e):
             raise HTTPException(404, detail={"error": "not_found", "message": "案例不存在"})
         raise HTTPException(400, detail={"error": "validation_error", "message": str(e)})
+
+    if body.test_data is not None:
+        from sqlalchemy import delete as _delete
+        await session.execute(_delete(TestData).where(TestData.test_case_id == case_id))
+        for idx, td_item in enumerate(body.test_data):
+            td = TestData(
+                id=generate_uuid(),
+                test_case_id=case_id,
+                field_name=td_item.get("field_name", ""),
+                rf_variable=td_item.get("rf_variable"),
+                field_value=td_item.get("field_value"),
+                description=td_item.get("description"),
+                source=td_item.get("source", "manual"),
+                row_index=td_item.get("row_index", idx),
+            )
+            session.add(td)
+        await session.flush()
+
+    result = await session.execute(
+        select(TestCase)
+        .where(TestCase.id == case_id, TestCase.is_deleted.is_(False))
+        .options(selectinload(TestCase.test_data))
+    )
+    case = result.scalar_one_or_none()
+    if not case:
+        raise HTTPException(404, detail={"error": "not_found", "message": "案例不存在"})
     return serialize_case_detail(case)
 
 

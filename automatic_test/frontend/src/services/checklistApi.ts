@@ -67,6 +67,15 @@ export async function updateChecklistItems(id: string, caseIds: string[]): Promi
   return res.data
 }
 
+export interface TestDataItem {
+  id: string
+  field_name: string
+  rf_variable: string | null
+  field_value: string | null
+  description: string | null
+  row_index: number | null
+}
+
 export interface ChecklistCaseItem {
   item_id: string
   test_case_id: string
@@ -74,6 +83,11 @@ export interface ChecklistCaseItem {
   notes: string | null
   case_number: string | null
   name: string | null
+}
+
+export interface ChecklistItemDetail extends ChecklistCaseItem {
+  test_data: TestDataItem[]
+  actual_values: Record<string, string>
 }
 
 export async function updateChecklist(id: string, name: string, created_by: string): Promise<Checklist> {
@@ -85,7 +99,7 @@ export async function deleteChecklist(id: string): Promise<void> {
   await apiClient.delete(`/checklists/${id}`)
 }
 
-export async function getChecklistCases(checklistId: string): Promise<{ items: ChecklistCaseItem[]; total: number }> {
+export async function getChecklistCases(checklistId: string): Promise<{ items: ChecklistItemDetail[]; total: number }> {
   const res = await apiClient.get(`/checklists/${checklistId}/cases`)
   return res.data
 }
@@ -106,8 +120,8 @@ export async function removeCaseFromChecklist(checklistId: string, caseId: strin
 export async function patchChecklistCaseItem(
   checklistId: string,
   caseId: string,
-  payload: { notes?: string; position?: number },
-): Promise<ChecklistCaseItem> {
+  payload: { notes?: string; position?: number; actual_values?: Record<string, string> },
+): Promise<ChecklistItemDetail> {
   const res = await apiClient.patch(`/checklists/${checklistId}/cases/${caseId}`, payload)
   return res.data
 }

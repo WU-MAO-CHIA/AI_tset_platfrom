@@ -74,6 +74,7 @@ class AddCaseRequest(BaseModel):
 class PatchCaseItemRequest(BaseModel):
     notes: Optional[str] = None
     position: Optional[int] = None
+    actual_values: Optional[dict] = None
 
 
 class ReorderCasesRequest(BaseModel):
@@ -326,7 +327,12 @@ async def patch_checklist_case_item(
     service = ChecklistService(db)
     try:
         result = await service.update_case_item(
-            checklist_id, case_id, notes=body.notes, position=body.position
+            checklist_id,
+            case_id,
+            notes=body.notes,
+            position=body.position,
+            actual_values=body.actual_values if body.actual_values is not None else None,
+            clear_actual_values=("actual_values" in body.model_fields_set and body.actual_values is None),
         )
     except ValueError as exc:
         msg = str(exc)

@@ -43,6 +43,7 @@
       <table v-else class="case-table">
         <thead>
           <tr>
+            <th class="col-expand"></th>
             <th>#</th>
             <th>案例編號</th>
             <th>名稱</th>
@@ -50,12 +51,59 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(item, idx) in checklist.items" :key="item.id">
-            <td>{{ idx + 1 }}</td>
-            <td>{{ item.test_case?.case_number ?? item.test_case_id }}</td>
-            <td>{{ item.test_case?.name ?? '-' }}</td>
-            <td>{{ item.test_case?.system_category ?? '-' }}</td>
-          </tr>
+          <template v-for="(item, idx) in checklist.items" :key="item.id">
+            <tr>
+              <td class="col-expand">
+                <button class="expand-btn" @click="toggleExpand(item.test_case_id)" :title="expandedRows.has(item.test_case_id) ? '收合' : '展開'">
+                  {{ expandedRows.has(item.test_case_id) ? '▼' : '▶' }}
+                </button>
+              </td>
+              <td>{{ idx + 1 }}</td>
+              <td>{{ item.test_case?.case_number ?? item.test_case_id }}</td>
+              <td>{{ item.test_case?.name ?? '-' }}</td>
+              <td>{{ item.test_case?.system_category ?? '-' }}</td>
+            </tr>
+            <tr v-if="expandedRows.has(item.test_case_id)" class="expanded-row">
+              <td colspan="5" class="expanded-cell">
+                <div class="test-data-area">
+                  <template v-if="itemsMap.has(item.test_case_id)">
+                    <div v-if="(itemsMap.get(item.test_case_id)!.test_data ?? []).length === 0" class="no-test-data">
+                      此案例無測試資料
+                    </div>
+                    <table v-else class="test-data-table">
+                      <thead>
+                        <tr>
+                          <th>易讀名稱</th>
+                          <th>RF 變數</th>
+                          <th>預設值</th>
+                          <th>說明</th>
+                          <th>實際值</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="td in itemsMap.get(item.test_case_id)!.test_data" :key="td.id">
+                          <td class="td-readonly">{{ td.field_name }}</td>
+                          <td class="td-readonly">{{ td.rf_variable ?? '' }}</td>
+                          <td class="td-readonly">{{ td.field_value ?? '' }}</td>
+                          <td class="td-readonly">{{ td.description ?? '' }}</td>
+                          <td>
+                            <input
+                              class="actual-input"
+                              type="text"
+                              :value="getLocalActual(item.test_case_id, td.field_name) ?? (itemsMap.get(item.test_case_id)!.actual_values[td.field_name] ?? '')"
+                              @input="onActualInput(item.test_case_id, td.field_name, ($event.target as HTMLInputElement).value)"
+                              @blur="saveActualValues(item.test_case_id)"
+                            />
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </template>
+                  <div v-else class="no-test-data">載入中...</div>
+                </div>
+              </td>
+            </tr>
+          </template>
         </tbody>
       </table>
     </div>
@@ -114,15 +162,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   getChecklist,
+  getChecklistCases,
   updateChecklist,
   deleteChecklist,
   getChecklistExecutions,
+  patchChecklistCaseItem,
   type ChecklistDetail,
   type ChecklistExecutionRecord,
+  type ChecklistItemDetail,
 } from '../services/checklistApi'
 import { executeChecklist } from '../services/executionApi'
 import { useAuthStore } from '../stores/authStore'
@@ -140,10 +191,54 @@ const editModalOpen = ref(false)
 const editName = ref('')
 const editCreatedBy = ref('')
 
+// test_data expand/collapse state
+const expandedRows = ref<Set<string>>(new Set())
+const itemsMap = ref<Map<string, ChecklistItemDetail>>(new Map())
+// local unsaved actual_values: Map<test_case_id, Map<field_name, value>>
+const localActuals = ref<Map<string, Record<string, string>>>(new Map())
+
+const checklistId = computed(() => route.params.id as string)
+
+function toggleExpand(testCaseId: string) {
+  const next = new Set(expandedRows.value)
+  if (next.has(testCaseId)) {
+    next.delete(testCaseId)
+  } else {
+    next.add(testCaseId)
+  }
+  expandedRows.value = next
+}
+
+function getLocalActual(testCaseId: string, fieldName: string): string | undefined {
+  return localActuals.value.get(testCaseId)?.[fieldName]
+}
+
+function onActualInput(testCaseId: string, fieldName: string, value: string) {
+  const current = localActuals.value.get(testCaseId) ?? {}
+  localActuals.value.set(testCaseId, { ...current, [fieldName]: value })
+}
+
+async function saveActualValues(testCaseId: string) {
+  const local = localActuals.value.get(testCaseId)
+  if (!local) return
+  const existing = itemsMap.value.get(testCaseId)?.actual_values ?? {}
+  const merged = { ...existing, ...local }
+  try {
+    await patchChecklistCaseItem(checklistId.value, testCaseId, { actual_values: merged })
+    const item = itemsMap.value.get(testCaseId)
+    if (item) {
+      itemsMap.value.set(testCaseId, { ...item, actual_values: merged })
+    }
+    localActuals.value.delete(testCaseId)
+  } catch {
+    // silent: keep local state so user can retry
+  }
+}
+
 async function fetchChecklist() {
   loading.value = true
   errorMsg.value = ''
-  const id = route.params.id as string
+  const id = checklistId.value
   try {
     const [cl, exHistory] = await Promise.all([
       getChecklist(id),
@@ -151,6 +246,14 @@ async function fetchChecklist() {
     ])
     checklist.value = cl
     executions.value = exHistory.items
+
+    // fetch detailed items (test_data + actual_values)
+    const casesRes = await getChecklistCases(id)
+    const map = new Map<string, ChecklistItemDetail>()
+    for (const ci of casesRes.items) {
+      map.set(ci.test_case_id, ci)
+    }
+    itemsMap.value = map
   } catch {
     checklist.value = null
   } finally {
@@ -240,6 +343,52 @@ dt { font-weight: 600; color: #6b7280; }
   font-weight: 600;
   color: #374151;
 }
+.col-expand { width: 36px; }
+
+.expand-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  color: #6b7280;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: background 0.1s;
+}
+.expand-btn:hover { background: #e5e7eb; color: #374151; }
+
+.expanded-row > td.expanded-cell {
+  padding: 0;
+  border-bottom: 2px solid #c7d2fe;
+  background: #f5f3ff;
+}
+
+.test-data-area { padding: 12px 16px 16px 48px; }
+
+.no-test-data { color: #9ca3af; font-size: 13px; padding: 8px 0; }
+
+.test-data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.test-data-table th {
+  background: #ede9fe;
+  font-weight: 600;
+  color: #5b21b6;
+  padding: 6px 10px;
+  text-align: left;
+}
+.test-data-table td { padding: 4px 8px; border-bottom: 1px solid #e9d5ff; }
+.td-readonly { color: #374151; }
+
+.actual-input {
+  width: 100%;
+  padding: 4px 8px;
+  border: 1px solid #d8b4fe;
+  border-radius: 4px;
+  font-size: 13px;
+  background: white;
+  box-sizing: border-box;
+}
+.actual-input:focus { outline: none; border-color: #7c3aed; }
+
 .clickable { cursor: pointer; }
 .clickable:hover { background: #f0f4ff; }
 

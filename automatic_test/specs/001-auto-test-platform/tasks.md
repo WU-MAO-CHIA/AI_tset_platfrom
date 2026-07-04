@@ -742,28 +742,28 @@ Phase 2 完成後：
 
 ### TDD 測試（先寫、確認 RED）
 
-- [ ] T239 [P] [US1] 寫 contract test：`backend/tests/contract/test_test_data_api.py`（POST /cases 含 test_data 陣列的 rf_variable/description 欄位；GET /cases/:id 回傳 test_data 含四欄 field_name/rf_variable/field_value/description；PATCH /cases/:id/test_data/:td_id 接受 rf_variable/description 更新）
-- [ ] T240 [P] [US3] 寫 contract test：`backend/tests/contract/test_checklist_actual_values.py`（GET /checklists/:id/cases 每個 item 含 test_data 陣列（四欄）與 actual_values dict；PATCH /checklists/:id/cases/:case_id body 傳入 `actual_values: {rf_var: value}` 回傳 200 含更新後 actual_values；非法 case_id → 404）
+- [X] T239 [P] [US1] 寫 contract test：`backend/tests/contract/test_test_data_api.py`（POST /cases 含 test_data 陣列的 rf_variable/description 欄位；GET /cases/:id 回傳 test_data 含四欄 field_name/rf_variable/field_value/description；PATCH /cases/:id/test_data/:td_id 接受 rf_variable/description 更新）
+- [X] T240 [P] [US3] 寫 contract test：`backend/tests/contract/test_checklist_actual_values.py`（GET /checklists/:id/cases 每個 item 含 test_data 陣列（四欄）與 actual_values dict；PATCH /checklists/:id/cases/:case_id body 傳入 `actual_values: {rf_var: value}` 回傳 200 含更新後 actual_values；非法 case_id → 404）
 
 ### 資料庫 Migration
 
-- [ ] T241 [US1] 執行 `alembic revision --autogenerate -m "add_test_data_rf_variable_description_checklist_actual_values"` 並驗證 upgrade/downgrade：`test_data` 表新增 `rf_variable VARCHAR(200) nullable` 與 `description TEXT nullable`；`checklist_items` 表新增 `actual_values TEXT nullable`（JSON 序列化儲存）
+- [X] T241 [US1] 執行 `alembic revision --autogenerate -m "add_test_data_rf_variable_description_checklist_actual_values"` 並驗證 upgrade/downgrade：`test_data` 表新增 `rf_variable VARCHAR(200) nullable` 與 `description TEXT nullable`；`checklist_items` 表新增 `actual_values TEXT nullable`（JSON 序列化儲存）
 
 ### 後端 Model 更新
 
-- [ ] T242 [P] [US1] 更新 `backend/src/models/test_data.py`：新增 `rf_variable = Column(String(200), nullable=True)` 與 `description = Column(Text, nullable=True)` 兩欄
-- [ ] T243 [P] [US3] 更新 `backend/src/models/checklist_item.py`：新增 `actual_values = Column(Text, nullable=True)`（存 JSON 字串，讀取時 `json.loads`，寫入時 `json.dumps`）
+- [X] T242 [P] [US1] 更新 `backend/src/models/test_data.py`：新增 `rf_variable = Column(String(200), nullable=True)` 與 `description = Column(Text, nullable=True)` 兩欄
+- [X] T243 [P] [US3] 更新 `backend/src/models/checklist_item.py`：新增 `actual_values = Column(Text, nullable=True)`（存 JSON 字串，讀取時 `json.loads`，寫入時 `json.dumps`）
 
 ### 後端 API 更新
 
-- [ ] T244 [US1] 更新 `backend/src/api/cases.py`：TestDataCreate / TestDataUpdate request schema 新增 `rf_variable: str | None` 與 `description: str | None`；TestDataOut response schema 補充四欄；create/update 時若 `rf_variable` 為空則自動帶入 `"${" + field_name + "}"`；service/repo 對應傳遞新欄位
-- [ ] T245 [US3] 更新 `backend/src/api/checklists.py` 與 `backend/src/services/checklist_service.py`：（1）`GET /checklists/:id/cases` 的 ChecklistItemOut 新增 `test_data: list[TestDataOut]`（含四欄）與 `actual_values: dict[str, str]`；service 層聯查 TestData；（2）`PATCH /checklists/:id/cases/:case_id` request schema 新增 `actual_values: dict[str, str] | None`；service 序列化後寫入 `ChecklistItem.actual_values`
+- [X] T244 [US1] 更新 `backend/src/api/cases.py`：TestDataCreate / TestDataUpdate request schema 新增 `rf_variable: str | None` 與 `description: str | None`；TestDataOut response schema 補充四欄；create/update 時若 `rf_variable` 為空則自動帶入 `"${" + field_name + "}"`；service/repo 對應傳遞新欄位
+- [X] T245 [US3] 更新 `backend/src/api/checklists.py` 與 `backend/src/services/checklist_service.py`：（1）`GET /checklists/:id/cases` 的 ChecklistItemOut 新增 `test_data: list[TestDataOut]`（含四欄）與 `actual_values: dict[str, str]`；service 層聯查 TestData；（2）`PATCH /checklists/:id/cases/:case_id` request schema 新增 `actual_values: dict[str, str] | None`；service 序列化後寫入 `ChecklistItem.actual_values`
 
 ### 前端實作
 
-- [ ] T246 [US1] [US2] 更新 `frontend/src/pages/CaseDetailPage.vue` Tab 1「基本資訊」測試資料區塊：（1）**編輯模式**：改為四欄可編輯表格（易讀名稱、RF 變數（輸入易讀名稱後自動帶入 `${易讀名稱}`，可手動覆寫）、預設值、說明）；支援行內新增空白列（末尾插入）、行內直接編輯、刪除列；（2）**瀏覽模式**：四欄唯讀表格；表格欄對應後端欄位：易讀名稱←`field_name`、RF 變數←`rf_variable`、預設值←`field_value`、說明←`description`
-- [ ] T247 [US3] 更新 `frontend/src/pages/ChecklistDetailPage.vue`：每筆案例列新增展開/收合切換鈕（▶/▼，預設收合，多列可同時展開）；展開後顯示四欄測資表格（易讀名稱唯讀、RF 變數唯讀、預設值唯讀、實際值可編輯）；實際值欄位 onChange 後呼叫 `PATCH /checklists/:id/cases/:case_id` 傳入 `actual_values`；若案例無 test_data（陣列為空）展開後顯示「此案例無測試資料」
-- [ ] T248 [P] [US3] 更新 `frontend/src/services/checklistApi.ts`：ChecklistItemDetail 型別新增 `test_data: TestDataItem[]`（含 field_name/rf_variable/field_value/description 四欄）與 `actual_values: Record<string, string>`；新增或更新 `updateCaseItem(checklistId, caseId, payload: { notes?: string; actual_values?: Record<string, string> })` 對應 PATCH 端點
+- [X] T246 [US1] [US2] 更新 `frontend/src/pages/CaseDetailPage.vue` Tab 1「基本資訊」測試資料區塊：（1）**編輯模式**：改為四欄可編輯表格（易讀名稱、RF 變數（輸入易讀名稱後自動帶入 `${易讀名稱}`，可手動覆寫）、預設值、說明）；支援行內新增空白列（末尾插入）、行內直接編輯、刪除列；（2）**瀏覽模式**：四欄唯讀表格；表格欄對應後端欄位：易讀名稱←`field_name`、RF 變數←`rf_variable`、預設值←`field_value`、說明←`description`
+- [X] T247 [US3] 更新 `frontend/src/pages/ChecklistDetailPage.vue`：每筆案例列新增展開/收合切換鈕（▶/▼，預設收合，多列可同時展開）；展開後顯示四欄測資表格（易讀名稱唯讀、RF 變數唯讀、預設值唯讀、實際值可編輯）；實際值欄位 onChange 後呼叫 `PATCH /checklists/:id/cases/:case_id` 傳入 `actual_values`；若案例無 test_data（陣列為空）展開後顯示「此案例無測試資料」
+- [X] T248 [P] [US3] 更新 `frontend/src/services/checklistApi.ts`：ChecklistItemDetail 型別新增 `test_data: TestDataItem[]`（含 field_name/rf_variable/field_value/description 四欄）與 `actual_values: Record<string, string>`；新增或更新 `updateCaseItem(checklistId, caseId, payload: { notes?: string; actual_values?: Record<string, string> })` 對應 PATCH 端點
 
 **Checkpoint**: `pytest backend/tests/contract/test_test_data_api.py backend/tests/contract/test_checklist_actual_values.py -v` 先 RED → 實作後 GREEN；`npm run dev` CaseDetailPage Tab 1 測試資料以四欄表格顯示；/checklists/:id 案例列可展開，填入實際值後 PATCH 持久化；下次開啟清單仍保留實際值
 
