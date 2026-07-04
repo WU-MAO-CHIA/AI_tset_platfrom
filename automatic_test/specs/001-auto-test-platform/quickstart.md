@@ -122,6 +122,38 @@ curl -X POST http://localhost:8000/api/v1/cases/TC-001-UUID/ai-complete \
   }'
 ```
 
+### Tab 2 立即試跑（Phase 27）
+```bash
+# 在 Tab 2 中使用 RF 程式碼預覽區的內容進行立即試跑
+# 無需先儲存案例，試跑結果直接附加至 Chat 對話歷史
+curl -X POST http://localhost:8000/api/v1/cases/TC-001-UUID/trial-run \
+  -H "Content-Type: application/json" \
+  -d '{
+    "rf_code": "*** Settings ***\nLibrary    Browser\n\n*** Test Cases ***\n登入測試\n    Open Browser    https://example.com    Chrome",
+    "case_name": "示範登入測試"
+  }'
+
+# Response: { "execution_id": "exec-xyz", "stream_url": "/api/v1/executions/exec-xyz/stream" }
+
+# 試跑完成後查詢對話歷史（含試跑結果訊息）
+curl http://localhost:8000/api/v1/cases/TC-001-UUID/chat-history
+
+# Response 包含訊息列表，其中試跑結果訊息格式為：
+# {
+#   "type": "trial_run_result",
+#   "role": "system",
+#   "content": {
+#     "status": "failed",
+#     "elapsed_ms": 5234,
+#     "error_message": "步驟 'Open Browser' 失敗：連線逾時",
+#     "screenshot_paths": ["executions/abc123/screenshots/step_1.png"]
+#   },
+#   "created_at": "2026-07-04T10:01:30Z"
+# }
+# 
+# 試跑失敗時，AI 自動分析並追加新的 chat 型訊息建議修正
+```
+
 ### 建立清單並執行
 ```bash
 # 建立清單

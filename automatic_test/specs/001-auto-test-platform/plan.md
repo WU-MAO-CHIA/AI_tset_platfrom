@@ -119,7 +119,8 @@ automatic_test/
 | 23 | LLM 設定 env-only + 後台唯讀遮罩（FR-027） | ✅ |
 | 24 | 本地 Ollama 整合 + 後台「目前啟用模型」可切換（FR-012/027） | ✅ |
 | 25 | 測資變數四欄表格 + 清單案例展開列（FR-001/005/006/023） | ✅ |
-| 26 | 編輯模式自動從 RF 程式碼解析變數填入測資表格（FR-001 US1-15） | 🔄 進行中 |
+| 26 | 編輯模式自動從 RF 程式碼解析變數填入測資表格（FR-001 US1-15） | ✅ 完成 |
+| 27 | Tab 2 立即試跑與 Chat 整合（FR-016 US1-16） | 🔄 規劃中 |
 
 ---
 
@@ -287,3 +288,76 @@ T249（CaseDetailPage.vue：startEdit() 加入 RF 變數解析 + 合併邏輯）
 | `CaseDetailPage` | 唯讀顯示執行模式 |
 | `AdminPage` | LLM Keys tab 旁新增「Remote Server」tab，設定 URL + 連線測試按鈕 |
 | `adminApi.ts` | 新增 `getRemoteServerUrl()` / `setRemoteServerUrl()` |
+
+---
+
+## Phase 27：Tab 2 立即試跑與 Chat 整合（FR-016 US1-16）
+
+### 背景
+
+源自 2026-07-04 `/speckit-clarify` 澄清：在 Tab 2「測試步驟」編輯介面中，測試人員需快速驗證右側 RF 程式碼預覽區的當前內容是否可執行。按「立即試跑」按鈕應直接使用當前 RF 代碼執行試跑，完成後將結果（pass/fail badge、執行時間、失敗訊息、截圖）以對話訊息形式附加至左側 Chat，並自動觸發 AI 分析失敗原因（若失敗）。
+
+### 範圍
+
+**後端修改**:
+- ChatMessage model 新增 `type` 欄位（`chat` / `trial_run_result`），Alembic migration 補全舊資料
+- 新增或擴充試跑 API：`POST /cases/{case_id}/trial-run-from-code` 或改擴 `POST /cases/{case_id}/trial-run` 接受 `rf_code` 參數
+- ExecutionService 新增試跑流程（讀取 RF code → 執行 → 解析結果 → 生成 trial_run_result 訊息 → 自動 AI 分析）
+- AI 服務新增失敗分析 prompt 組裝函式（將試跑結果嵌入）
+
+**前端修改**:
+- CaseDetailPage Tab 2：右側 RF 程式碼預覽區新增「立即試跑」按鈕
+- Chat 訊息渲染邏輯擴充：支援 `type='trial_run_result'` 訊息（badge + 執行時間 + 錯誤訊息 + 截圖廊道）
+- chat-history API 回應格式新增 `type` 欄位
+
+**資料庫修改**:
+- Alembic migration：`case_chat_messages` 表新增 `type` 欄位（VARCHAR(30)），舊資料補全為 `'chat'`
+
+### 資料流
+
+```
+測試人員進入 Tab 2 編輯模式
+    ↓
+右側 RF 程式碼預覽區按「立即試跑」按鈕
+    ↓ (不需先儲存案例)
+前端呼叫 POST /cases/{id}/trial-run，request body 含 RF 代碼文字
+    ↓
+後端建立 ExecutionRecord（`execution_type='trial_run'`），開啟背景任務
+    ↓
+背景任務執行 RF code → 解析 output.xml → 生成 trial_run_result 訊息
+    ↓ (成功 / 失敗)
+寫入 CaseChatMessage（`type='trial_run_result'`）
+    ↓
+若失敗，自動組裝 AI 分析 prompt，調用 AI 服務
+    ↓
+AI 回應作為新 ChatMessage（`type='chat'`）附加
+    ↓
+前端 SSE 推送兩條訊息 → 左側 Chat 區更新顯示
+```
+
+### TDD 執行順序
+
+```
+T250（contract test RED：POST /cases/{id}/trial-run-from-code API）
+T251（Alembic migration：`case_chat_messages` 新增 `type` 欄位）
+  ↓
+T252（ChatMessage model 新增 `type` 欄位）    ← 可平行
+  ↓
+T253（ExecutionService 試跑流程）          ← 需 model 完成
+T254（AI 失敗分析 prompt 組裝）            ← 可平行
+  ↓
+T255（CaseDetailPage Tab 2 試跑按鈕）      ← 可平行
+T256（Chat 訊息渲染 trial_run_result 型別）
+  ↓
+T257（e2e 測試：完整試跑流程）
+```
+
+### 驗收條件
+
+- `POST /cases/{id}/trial-run` 接受 `rf_code` 文字參數，無需先儲存案例
+- 試跑完成後自動生成 `type='trial_run_result'` 訊息，持久化至 `case_chat_messages`
+- 訊息 content 包含 `status` / `elapsed_ms` / `error_message` / `screenshot_paths`
+- 試跑失敗時自動觸發 AI 分析，回應附加為新 `type='chat'` 訊息
+- `GET /cases/{id}/chat-history` 回應包含 `type` 欄位，區分訊息型別
+- CaseDetailPage Tab 2 的 RF 程式碼預覽區有明顯「立即試跑」按鈕
+- 前端 Chat 區域可正確解析並顯示 `trial_run_result` 訊息（badge + 執行時間 + 錯誤訊息 + 截圖縮圖）
