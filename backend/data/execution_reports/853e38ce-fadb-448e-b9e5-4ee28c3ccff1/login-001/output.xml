@@ -1,0 +1,359 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<robot generator="Robot 7.4.2 (Python 3.13.1 on win32)" generated="2026-06-20T23:04:25.386547" rpa="false" schemaversion="5">
+<suite id="s1" name="Test" source="C:\Users\mark\AppData\Local\Temp\tmpa3qt2xmo\test.robot">
+<test id="s1-t1" name="TC01 - 正常登入成功" line="14">
+<kw name="Fill In Login Form">
+<kw name="Open Login Page">
+<kw name="New Browser" owner="Browser">
+<msg time="2026-06-20T23:04:25.607750" level="INFO">{"browser": "chromium", "headless": true, "chromiumSandbox": false, "devtools": false, "handleSIGHUP": true, "handleSIGINT": true, "handleSIGTERM": true, "slowMo": 0.0, "timeout": 30000.0, "tracesDir": "C:\\Users\\mark\\AppData\\Local\\Temp\\tmpa3qt2xmo\\browser\\traces\\temp\\c7adb01d-c8f8-4319-9a36-08f82088e97d"}</msg>
+<msg time="2026-06-20T23:04:25.628867" level="INFO">Starting Browser process C:\Users\mark\Desktop\AI_Auto_test\automatic_test\backend\.venv\Lib\site-packages\Browser\wrapper\index.js using at 127.0.0.1:51982</msg>
+<msg time="2026-06-20T23:04:26.228230" level="INFO">Successfully created browser with options: {"browser":"chromium","headless":true,"chromiumSandbox":false,"devtools":false,"handleSIGHUP":true,"handleSIGINT":true,"handleSIGTERM":true,"slowMo":0,"timeout":30000,"tracesDir":"C:\\Users\\mark\\AppData\\Local\\Temp\\tmpa3qt2xmo\\browser\\traces\\temp\\c7adb01d-c8f8-4319-9a36-08f82088e97d"}</msg>
+<arg>chromium</arg>
+<arg>headless=True</arg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Create a new playwright Browser with specified options.</doc>
+<status status="PASS" start="2026-06-20T23:04:25.607175" elapsed="0.621311"/>
+</kw>
+<kw name="New Context" owner="Browser">
+<msg time="2026-06-20T23:04:26.230545" level="INFO">{
+  "acceptDownloads": true,
+  "bypassCSP": false,
+  "forcedColors": "none",
+  "ignoreHTTPSErrors": false,
+  "javaScriptEnabled": true,
+  "offline": false,
+  "reducedMotion": "no-preference",
+  "serviceWorkers": "allow",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  }
+}</msg>
+<msg time="2026-06-20T23:04:26.247803" level="INFO">Successfully created context. </msg>
+<msg time="2026-06-20T23:04:26.247888" level="INFO">{'acceptDownloads': True, 'bypassCSP': False, 'forcedColors': 'none', 'ignoreHTTPSErrors': False, 'javaScriptEnabled': True, 'offline': False, 'reducedMotion': 'no-preference', 'serviceWorkers': 'allow', 'viewport': {'width': 1280, 'height': 720}}</msg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Create a new BrowserContext with specified options.</doc>
+<status status="PASS" start="2026-06-20T23:04:26.228796" elapsed="0.019177"/>
+</kw>
+<kw name="New Page" owner="Browser">
+<msg time="2026-06-20T23:04:27.409773" level="INFO">Successfully initialized new page object and opened url: https://practicetestautomation.com/practice-test-login/</msg>
+<arg>${BASE_URL}</arg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Open a new Page.</doc>
+<status status="PASS" start="2026-06-20T23:04:26.248160" elapsed="1.161777"/>
+</kw>
+<doc>開啟瀏覽器並導向登入頁面</doc>
+<status status="PASS" start="2026-06-20T23:04:25.606699" elapsed="1.803341"/>
+</kw>
+<kw name="Fill Text" owner="Browser">
+<msg time="2026-06-20T23:04:27.410582" level="INFO">Fills the text 'student' in the given field.</msg>
+<arg>id=username</arg>
+<arg>${username}</arg>
+<tag>PageContent</tag>
+<tag>Setter</tag>
+<doc>Clears and fills the given ``txt`` into the text field found by ``selector``.</doc>
+<status status="PASS" start="2026-06-20T23:04:27.410157" elapsed="0.026849"/>
+</kw>
+<kw name="Fill Text" owner="Browser">
+<msg time="2026-06-20T23:04:27.437579" level="INFO">Fills the text 'Password123' in the given field.</msg>
+<arg>id=password</arg>
+<arg>${password}</arg>
+<tag>PageContent</tag>
+<tag>Setter</tag>
+<doc>Clears and fills the given ``txt`` into the text field found by ``selector``.</doc>
+<status status="PASS" start="2026-06-20T23:04:27.437160" elapsed="0.007571"/>
+</kw>
+<kw name="Click" owner="Browser">
+<msg time="2026-06-20T23:04:27.445270" level="INFO">Clicks the element 'id=submit'.</msg>
+<arg>id=submit</arg>
+<tag>PageContent</tag>
+<tag>Setter</tag>
+<doc>Simulates mouse click on the element found by ``selector``.</doc>
+<status status="PASS" start="2026-06-20T23:04:27.444885" elapsed="0.573674"/>
+</kw>
+<arg>${USERNAME}</arg>
+<arg>${PASSWORD}</arg>
+<doc>填寫登入表單並送出</doc>
+<status status="PASS" start="2026-06-20T23:04:25.606307" elapsed="2.412367"/>
+</kw>
+<kw name="Wait For Elements State" owner="Browser">
+<msg time="2026-06-20T23:04:28.039908" level="INFO">Waited for Element with selector text=Logged In Successfully at state visible</msg>
+<arg>text=Logged In Successfully</arg>
+<arg>visible</arg>
+<tag>PageContent</tag>
+<tag>Wait</tag>
+<doc>Waits for the element found by ``selector`` to satisfy state option.</doc>
+<status status="PASS" start="2026-06-20T23:04:28.018800" elapsed="0.021236"/>
+</kw>
+<kw name="Wait For Elements State" owner="Browser">
+<msg time="2026-06-20T23:04:28.044939" level="INFO">Waited for Element with selector text=Log out at state visible</msg>
+<arg>text=Log out</arg>
+<arg>visible</arg>
+<tag>PageContent</tag>
+<tag>Wait</tag>
+<doc>Waits for the element found by ``selector`` to satisfy state option.</doc>
+<status status="PASS" start="2026-06-20T23:04:28.040192" elapsed="0.004848"/>
+</kw>
+<kw name="Close Login Page" type="TEARDOWN">
+<kw name="Close Browser" owner="Browser">
+<msg time="2026-06-20T23:04:28.097845" level="INFO">Closed browser</msg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Closes the current browser.</doc>
+<status status="PASS" start="2026-06-20T23:04:28.045522" elapsed="0.052457"/>
+</kw>
+<doc>關閉瀏覽器</doc>
+<status status="PASS" start="2026-06-20T23:04:28.045264" elapsed="0.052801"/>
+</kw>
+<doc>使用正確帳號與密碼登入，驗證成功進入後台頁面</doc>
+<tag>login</tag>
+<tag>positive</tag>
+<status status="PASS" start="2026-06-20T23:04:25.605214" elapsed="2.492900"/>
+</test>
+<test id="s1-t2" name="TC02 - 錯誤帳號登入失敗" line="21">
+<kw name="Fill In Login Form">
+<kw name="Open Login Page">
+<kw name="New Browser" owner="Browser">
+<msg time="2026-06-20T23:04:28.108117" level="INFO">{"browser": "chromium", "headless": true, "chromiumSandbox": false, "devtools": false, "handleSIGHUP": true, "handleSIGINT": true, "handleSIGTERM": true, "slowMo": 0.0, "timeout": 30000.0, "tracesDir": "C:\\Users\\mark\\AppData\\Local\\Temp\\tmpa3qt2xmo\\browser\\traces\\temp\\e1345717-c14b-45ac-9525-53a0ffa35c30"}</msg>
+<msg time="2026-06-20T23:04:28.163260" level="INFO">Successfully created browser with options: {"browser":"chromium","headless":true,"chromiumSandbox":false,"devtools":false,"handleSIGHUP":true,"handleSIGINT":true,"handleSIGTERM":true,"slowMo":0,"timeout":30000,"tracesDir":"C:\\Users\\mark\\AppData\\Local\\Temp\\tmpa3qt2xmo\\browser\\traces\\temp\\e1345717-c14b-45ac-9525-53a0ffa35c30"}</msg>
+<arg>chromium</arg>
+<arg>headless=True</arg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Create a new playwright Browser with specified options.</doc>
+<status status="PASS" start="2026-06-20T23:04:28.107526" elapsed="0.056005"/>
+</kw>
+<kw name="New Context" owner="Browser">
+<msg time="2026-06-20T23:04:28.165468" level="INFO">{
+  "acceptDownloads": true,
+  "bypassCSP": false,
+  "forcedColors": "none",
+  "ignoreHTTPSErrors": false,
+  "javaScriptEnabled": true,
+  "offline": false,
+  "reducedMotion": "no-preference",
+  "serviceWorkers": "allow",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  }
+}</msg>
+<msg time="2026-06-20T23:04:28.171692" level="INFO">Successfully created context. </msg>
+<msg time="2026-06-20T23:04:28.171763" level="INFO">{'acceptDownloads': True, 'bypassCSP': False, 'forcedColors': 'none', 'ignoreHTTPSErrors': False, 'javaScriptEnabled': True, 'offline': False, 'reducedMotion': 'no-preference', 'serviceWorkers': 'allow', 'viewport': {'width': 1280, 'height': 720}}</msg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Create a new BrowserContext with specified options.</doc>
+<status status="PASS" start="2026-06-20T23:04:28.163836" elapsed="0.007993"/>
+</kw>
+<kw name="New Page" owner="Browser">
+<msg time="2026-06-20T23:04:28.811398" level="INFO">Successfully initialized new page object and opened url: https://practicetestautomation.com/practice-test-login/</msg>
+<arg>${BASE_URL}</arg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Open a new Page.</doc>
+<status status="PASS" start="2026-06-20T23:04:28.172090" elapsed="0.639518"/>
+</kw>
+<doc>開啟瀏覽器並導向登入頁面</doc>
+<status status="PASS" start="2026-06-20T23:04:28.107288" elapsed="0.704435"/>
+</kw>
+<kw name="Fill Text" owner="Browser">
+<msg time="2026-06-20T23:04:28.812354" level="INFO">Fills the text 'wronguser' in the given field.</msg>
+<arg>id=username</arg>
+<arg>${username}</arg>
+<tag>PageContent</tag>
+<tag>Setter</tag>
+<doc>Clears and fills the given ``txt`` into the text field found by ``selector``.</doc>
+<status status="PASS" start="2026-06-20T23:04:28.811851" elapsed="0.025264"/>
+</kw>
+<kw name="Fill Text" owner="Browser">
+<msg time="2026-06-20T23:04:28.837829" level="INFO">Fills the text 'Password123' in the given field.</msg>
+<arg>id=password</arg>
+<arg>${password}</arg>
+<tag>PageContent</tag>
+<tag>Setter</tag>
+<doc>Clears and fills the given ``txt`` into the text field found by ``selector``.</doc>
+<status status="PASS" start="2026-06-20T23:04:28.837288" elapsed="0.009397"/>
+</kw>
+<kw name="Click" owner="Browser">
+<msg time="2026-06-20T23:04:28.847284" level="INFO">Clicks the element 'id=submit'.</msg>
+<arg>id=submit</arg>
+<tag>PageContent</tag>
+<tag>Setter</tag>
+<doc>Simulates mouse click on the element found by ``selector``.</doc>
+<status status="PASS" start="2026-06-20T23:04:28.846848" elapsed="0.033712"/>
+</kw>
+<arg>${WRONG_USER}</arg>
+<arg>${PASSWORD}</arg>
+<doc>填寫登入表單並送出</doc>
+<status status="PASS" start="2026-06-20T23:04:28.106951" elapsed="0.773715"/>
+</kw>
+<kw name="Wait For Elements State" owner="Browser">
+<msg time="2026-06-20T23:04:28.884826" level="INFO">Waited for Element with selector id=error at state visible</msg>
+<arg>id=error</arg>
+<arg>visible</arg>
+<tag>PageContent</tag>
+<tag>Wait</tag>
+<doc>Waits for the element found by ``selector`` to satisfy state option.</doc>
+<status status="PASS" start="2026-06-20T23:04:28.880786" elapsed="0.004151"/>
+</kw>
+<kw name="Get Text" owner="Browser">
+<msg time="2026-06-20T23:04:28.907814" level="INFO">Text: ['Your username is invalid!']</msg>
+<arg>id=error</arg>
+<arg>==</arg>
+<arg>Your username is invalid!</arg>
+<tag>Assertion</tag>
+<tag>Getter</tag>
+<tag>PageContent</tag>
+<doc>Returns text attribute of the element found by ``selector``.</doc>
+<status status="PASS" start="2026-06-20T23:04:28.885069" elapsed="0.022836"/>
+</kw>
+<kw name="Close Login Page" type="TEARDOWN">
+<kw name="Close Browser" owner="Browser">
+<msg time="2026-06-20T23:04:28.952273" level="INFO">Closed browser</msg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Closes the current browser.</doc>
+<status status="PASS" start="2026-06-20T23:04:28.908405" elapsed="0.043996"/>
+</kw>
+<doc>關閉瀏覽器</doc>
+<status status="PASS" start="2026-06-20T23:04:28.908139" elapsed="0.044347"/>
+</kw>
+<doc>使用錯誤帳號登入，驗證頁面顯示帳號錯誤提示</doc>
+<tag>login</tag>
+<tag>negative</tag>
+<status status="PASS" start="2026-06-20T23:04:28.103846" elapsed="0.848693"/>
+</test>
+<test id="s1-t3" name="TC03 - 錯誤密碼登入失敗" line="28">
+<kw name="Fill In Login Form">
+<kw name="Open Login Page">
+<kw name="New Browser" owner="Browser">
+<msg time="2026-06-20T23:04:28.960081" level="INFO">{"browser": "chromium", "headless": true, "chromiumSandbox": false, "devtools": false, "handleSIGHUP": true, "handleSIGINT": true, "handleSIGTERM": true, "slowMo": 0.0, "timeout": 30000.0, "tracesDir": "C:\\Users\\mark\\AppData\\Local\\Temp\\tmpa3qt2xmo\\browser\\traces\\temp\\b86a4724-1348-409a-8325-f88ba5c41012"}</msg>
+<msg time="2026-06-20T23:04:29.011583" level="INFO">Successfully created browser with options: {"browser":"chromium","headless":true,"chromiumSandbox":false,"devtools":false,"handleSIGHUP":true,"handleSIGINT":true,"handleSIGTERM":true,"slowMo":0,"timeout":30000,"tracesDir":"C:\\Users\\mark\\AppData\\Local\\Temp\\tmpa3qt2xmo\\browser\\traces\\temp\\b86a4724-1348-409a-8325-f88ba5c41012"}</msg>
+<arg>chromium</arg>
+<arg>headless=True</arg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Create a new playwright Browser with specified options.</doc>
+<status status="PASS" start="2026-06-20T23:04:28.959600" elapsed="0.052227"/>
+</kw>
+<kw name="New Context" owner="Browser">
+<msg time="2026-06-20T23:04:29.013717" level="INFO">{
+  "acceptDownloads": true,
+  "bypassCSP": false,
+  "forcedColors": "none",
+  "ignoreHTTPSErrors": false,
+  "javaScriptEnabled": true,
+  "offline": false,
+  "reducedMotion": "no-preference",
+  "serviceWorkers": "allow",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  }
+}</msg>
+<msg time="2026-06-20T23:04:29.019315" level="INFO">Successfully created context. </msg>
+<msg time="2026-06-20T23:04:29.019413" level="INFO">{'acceptDownloads': True, 'bypassCSP': False, 'forcedColors': 'none', 'ignoreHTTPSErrors': False, 'javaScriptEnabled': True, 'offline': False, 'reducedMotion': 'no-preference', 'serviceWorkers': 'allow', 'viewport': {'width': 1280, 'height': 720}}</msg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Create a new BrowserContext with specified options.</doc>
+<status status="PASS" start="2026-06-20T23:04:29.012081" elapsed="0.007436"/>
+</kw>
+<kw name="New Page" owner="Browser">
+<msg time="2026-06-20T23:04:29.598407" level="INFO">Successfully initialized new page object and opened url: https://practicetestautomation.com/practice-test-login/</msg>
+<arg>${BASE_URL}</arg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Open a new Page.</doc>
+<status status="PASS" start="2026-06-20T23:04:29.019717" elapsed="0.578841"/>
+</kw>
+<doc>開啟瀏覽器並導向登入頁面</doc>
+<status status="PASS" start="2026-06-20T23:04:28.959398" elapsed="0.639254"/>
+</kw>
+<kw name="Fill Text" owner="Browser">
+<msg time="2026-06-20T23:04:29.599213" level="INFO">Fills the text 'student' in the given field.</msg>
+<arg>id=username</arg>
+<arg>${username}</arg>
+<tag>PageContent</tag>
+<tag>Setter</tag>
+<doc>Clears and fills the given ``txt`` into the text field found by ``selector``.</doc>
+<status status="PASS" start="2026-06-20T23:04:29.598769" elapsed="0.021637"/>
+</kw>
+<kw name="Fill Text" owner="Browser">
+<msg time="2026-06-20T23:04:29.620981" level="INFO">Fills the text 'wrongpassword' in the given field.</msg>
+<arg>id=password</arg>
+<arg>${password}</arg>
+<tag>PageContent</tag>
+<tag>Setter</tag>
+<doc>Clears and fills the given ``txt`` into the text field found by ``selector``.</doc>
+<status status="PASS" start="2026-06-20T23:04:29.620555" elapsed="0.007268"/>
+</kw>
+<kw name="Click" owner="Browser">
+<msg time="2026-06-20T23:04:29.628364" level="INFO">Clicks the element 'id=submit'.</msg>
+<arg>id=submit</arg>
+<tag>PageContent</tag>
+<tag>Setter</tag>
+<doc>Simulates mouse click on the element found by ``selector``.</doc>
+<status status="PASS" start="2026-06-20T23:04:29.627977" elapsed="0.036051"/>
+</kw>
+<arg>${USERNAME}</arg>
+<arg>${WRONG_PASS}</arg>
+<doc>填寫登入表單並送出</doc>
+<status status="PASS" start="2026-06-20T23:04:28.959079" elapsed="0.705057"/>
+</kw>
+<kw name="Wait For Elements State" owner="Browser">
+<msg time="2026-06-20T23:04:29.669745" level="INFO">Waited for Element with selector id=error at state visible</msg>
+<arg>id=error</arg>
+<arg>visible</arg>
+<tag>PageContent</tag>
+<tag>Wait</tag>
+<doc>Waits for the element found by ``selector`` to satisfy state option.</doc>
+<status status="PASS" start="2026-06-20T23:04:29.664265" elapsed="0.005610"/>
+</kw>
+<kw name="Get Text" owner="Browser">
+<msg time="2026-06-20T23:04:29.691482" level="INFO">Text: ['Your password is invalid!']</msg>
+<arg>id=error</arg>
+<arg>==</arg>
+<arg>Your password is invalid!</arg>
+<tag>Assertion</tag>
+<tag>Getter</tag>
+<tag>PageContent</tag>
+<doc>Returns text attribute of the element found by ``selector``.</doc>
+<status status="PASS" start="2026-06-20T23:04:29.670020" elapsed="0.021555"/>
+</kw>
+<kw name="Close Login Page" type="TEARDOWN">
+<kw name="Close Browser" owner="Browser">
+<msg time="2026-06-20T23:04:29.743521" level="INFO">Closed browser</msg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Closes the current browser.</doc>
+<status status="PASS" start="2026-06-20T23:04:29.692218" elapsed="0.051430"/>
+</kw>
+<doc>關閉瀏覽器</doc>
+<status status="PASS" start="2026-06-20T23:04:29.691927" elapsed="0.051807"/>
+</kw>
+<doc>使用錯誤密碼登入，驗證頁面顯示密碼錯誤提示</doc>
+<tag>login</tag>
+<tag>negative</tag>
+<status status="PASS" start="2026-06-20T23:04:28.956137" elapsed="0.787642"/>
+</test>
+<status status="PASS" start="2026-06-20T23:04:25.387616" elapsed="4.359885"/>
+</suite>
+<statistics>
+<total>
+<stat pass="3" fail="0" skip="0">All Tests</stat>
+</total>
+<tag>
+<stat pass="3" fail="0" skip="0">login</stat>
+<stat pass="2" fail="0" skip="0">negative</stat>
+<stat pass="1" fail="0" skip="0">positive</stat>
+</tag>
+<suite>
+<stat name="Test" id="s1" pass="3" fail="0" skip="0">Test</stat>
+</suite>
+</statistics>
+<errors>
+</errors>
+</robot>
