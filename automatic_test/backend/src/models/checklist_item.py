@@ -20,6 +20,7 @@ class ChecklistItem(Base, TimestampMixin):
     test_case_id: Mapped[str] = mapped_column(String(36), ForeignKey("test_cases.id"), nullable=False)
     position: Mapped[Optional[int]] = mapped_column(Integer, default=0)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    actual_values: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     checklist: Mapped["TestChecklist"] = relationship("TestChecklist", back_populates="items")
     test_case: Mapped["TestCase"] = relationship("TestCase")

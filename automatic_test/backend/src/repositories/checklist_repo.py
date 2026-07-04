@@ -21,10 +21,15 @@ class ChecklistRepository(BaseRepository[TestChecklist]):
 
     async def get_with_items(self, id: str) -> Optional[TestChecklist]:
         from src.models.test_case import TestCase
+        from src.models.test_data import TestData
         result = await self.session.execute(
             select(TestChecklist)
             .where(TestChecklist.id == id)
-            .options(selectinload(TestChecklist.items).selectinload(ChecklistItem.test_case))
+            .options(
+                selectinload(TestChecklist.items)
+                .selectinload(ChecklistItem.test_case)
+                .selectinload(TestCase.test_data)
+            )
         )
         return result.scalar_one_or_none()
 

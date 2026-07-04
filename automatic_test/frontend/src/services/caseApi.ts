@@ -12,12 +12,23 @@ export interface TestCaseSummary {
   updated_at: string | null
 }
 
+export interface TestDataItem {
+  id: string
+  field_name: string
+  rf_variable: string | null
+  field_value: string | null
+  description: string | null
+  row_index: number | null
+  source?: string
+}
+
 export interface TestCaseDetail extends TestCaseSummary {
   description: string | null
   precondition_steps: string | null
   main_steps: string
   modified_by: string | null
   created_at: string | null
+  test_data: TestDataItem[]
 }
 
 export interface CreateCaseRequest {
@@ -39,6 +50,13 @@ export interface UpdateCaseRequest {
   system_category?: string
   tags?: string[]
   created_by: string
+  test_data?: Array<{
+    field_name: string
+    rf_variable?: string | null
+    field_value?: string | null
+    description?: string | null
+    row_index?: number
+  }>
 }
 
 export interface AttachmentRecord {

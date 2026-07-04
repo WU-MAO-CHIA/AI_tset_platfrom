@@ -1,3 +1,4 @@
+import json
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,17 +39,41 @@ class ChecklistService:
         if checklist is None:
             return None
         items = sorted(checklist.items, key=lambda x: x.position or 0)
-        return [
-            {
+        result = []
+        for item in items:
+            actual_values: dict = {}
+            if item.actual_values:
+                try:
+                    actual_values = json.loads(item.actual_values)
+                except (json.JSONDecodeError, ValueError):
+                    actual_values = {}
+
+            test_data = []
+            if item.test_case and item.test_case.test_data:
+                sorted_td = sorted(item.test_case.test_data, key=lambda td: td.row_index or 0)
+                test_data = [
+                    {
+                        "id": td.id,
+                        "field_name": td.field_name,
+                        "rf_variable": td.rf_variable,
+                        "field_value": td.field_value,
+                        "description": td.description,
+                        "row_index": td.row_index,
+                    }
+                    for td in sorted_td
+                ]
+
+            result.append({
                 "item_id": item.id,
                 "test_case_id": item.test_case_id,
                 "position": item.position or 0,
                 "notes": item.notes,
+                "actual_values": actual_values,
+                "test_data": test_data,
                 "case_number": item.test_case.case_number if item.test_case else None,
                 "name": item.test_case.name if item.test_case else None,
-            }
-            for item in items
-        ]
+            })
+        return result
 
     async def add_case(self, checklist_id: str, case_id: str, position: Optional[int] = None) -> dict:
         checklist = await self._cl_repo.get_with_items(checklist_id)
@@ -89,6 +114,8 @@ class ChecklistService:
         case_id: str,
         notes: Optional[str] = None,
         position: Optional[int] = None,
+        actual_values: Optional[dict] = None,
+        clear_actual_values: bool = False,
     ) -> Optional[dict]:
         checklist = await self._cl_repo.get_with_items(checklist_id)
         if checklist is None:
@@ -100,8 +127,26 @@ class ChecklistService:
             item.notes = notes
         if position is not None:
             item.position = position
+        if clear_actual_values:
+            item.actual_values = None
+        elif actual_values is not None:
+            item.actual_values = json.dumps(actual_values, ensure_ascii=False)
         await self._session.flush()
-        return {"item_id": item.id, "test_case_id": item.test_case_id, "position": item.position, "notes": item.notes}
+
+        parsed_actual_values: dict = {}
+        if item.actual_values:
+            try:
+                parsed_actual_values = json.loads(item.actual_values)
+            except (json.JSONDecodeError, ValueError):
+                parsed_actual_values = {}
+
+        return {
+            "item_id": item.id,
+            "test_case_id": item.test_case_id,
+            "position": item.position,
+            "notes": item.notes,
+            "actual_values": parsed_actual_values,
+        }
 
     async def reorder_cases(self, checklist_id: str, case_ids: list[str]) -> bool:
         checklist = await self._cl_repo.get_with_items(checklist_id)

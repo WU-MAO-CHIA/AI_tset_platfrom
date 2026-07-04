@@ -44,6 +44,61 @@
           @saved="onSaved"
           @trial-run="onTrialRunFromForm"
         />
+
+        <!-- 測試資料區塊（編輯模式） -->
+        <div class="section test-data-section">
+          <h2>測試資料</h2>
+          <table class="test-data-table" v-if="editTestData.length > 0">
+            <thead>
+              <tr>
+                <th>易讀名稱</th>
+                <th>RF 變數</th>
+                <th>預設值</th>
+                <th>說明</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(row, idx) in editTestData" :key="idx">
+                <td>
+                  <input
+                    v-model="row.field_name"
+                    class="td-input"
+                    placeholder="易讀名稱"
+                    @input="onFieldNameInput(idx)"
+                  />
+                </td>
+                <td>
+                  <input
+                    v-model="row.rf_variable"
+                    class="td-input"
+                    placeholder="${易讀名稱}"
+                    @input="row._rf_auto = false"
+                  />
+                </td>
+                <td>
+                  <input
+                    v-model="row.field_value"
+                    class="td-input"
+                    placeholder="預設值"
+                  />
+                </td>
+                <td>
+                  <input
+                    v-model="row.description"
+                    class="td-input"
+                    placeholder="說明"
+                  />
+                </td>
+                <td>
+                  <button class="btn-del-row" @click="deleteTestDataRow(idx)" title="刪除此列">✕</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div v-else class="empty td-empty">（無測試資料）</div>
+          <button class="btn-add-row" @click="addTestDataRow">＋ 新增列</button>
+        </div>
       </div>
 
       <!-- Tab 2：測試步驟（左：AI Chat，右：RF 預覽） -->
@@ -105,6 +160,31 @@
           <h2>主要步驟</h2>
           <pre>{{ caseData.main_steps }}</pre>
         </div>
+
+        <!-- 測試資料區塊（唯讀） -->
+        <div class="section">
+          <h2>測試資料</h2>
+          <div v-if="!caseData.test_data || caseData.test_data.length === 0" class="empty">（無測試資料）</div>
+          <table v-else class="test-data-table">
+            <thead>
+              <tr>
+                <th>易讀名稱</th>
+                <th>RF 變數</th>
+                <th>預設值</th>
+                <th>說明</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="td in caseData.test_data" :key="td.id">
+                <td>{{ td.field_name }}</td>
+                <td>{{ td.rf_variable ?? '' }}</td>
+                <td>{{ td.field_value ?? '' }}</td>
+                <td>{{ td.description ?? '' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
         <div class="section">
           <h2>媒體附件</h2>
           <ul v-if="attachments.length" class="attachment-list">
@@ -164,7 +244,7 @@
 
     <div class="section" v-show="!editing">
       <h2>測試資料匯入</h2>
-      <FileImporter :case-id="caseData.id" />
+      <FileImporter :case-id="caseData.id" @imported="reloadTestData" />
     </div>
 
     <div class="section" v-show="!editing">
@@ -191,7 +271,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { caseApi, type TestCaseDetail, type AttachmentRecord } from '../services/caseApi'
+import { caseApi, type TestCaseDetail, type AttachmentRecord, type TestDataItem } from '../services/caseApi'
 import FileImporter from '../components/FileImporter/index.vue'
 import TestCaseForm from '../components/TestCaseForm/index.vue'
 import AIChatPanel from '../components/AIChatPanel/index.vue'
@@ -217,6 +297,50 @@ const rfCode = ref('')
 const chatMessages = ref<Array<{ role: string; content: string; created_at: string }>>([])
 const attachments = ref<AttachmentRecord[]>([])
 
+interface EditTestDataRow {
+  id?: string
+  field_name: string
+  rf_variable: string
+  field_value: string
+  description: string
+  _rf_auto: boolean
+}
+
+const editTestData = ref<EditTestDataRow[]>([])
+
+function initEditTestData(testData: TestDataItem[]) {
+  editTestData.value = testData.map(td => ({
+    id: td.id,
+    field_name: td.field_name,
+    rf_variable: td.rf_variable ?? '',
+    field_value: td.field_value ?? '',
+    description: td.description ?? '',
+    _rf_auto: false,
+  }))
+}
+
+function onFieldNameInput(idx: number) {
+  const row = editTestData.value[idx]
+  if (row._rf_auto || !row.rf_variable) {
+    row.rf_variable = row.field_name ? `\${${row.field_name}}` : ''
+    row._rf_auto = true
+  }
+}
+
+function addTestDataRow() {
+  editTestData.value.push({
+    field_name: '',
+    rf_variable: '',
+    field_value: '',
+    description: '',
+    _rf_auto: true,
+  })
+}
+
+function deleteTestDataRow(idx: number) {
+  editTestData.value.splice(idx, 1)
+}
+
 async function loadAttachments() {
   try {
     const res = await caseApi.listAttachments(caseId)
@@ -226,6 +350,11 @@ async function loadAttachments() {
   }
 }
 
+async function reloadTestData() {
+  const res = await caseApi.getCase(caseId)
+  caseData.value = res.data
+}
+
 const editInitialData = computed(() => caseData.value ? { ...caseData.value } : undefined)
 
 onMounted(async () => {
@@ -233,15 +362,13 @@ onMounted(async () => {
   caseData.value = res.data
   await loadAttachments()
 
-  // Load saved RF script (DB / disk) — authoritative source
   try {
     const scriptRes = await caseApi.getRobotScript(caseId)
     rfCode.value = scriptRes.data.rf_code
   } catch {
-    // 404 = no script saved yet; fall through to chat history
+    // 404 = no script saved yet
   }
 
-  // Load chat history; if rfCode still empty, try extracting from last assistant message
   try {
     const histRes = await caseApi.getChatHistory(caseId)
     chatMessages.value = histRes.data.messages ?? []
@@ -262,6 +389,7 @@ onMounted(async () => {
 
 function startEdit() {
   mainSteps.value = caseData.value?.main_steps ?? ''
+  initEditTestData(caseData.value?.test_data ?? [])
   editTab.value = 'basic'
   editing.value = true
 }
@@ -271,6 +399,17 @@ function cancelEdit() {
 }
 
 async function onSaved(_id: string) {
+  // save test_data changes (full replace)
+  await caseApi.updateCase(caseId, {
+    created_by: 'current_user',
+    test_data: editTestData.value.map((row, idx) => ({
+      field_name: row.field_name,
+      rf_variable: row.rf_variable || null,
+      field_value: row.field_value || null,
+      description: row.description || null,
+      row_index: idx,
+    })),
+  })
   const res = await caseApi.getCase(caseId)
   caseData.value = res.data
   await loadAttachments()
@@ -452,4 +591,56 @@ pre { white-space: pre-wrap; background: #f9f9f9; padding: 12px; border-radius: 
 .rf-readonly { }
 .rf-code { color: #cdd6f4; background: transparent; font-family: 'Courier New', monospace; font-size: 13px; white-space: pre-wrap; margin: 0; line-height: 1.6; }
 .rf-empty { color: #7c8097; font-size: 13px; }
+
+/* 測試資料表格 */
+.test-data-section { margin-top: 24px; }
+
+.test-data-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.test-data-table th {
+  background: #f3f4f6;
+  font-weight: 600;
+  color: #374151;
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 2px solid #e5e7eb;
+}
+.test-data-table td {
+  padding: 4px 6px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.td-input {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+.td-input:focus { outline: none; border-color: #6366f1; }
+
+.btn-del-row {
+  background: none;
+  border: none;
+  color: #dc2626;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+.btn-del-row:hover { background: #fee2e2; }
+
+.btn-add-row {
+  margin-top: 8px;
+  background: none;
+  border: 1px dashed #9ca3af;
+  color: #6b7280;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 5px 14px;
+  border-radius: 4px;
+}
+.btn-add-row:hover { border-color: #4f46e5; color: #4f46e5; }
+
+.td-empty { font-size: 13px; margin-bottom: 8px; }
 </style>
