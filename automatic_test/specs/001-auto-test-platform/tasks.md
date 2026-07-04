@@ -803,9 +803,9 @@ Phase 2 完成後：
 
 ### 後端 Service 與 API 實作
 
-- [ ] T253 擴充 `backend/src/services/execution_service.py`：新增 `execute_trial_run_from_code(case_id: str, rf_code: str, case_name: str) -> ExecutionRecord` 方法；調用 RF 執行引擎，解析 output.xml，生成試跑結果訊息（status、elapsed_ms、error_message、screenshot_paths）；將結果寫入 case_chat_messages（`type=TRIAL_RUN_RESULT`）；若失敗則調用 `_generate_trial_run_analysis_prompt()` 組裝 prompt，調用 AI 分析，將 AI 回應寫入新的 ChatMessage（`type=CHAT`，`role=assistant`）
-- [ ] T254 [P] 新增 `backend/src/services/ai_service.py` 方法 `analyze_trial_run_failure(case_name: str, error_message: str, rf_code: str, elapsed_ms: int) -> str`：組裝 prompt 包含失敗訊息與當前 RF 代碼，調用 LLM 分析並回傳建議修正的 RF 程式碼或步驟
-- [ ] T255 [P] 擴充 `backend/src/api/cases.py`：POST `/cases/{case_id}/trial-run` endpoint 接受 request body `{ "rf_code": string, "case_name": string | null }`，調用 execution_service 試跑方法，回傳 202 Accepted 與 `{ execution_id, stream_url }`
+- [X] T253 擴充 `backend/src/services/execution_service.py`：新增 `execute_trial_run_from_code(case_id: str, rf_code: str, case_name: str) -> ExecutionRecord` 方法；調用 RF 執行引擎，解析 output.xml，生成試跑結果訊息（status、elapsed_ms、error_message、screenshot_paths）；將結果寫入 case_chat_messages（`type=TRIAL_RUN_RESULT`）；若失敗則調用 `_generate_trial_run_analysis_prompt()` 組裝 prompt，調用 AI 分析，將 AI 回應寫入新的 ChatMessage（`type=CHAT`，`role=assistant`）
+- [X] T254 [P] 新增 `backend/src/services/ai_service.py` 方法 `analyze_trial_run_failure(case_name: str, error_message: str, rf_code: str, elapsed_ms: int) -> str`：組裝 prompt 包含失敗訊息與當前 RF 代碼，調用 LLM 分析並回傳建議修正的 RF 程式碼或步驟
+- [X] T255 [P] 擴充 `backend/src/api/cases.py`：POST `/cases/{case_id}/trial-run` endpoint 接受 request body `{ "rf_code": string, "case_name": string | null }`，調用 execution_service 試跑方法，回傳 202 Accepted 與 `{ execution_id, stream_url }`
 
 ### 前端實作
 

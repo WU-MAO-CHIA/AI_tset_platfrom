@@ -139,8 +139,11 @@ class ExecutionService:
 
         async with AsyncSessionLocal() as session:
             from src.models.case_result import CaseResult
+            from src.models.case_chat_message import CaseChatMessage, ChatMessageType
             from src.models.base import generate_uuid
             from datetime import datetime, timezone
+            import json
+
             cr = CaseResult(
                 id=generate_uuid(),
                 execution_id=execution_id,
@@ -152,6 +155,22 @@ class ExecutionService:
                 position=0,
             )
             session.add(cr)
+
+            # Phase 27: Create trial run result message
+            trial_result_msg = CaseChatMessage(
+                id=generate_uuid(),
+                case_id=source_case_id,
+                role="system",
+                type=ChatMessageType.TRIAL_RUN_RESULT,
+                content=json.dumps({
+                    "status": case_status,
+                    "elapsed_ms": result.get("elapsed_ms", 0),
+                    "error_message": result.get("failure_message") or "",
+                    "screenshot_paths": result.get("screenshots", [])
+                })
+            )
+            session.add(trial_result_msg)
+
             await ExecutionRepository(session).update(
                 execution_id,
                 status=final_status,
@@ -162,8 +181,70 @@ class ExecutionService:
             )
             await session.commit()
 
+            # Phase 27: If trial failed, trigger AI analysis
+            if case_status == "failed":
+                await ExecutionService._trigger_ai_analysis(
+                    session=session,
+                    case_id=source_case_id,
+                    case_name=case_name or f"Trial Run {execution_id}",
+                    error_message=result.get("failure_message") or "Unknown error",
+                    rf_code=rf_code or ""
+                )
+
         await asyncio.sleep(5)
         clear_execution_queue(execution_id)
+
+    @staticmethod
+    async def _trigger_ai_analysis(session, case_id: str, case_name: str, error_message: str, rf_code: str) -> None:
+        """Phase 27: Trigger AI analysis for failed trial run and append suggestion."""
+        from src.models.case_chat_message import CaseChatMessage, ChatMessageType
+        from src.models.base import generate_uuid
+        from src.core.config import get_settings
+        from src.core.llm_provider import get_provider
+
+        try:
+            # Build analysis prompt
+            prompt = ExecutionService._generate_trial_run_analysis_prompt(
+                case_name=case_name,
+                error_message=error_message,
+                rf_code=rf_code
+            )
+
+            # Call AI to get suggestion
+            settings = get_settings()
+            provider = get_provider(settings.default_llm_model, settings)
+            suggestion = await provider.complete(prompt)
+
+            # Save AI suggestion as chat message
+            analysis_msg = CaseChatMessage(
+                id=generate_uuid(),
+                case_id=case_id,
+                role="assistant",
+                type=ChatMessageType.CHAT,
+                content=suggestion
+            )
+            session.add(analysis_msg)
+            await session.commit()
+        except Exception as e:
+            # Silently fail if AI analysis fails
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"AI analysis failed for case {case_id}: {str(e)}")
+
+    @staticmethod
+    def _generate_trial_run_analysis_prompt(case_name: str, error_message: str, rf_code: str) -> str:
+        """Phase 27: Generate prompt for AI to analyze trial run failure."""
+        return f"""案例 "{case_name}" 的試跑失敗。
+
+失敗訊息：
+{error_message}
+
+當前 Robot Framework 程式碼：
+```robot
+{rf_code}
+```
+
+請分析失敗原因並提供修正建議。如可能，請提供更新後的 RF 程式碼片段。"""
 
     @staticmethod
     async def _execute_all_cases_bg(execution_id: str, case_ids: list[str], max_workers: int) -> None:
