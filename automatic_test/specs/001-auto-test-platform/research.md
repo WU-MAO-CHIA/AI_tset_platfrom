@@ -518,6 +518,55 @@ router.beforeEach((to) => {
 
 ---
 
+## 決策 13：RF 程式碼變數自動解析策略（Phase 26）
+
+**Decision**: 前端純正規式解析，不引入 RF parser 函式庫；使用 hardcoded exclusion set 排除 RF 框架內建變數。
+
+**Rationale**:
+- RF 變數語法固定（`${VAR_NAME}`），正規式足以覆蓋所有使用場景
+- 引入完整 RF parser（如 robotframework Python 套件）會大幅增加前端 bundle 體積
+- Exclusion set 維護成本低，RF 內建變數清單穩定（不隨 RF 版本頻繁變動）
+- 此功能為「輔助補齊」性質，不需 100% 精確，漏偵測 edge case 可由使用者手動補充
+
+**解析流程（前端 TypeScript）**:
+```typescript
+const RF_BUILTINS = new Set([
+  'CURDIR', 'EXECDIR', 'TEMPDIR', 'OUTPUT_DIR', 'OUTPUT_FILE',
+  'LOG_FILE', 'REPORT_FILE', 'DEBUG_FILE', 'SUITE_NAME', 'SUITE_SOURCE',
+  'SUITE_DOCUMENTATION', 'SUITE_STATUS', 'SUITE_MESSAGE', 'TEST_NAME',
+  'TEST_DOCUMENTATION', 'TEST_STATUS', 'TEST_MESSAGE', 'PREV_TEST_NAME',
+  'PREV_TEST_STATUS', 'PREV_TEST_MESSAGE', 'LOG_LEVEL',
+  'True', 'False', 'None', 'null', 'EMPTY', 'SPACE',
+])
+
+function extractRFVariables(rfCode: string): string[] {
+  const matches = rfCode.matchAll(/\$\{([^}]+)\}/g)
+  const seen = new Set<string>()
+  const result: string[] = []
+  for (const m of matches) {
+    const name = m[1]
+    if (!RF_BUILTINS.has(name) && !seen.has(name.toUpperCase())) {
+      seen.add(name.toUpperCase())
+      result.push(name)
+    }
+  }
+  return result
+}
+```
+
+**合併策略**:
+- `field_name` = 提取的名稱（去除 `${}`，保留原始大小寫）
+- `rf_variable` = `${原始名稱}`（與 RF 程式碼完全一致）
+- 以 `rf_variable` 大小寫不分比對現有 `editTestData`，已存在者略過
+- API 失敗（404 = 尚無 RF 程式碼）時靜默略過，不中斷進入編輯模式的流程
+
+**Alternatives considered**:
+- robotframework-parser npm 套件：過重，且此場景不需語法樹解析
+- 後端提供「解析 RF 變數」端點：過度設計，前端正規式即可滿足需求
+- 詢問使用者是否要「取代」或「合併」：已決定固定採合併補齊策略，不增加 UX 複雜度
+
+---
+
 ## 所有 NEEDS CLARIFICATION 解析完畢
 
 | 問題 | 決策 |

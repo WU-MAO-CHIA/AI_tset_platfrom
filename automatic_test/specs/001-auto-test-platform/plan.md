@@ -86,6 +86,7 @@ automatic_test/
 | 10 | 背景任務 session：@staticmethod + 自建 session，禁用 request-scoped | research.md |
 | 11 | RF 報告持久化：shutil.copytree → data/execution_reports/{id}/ | research.md |
 | 12 | Auth / Admin：JWT Token + passlib bcrypt + 三角色 RBAC | research.md |
+| 13 | RF 變數解析：前端正規式 + RF_BUILTINS exclusion set，合併補齊策略 | research.md |
 
 ## Implementation Progress
 
@@ -117,7 +118,8 @@ automatic_test/
 | 22 | 執行前空清單驗證（FR-009 pre-flight） | ✅ |
 | 23 | LLM 設定 env-only + 後台唯讀遮罩（FR-027） | ✅ |
 | 24 | 本地 Ollama 整合 + 後台「目前啟用模型」可切換（FR-012/027） | ✅ |
-| 25 | 測資變數四欄表格 + 清單案例展開列（FR-001/005/006/023） | 🔄 進行中 |
+| 25 | 測資變數四欄表格 + 清單案例展開列（FR-001/005/006/023） | ✅ |
+| 26 | 編輯模式自動從 RF 程式碼解析變數填入測資表格（FR-001 US1-15） | 🔄 進行中 |
 
 ---
 
@@ -195,6 +197,58 @@ T248（checklistApi.ts）
 - `PATCH /api/v1/checklists/:id/cases/:case_id` 接受 `actual_values` JSON 並持久化。
 - CaseDetailPage Tab 1 顯示 4 欄表格；編輯模式可新增/編輯/刪除列；RF 變數自動帶入 `${易讀名稱}`。
 - ChecklistDetailPage 案例列預設收合；點擊展開顯示 4 欄表格；實際值可編輯並持久化。
+
+---
+
+## Phase 26：編輯模式自動從 RF 程式碼解析變數填入測資表格（FR-001 US1-15）
+
+### 背景
+
+源自 2026-07-04 `/speckit-clarify` 釐清：使用者進入案例編輯模式時，系統應自動讀取該案例已儲存的 RF 程式碼，解析所有非內建的 `${VARIABLE_NAME}` 參照，以合併補齊策略填入測試資料表格，減少手動輸入工作量。
+
+### 範圍
+
+**純前端變更**，無後端修改、無資料庫遷移、無新 API endpoint。
+
+使用既有 `caseApi.getRobotScript(caseId)` → `GET /cases/:id/robot-script`（Phase 18 已實作）。
+
+### 前端修改範圍
+
+| 檔案 | 變更 |
+|------|------|
+| `src/pages/CaseDetailPage.vue` | `startEdit()` 增加 RF 變數解析邏輯：呼叫 `getRobotScript`，解析 `${VAR}` 並合併補齊 `editTestData` |
+
+### 實作細節
+
+**RF 內建變數排除清單**（`RF_BUILTINS`）：
+```typescript
+const RF_BUILTINS = new Set([
+  'CURDIR', 'EXECDIR', 'TEMPDIR', 'OUTPUT_DIR', 'OUTPUT_FILE',
+  'LOG_FILE', 'REPORT_FILE', 'DEBUG_FILE', 'SUITE_NAME', 'SUITE_SOURCE',
+  'SUITE_DOCUMENTATION', 'SUITE_STATUS', 'SUITE_MESSAGE', 'TEST_NAME',
+  'TEST_DOCUMENTATION', 'TEST_STATUS', 'TEST_MESSAGE', 'PREV_TEST_NAME',
+  'PREV_TEST_STATUS', 'PREV_TEST_MESSAGE', 'LOG_LEVEL',
+  'True', 'False', 'None', 'null', 'EMPTY', 'SPACE',
+])
+```
+
+**合併邏輯**：
+- 比對鍵：`rf_variable`（大小寫不分，如 `${USERNAME}` 與 `${username}` 視為相同）
+- 新增列的 `field_name` = 提取名稱（去除 `${}`，保留原始大小寫）
+- `rf_variable` = `${原始名稱}`、`field_value` = `''`、`description` = `''`、`_rf_auto` = `false`
+- 若 `getRobotScript` 回傳 404（尚無 RF 程式碼），靜默略過，不中斷 `startEdit()` 流程
+
+### TDD 執行順序
+
+```
+T249（CaseDetailPage.vue：startEdit() 加入 RF 變數解析 + 合併邏輯）
+```
+
+### 驗收條件
+
+- 進入編輯模式後，`editTestData` 包含 RF 程式碼中所有非內建 `${VAR}` 的列（已存在者不重複）。
+- 已手動填入的列（`field_value`、`description`）不被覆蓋。
+- 無 RF 程式碼時，`editTestData` 維持原有狀態。
 
 ---
 
