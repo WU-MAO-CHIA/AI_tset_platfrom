@@ -785,6 +785,47 @@ Phase 2 完成後：
 
 ---
 
+## Phase 27: Tab 2 立即試跑與 Chat 整合（FR-016 US1-16）（2026-07-04）
+
+**Purpose**: 在 Tab 2「測試步驟」編輯介面中，測試人員可按「立即試跑」按鈕直接使用右側 RF 程式碼預覽區的當前內容執行試跑（無需先儲存案例）。試跑完成後自動將結果（pass/fail badge、執行時間、失敗訊息、截圖）以對話訊息形式附加至左側 Chat，並自動觸發 AI 分析失敗原因（若失敗）。核心修改：ChatMessage 新增 `type` 欄位（區分 `chat` vs `trial_run_result`），試跑 API 擴充，ExecutionService 新增試跑流程，前端 Chat 訊息渲染擴充。
+
+### 合約測試（RED）
+
+- [ ] T250 在 `backend/tests/contract/test_trial_run_api.py` 新增 POST `/cases/{case_id}/trial-run` 合約測試，request body 包含 `rf_code` 與 `case_name`（選填），驗證回傳 202 Accepted 與 `execution_id`；後續 `GET /cases/{id}/chat-history` 應包含 `type` 欄位
+
+### 資料庫遷移
+
+- [ ] T251 執行 `alembic revision --autogenerate -m "add_chat_message_type_field"` 並驗證 upgrade/downgrade：`case_chat_messages` 表新增 `type VARCHAR(30) NOT NULL DEFAULT 'chat'` 欄位，舊資料補全為 `'chat'`；檢查 model 的 Enum 型別相容
+
+### 後端 Model 更新
+
+- [ ] T252 [P] 更新 `backend/src/models/chat_message.py`：新增 `type = Column(Enum(ChatMessageType), nullable=False, default=ChatMessageType.CHAT)` 欄位，定義 `ChatMessageType` enum（`CHAT` / `TRIAL_RUN_RESULT`）；schema 中 ChatMessageOut 新增 `type` 欄位
+
+### 後端 Service 與 API 實作
+
+- [ ] T253 擴充 `backend/src/services/execution_service.py`：新增 `execute_trial_run_from_code(case_id: str, rf_code: str, case_name: str) -> ExecutionRecord` 方法；調用 RF 執行引擎，解析 output.xml，生成試跑結果訊息（status、elapsed_ms、error_message、screenshot_paths）；將結果寫入 case_chat_messages（`type=TRIAL_RUN_RESULT`）；若失敗則調用 `_generate_trial_run_analysis_prompt()` 組裝 prompt，調用 AI 分析，將 AI 回應寫入新的 ChatMessage（`type=CHAT`，`role=assistant`）
+- [ ] T254 [P] 新增 `backend/src/services/ai_service.py` 方法 `analyze_trial_run_failure(case_name: str, error_message: str, rf_code: str, elapsed_ms: int) -> str`：組裝 prompt 包含失敗訊息與當前 RF 代碼，調用 LLM 分析並回傳建議修正的 RF 程式碼或步驟
+- [ ] T255 [P] 擴充 `backend/src/api/cases.py`：POST `/cases/{case_id}/trial-run` endpoint 接受 request body `{ "rf_code": string, "case_name": string | null }`，調用 execution_service 試跑方法，回傳 202 Accepted 與 `{ execution_id, stream_url }`
+
+### 前端實作
+
+- [ ] T256 [P] 更新 `frontend/src/pages/CaseDetailPage.vue` Tab 2「測試步驟」右側 RF 程式碼預覽區：新增紫色「立即試跑」按鈕；點擊後呼叫 `POST /cases/{id}/trial-run` 傳入右側當前 RF 代碼文字（從 `RFCodePreview` 元件取值）與案例名稱；顯示 loading indicator 直至試跑完成
+- [ ] T257 [P] 更新 `frontend/src/pages/CaseDetailPage.vue` Tab 2 左側 Chat 區域的訊息渲染邏輯（`ChatBubble` 元件）：支援 `type='trial_run_result'` 訊息型別；若 status='passed'，顯示綠色 PASS badge 與執行時間；若 status='failed'，顯示紅色 FAIL badge、執行時間、錯誤訊息、截圖縮圖廊道（可點擊放大）；其他 status（timeout/error）同樣顯示對應 badge
+
+### 前端 API 更新
+
+- [ ] T258 更新 `frontend/src/services/caseApi.ts`：ChatMessageModel 型別新增 `type: 'chat' | 'trial_run_result'` 欄位；若 `type='trial_run_result'`，content 為 JSON 物件，parseable 為 `{ status, elapsed_ms, error_message, screenshot_paths }`；`getChatHistory` 回應包含 `type` 欄位；新增或更新 `runTrialFromCode(caseId: string, rfCode: string, caseName?: string) -> Promise<{ execution_id: string; stream_url: string }>` 方法
+
+### 端端測試（E2E）
+
+- [ ] T259 [P] 在 `frontend/tests/e2e/trial-run.spec.ts` 新增 e2e 測試：（1）開啟案例編輯頁面進入 Tab 2；（2）輸入簡單 RF 代碼於右側預覽區或由 AI Chat 生成；（3）點擊「立即試跑」按鈕；（4）驗證試跑結果訊息出現在左側 Chat 區域；（5）若試跑失敗，驗證 AI 建議訊息隨後出現；（6）刷新頁面後驗證訊息持久化至對話歷史
+
+**Checkpoint**: `pytest backend/tests/contract/test_trial_run_api.py -v` 先 RED → 實作後 GREEN；`npm run dev` 進入 CaseDetailPage Tab 2，點擊「立即試跑」後看到試跑結果訊息出現在 Chat；試跑失敗時看到 AI 分析建議；頁面刷新後訊息仍存在
+
+**Dependencies**: T252（model）必須先完成才能執行 T253/T254；T253 與 T254 可平行；T256/T257/T258 可平行，均依賴 T252/T253/T254 完成；T259（e2e）依賴前端實作完成
+
+---
+
 ## Notes
 
 - `[P]` = 不同檔案，無未完成依賴，可平行執行
