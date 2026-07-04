@@ -791,15 +791,15 @@ Phase 2 完成後：
 
 ### 合約測試（RED）
 
-- [ ] T250 在 `backend/tests/contract/test_trial_run_api.py` 新增 POST `/cases/{case_id}/trial-run` 合約測試，request body 包含 `rf_code` 與 `case_name`（選填），驗證回傳 202 Accepted 與 `execution_id`；後續 `GET /cases/{id}/chat-history` 應包含 `type` 欄位
+- [X] T250 在 `backend/tests/contract/test_trial_run_api.py` 新增 POST `/cases/{case_id}/trial-run` 合約測試，request body 包含 `rf_code` 與 `case_name`（選填），驗證回傳 202 Accepted 與 `execution_id`；後續 `GET /cases/{id}/chat-history` 應包含 `type` 欄位
 
 ### 資料庫遷移
 
-- [ ] T251 執行 `alembic revision --autogenerate -m "add_chat_message_type_field"` 並驗證 upgrade/downgrade：`case_chat_messages` 表新增 `type VARCHAR(30) NOT NULL DEFAULT 'chat'` 欄位，舊資料補全為 `'chat'`；檢查 model 的 Enum 型別相容
+- [X] T251 執行 `alembic revision --autogenerate -m "add_chat_message_type_field"` 並驗證 upgrade/downgrade：`case_chat_messages` 表新增 `type VARCHAR(30) NOT NULL DEFAULT 'chat'` 欄位，舊資料補全為 `'chat'`；檢查 model 的 Enum 型別相容
 
 ### 後端 Model 更新
 
-- [ ] T252 [P] 更新 `backend/src/models/chat_message.py`：新增 `type = Column(Enum(ChatMessageType), nullable=False, default=ChatMessageType.CHAT)` 欄位，定義 `ChatMessageType` enum（`CHAT` / `TRIAL_RUN_RESULT`）；schema 中 ChatMessageOut 新增 `type` 欄位
+- [X] T252 [P] 更新 `backend/src/models/chat_message.py`：新增 `type = Column(Enum(ChatMessageType), nullable=False, default=ChatMessageType.CHAT)` 欄位，定義 `ChatMessageType` enum（`CHAT` / `TRIAL_RUN_RESULT`）；schema 中 ChatMessageOut 新增 `type` 欄位
 
 ### 後端 Service 與 API 實作
 

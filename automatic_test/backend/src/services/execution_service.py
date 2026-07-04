@@ -64,18 +64,19 @@ class ExecutionService:
         )
         return record
 
-    async def run_trial(self, source_case_id: str) -> ExecutionRecord:
+    async def run_trial(self, source_case_id: str, rf_code: Optional[str] = None, case_name: Optional[str] = None) -> ExecutionRecord:
+        """Phase 27: Execute trial run with optional RF code override."""
         from datetime import datetime, timezone
         record = await self._exec_repo.create_for_trial_run(source_case_id=source_case_id)
         await self._exec_repo.update(record.id, status="running", total_count=1, started_at=datetime.now())
         await self._session.flush()
         asyncio.create_task(
-            ExecutionService._execute_trial_bg(record.id, source_case_id)
+            ExecutionService._execute_trial_bg(record.id, source_case_id, rf_code=rf_code, case_name=case_name)
         )
         return record
 
     @staticmethod
-    async def _execute_trial_bg(execution_id: str, source_case_id: str) -> None:
+    async def _execute_trial_bg(execution_id: str, source_case_id: str, rf_code: Optional[str] = None, case_name: Optional[str] = None) -> None:
         from src.core.config import get_settings
         from src.repositories.test_case_repo import TestCaseRepository
         from src.execution.listener import get_execution_queue, clear_execution_queue
@@ -95,11 +96,13 @@ class ExecutionService:
             return
 
         case_number = case.case_number
-        robot_code: Optional[str] = None
-        script_path = os.path.join(settings.robot_scripts_dir, f"{case_number}.robot")
-        if os.path.exists(script_path):
-            with open(script_path, "r", encoding="utf-8") as f:
-                robot_code = f.read()
+        # Phase 27: Use provided rf_code if available, otherwise read from file
+        robot_code: Optional[str] = rf_code
+        if not robot_code:
+            script_path = os.path.join(settings.robot_scripts_dir, f"{case_number}.robot")
+            if os.path.exists(script_path):
+                with open(script_path, "r", encoding="utf-8") as f:
+                    robot_code = f.read()
 
         queue.put_nowait({"event": "case_started", "execution_id": execution_id, "case_id": source_case_id, "case_number": case_number})
 

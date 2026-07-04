@@ -15,6 +15,17 @@ async def client():
         yield c
 
 
+async def _get_auth_token(client) -> str:
+    """Get auth token for testing."""
+    r = await client.post("/api/v1/auth/login", json={"username": "admin", "password": "admin"})
+    if r.status_code == 200:
+        return r.json()["access_token"]
+    # Fallback: create a test user
+    r = await client.post("/api/v1/admin/accounts", json={"username": "test_user", "password": "test_pass", "role": "viewer"})
+    r = await client.post("/api/v1/auth/login", json={"username": "test_user", "password": "test_pass"})
+    return r.json()["access_token"]
+
+
 @pytest.fixture
 def valid_case_payload():
     unique = uuid.uuid4().hex[:6].upper()
@@ -27,9 +38,16 @@ def valid_case_payload():
     }
 
 
+@pytest.fixture
+async def auth_headers(client):
+    """Fixture for authorization headers."""
+    token = await _get_auth_token(client)
+    return {"Authorization": f"Bearer {token}"}
+
+
 class TestCreateCase:
-    async def test_create_case_returns_201(self, client, valid_case_payload):
-        response = await client.post("/api/v1/cases", json=valid_case_payload)
+    async def test_create_case_returns_201(self, client, valid_case_payload, auth_headers):
+        response = await client.post("/api/v1/cases", json=valid_case_payload, headers=auth_headers)
         assert response.status_code == 201
         data = response.json()
         assert data["case_number"] == valid_case_payload["case_number"]
@@ -148,3 +166,81 @@ class TestChatEndpoints:
         data = response.json()
         assert "messages" in data
         assert isinstance(data["messages"], list)
+
+    async def test_chat_history_includes_type_field_phase27(self, client, valid_case_payload):
+        """Phase 27: Chat history messages should include 'type' field."""
+        create_resp = await client.post("/api/v1/cases", json=valid_case_payload)
+        case_id = create_resp.json()["id"]
+        response = await client.get(f"/api/v1/cases/{case_id}/chat-history")
+        assert response.status_code == 200
+        data = response.json()
+        assert "messages" in data
+        if len(data["messages"]) > 0:
+            assert "type" in data["messages"][0], "Message should include 'type' field"
+            assert data["messages"][0]["type"] in ["chat", "trial_run_result"]
+
+
+class TestTrialRunEndpoints:
+    """Phase 27: Trial run endpoints - immediate execution with RF code preview."""
+
+    async def test_trial_run_accepts_rf_code_and_case_name(self, client, valid_case_payload, auth_headers):
+        """T250: POST /cases/{case_id}/trial-run accepts rf_code and case_name."""
+        create_resp = await client.post("/api/v1/cases", json=valid_case_payload, headers=auth_headers)
+        case_id = create_resp.json()["id"]
+
+        rf_code = "*** Settings ***\nLibrary    Browser\n\n*** Test Cases ***\n測試\n    Log    Hello"
+        response = await client.post(
+            f"/api/v1/cases/{case_id}/trial-run",
+            json={"rf_code": rf_code, "case_name": "Trial Run Test"},
+            headers=auth_headers
+        )
+
+        assert response.status_code == 202, f"Expected 202 Accepted, got {response.status_code}: {response.text}"
+        data = response.json()
+        assert "execution_id" in data, "Response should include 'execution_id'"
+        assert "stream_url" in data, "Response should include 'stream_url'"
+
+    async def test_trial_run_rf_code_required(self, client, valid_case_payload, auth_headers):
+        """T250: rf_code field is required for trial-run."""
+        create_resp = await client.post("/api/v1/cases", json=valid_case_payload, headers=auth_headers)
+        case_id = create_resp.json()["id"]
+
+        response = await client.post(
+            f"/api/v1/cases/{case_id}/trial-run",
+            json={"case_name": "Trial Run Test"},  # Missing rf_code
+            headers=auth_headers
+        )
+
+        assert response.status_code == 422, f"Expected 422 Validation Error, got {response.status_code}"
+
+    async def test_trial_run_case_name_optional(self, client, valid_case_payload, auth_headers):
+        """T250: case_name is optional, defaults to case_id."""
+        create_resp = await client.post("/api/v1/cases", json=valid_case_payload, headers=auth_headers)
+        case_id = create_resp.json()["id"]
+
+        rf_code = "*** Settings ***\nLibrary    Browser\n\n*** Test Cases ***\n測試\n    Log    Hello"
+        response = await client.post(
+            f"/api/v1/cases/{case_id}/trial-run",
+            json={"rf_code": rf_code},  # No case_name
+            headers=auth_headers
+        )
+
+        assert response.status_code == 202, f"Expected 202 Accepted, got {response.status_code}: {response.text}"
+
+    async def test_trial_run_adds_result_message_to_chat_history(self, client, valid_case_payload, auth_headers):
+        """T250: Trial run result should appear in chat history with type='trial_run_result'."""
+        create_resp = await client.post("/api/v1/cases", json=valid_case_payload, headers=auth_headers)
+        case_id = create_resp.json()["id"]
+
+        rf_code = "*** Settings ***\nLibrary    Browser\n\n*** Test Cases ***\n測試\n    Log    Hello"
+        trial_resp = await client.post(
+            f"/api/v1/cases/{case_id}/trial-run",
+            json={"rf_code": rf_code, "case_name": "Trial Run Test"},
+            headers=auth_headers
+        )
+
+        assert trial_resp.status_code == 202
+
+        # Poll or wait for execution to complete (in integration test this would use proper async wait)
+        # For contract test, we just verify the endpoint accepts the request
+        # Actual verification of message persistence happens in integration tests

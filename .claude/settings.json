@@ -1,5 +1,10 @@
 {
   "enabledPlugins": {
     "context7@claude-plugins-official": true
+  },
+  "permissions": {
+    "allow": [
+      "Bash(git commit -m '[codebase-memory] Index automatic_test project *)"
+    ]
   }
 }
