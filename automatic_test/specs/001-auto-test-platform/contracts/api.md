@@ -22,7 +22,12 @@
   "tags": ["login", "smoke"],
   "created_by": "tester_01",
   "test_data": [
-    { "field_name": "username", "field_value": "testuser@example.com" }
+    {
+      "field_name": "username",
+      "rf_variable": "${username}",
+      "field_value": "testuser@example.com",
+      "description": "登入帳號"
+    }
   ]
 }
 ```
@@ -337,16 +342,37 @@ AI 輔助補齊測試步驟
 ---
 
 ### GET /checklists/{checklist_id}/cases
-取得案例管理畫面的案例列表（含備註與排序）
+取得案例管理畫面的案例列表（含備註、排序、測資變數、實際值）
 
 **Response 200**:
 ```json
 {
   "items": [
-    { "item_id": "uuid", "test_case_id": "uuid", "case_number": "auth-001", "name": "登入功能測試", "position": 1, "notes": "此清單專用備註" }
+    {
+      "item_id": "uuid",
+      "test_case_id": "uuid",
+      "case_number": "auth-001",
+      "name": "登入功能測試",
+      "position": 1,
+      "notes": "此清單專用備註",
+      "actual_values": { "${username}": "real_user_001" },
+      "test_data": [
+        {
+          "id": "uuid",
+          "field_name": "username",
+          "rf_variable": "${username}",
+          "field_value": "testuser@example.com",
+          "description": "登入帳號",
+          "row_index": 0
+        }
+      ]
+    }
   ],
   "total": 3
 }
+```
+
+> **Phase 25 新增**: `test_data` 陣列（含 4 欄：field_name、rf_variable、field_value、description）與 `actual_values` JSON 物件（ChecklistItem 層級覆寫值）。
 ```
 
 ---
@@ -378,13 +404,19 @@ AI 輔助補齊測試步驟
 ---
 
 ### PATCH /checklists/{checklist_id}/cases/{case_id}
-更新清單項目屬性（備註或排序）
+更新清單項目屬性（備註、排序或實際測試值）
 
 **Request Body** (所有欄位均為 optional):
 ```json
-{ "notes": "此案例在此清單中的備註", "position": 2 }
+{
+  "notes": "此案例在此清單中的備註",
+  "position": 2,
+  "actual_values": { "${username}": "real_user_001", "${password}": "RealPass123" }
+}
 ```
-**Response 200**: 更新後的 ChecklistItem 物件
+> **Phase 25 新增**: `actual_values`（object）持久化至 ChecklistItem；執行時優先套用，有值時取代案例的 field_value；送入 `null` 時清除。
+
+**Response 200**: 更新後的 ChecklistItem 物件（含 `actual_values`）
 
 ---
 

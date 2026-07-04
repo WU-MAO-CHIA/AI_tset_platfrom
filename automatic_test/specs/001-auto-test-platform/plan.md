@@ -1,6 +1,6 @@
 # Implementation Plan: 自動化測試平台 (Automatic Test Platform)
 
-**Branch**: `001-auto-test-platform` | **Date**: 2026-06-21 | **Spec**: [spec.md](./spec.md)  
+**Branch**: `001-auto-test-platform` | **Date**: 2026-07-04 | **Spec**: [spec.md](./spec.md)  
 **Input**: Feature specification from `/specs/001-auto-test-platform/spec.md`
 
 ## Summary
@@ -23,7 +23,14 @@
 
 ## Constitution Check
 
-*本專案無 `.specify/memory/constitution.md`，跳過此 Gate。*
+| Gate | 狀態 | 說明 |
+|------|------|------|
+| III. Test-First | ✅ | Phase 25：T239/T240 contract tests 先寫（RED），migration/model/API/前端後實作 |
+| VI. Python 3.11+ | ✅ | 後端維持 Python 3.11+ |
+| VI. Service/Repository | ✅ | 新欄位擴充既有 CaseService / ChecklistService，符合分層設計 |
+| VI. TypeScript + Vue | ✅ | 前端採 Vue 3 + TypeScript |
+| V. Simplicity (YAGNI) | ✅ | Phase 25 僅新增最小欄位，無新 entity 或新 service |
+| Security (FR-027) | ✅ | LLM 金鑰維持 `.env` 唯讀，`actual_values` 非機密資料 |
 
 ## Project Structure
 
@@ -33,10 +40,10 @@
 specs/001-auto-test-platform/
 ├── plan.md              # This file
 ├── research.md          # Architecture decisions (Decision 1–12)
-├── data-model.md        # Entity definitions
+├── data-model.md        # Entity definitions（含 Phase 25 新欄位）
 ├── quickstart.md        # Integration scenarios
-├── contracts/           # API contracts
-└── tasks.md             # Task breakdown
+├── contracts/           # API contracts（含 Phase 25 更新）
+└── tasks.md             # Task breakdown（Phase 1–25）
 ```
 
 ### Source Code
@@ -82,7 +89,7 @@ automatic_test/
 
 ## Implementation Progress
 
-### 已完成 Phase 1–19
+### 已完成 Phase 1–24
 
 | Phase | 內容 | 狀態 |
 |-------|------|------|
@@ -106,115 +113,88 @@ automatic_test/
 | 18 | RF script 持久化（PUT /robot-script, GET /robot-script, 頁面自動載入） | ✅ |
 | 19 | version 欄排序 + checklists 列表排序 + 操作按鈕樣式 | ✅ |
 | 20 | 登入畫面 + JWT 驗證 + 三角色 RBAC + 管理後台 | ✅ |
+| 21 | RF Remote 混合執行（⏸ 暫緩） | ⏸ |
+| 22 | 執行前空清單驗證（FR-009 pre-flight） | ✅ |
+| 23 | LLM 設定 env-only + 後台唯讀遮罩（FR-027） | ✅ |
+| 24 | 本地 Ollama 整合 + 後台「目前啟用模型」可切換（FR-012/027） | ✅ |
+| 25 | 測資變數四欄表格 + 清單案例展開列（FR-001/005/006/023） | 🔄 進行中 |
 
-### Phase 22：執行前空清單驗證（FR-009 pre-flight）
+---
 
-**目標**：點擊「執行測試」前，前端先檢查清單中案例數是否 > 0；若為 0 則顯示警示提示，不觸發後端請求。
+## Phase 25：測資變數四欄表格 + 清單案例展開列（FR-001 / FR-005 / FR-006 / FR-023）
 
-**涉及檔案**：
-- `automatic_test/frontend/src/pages/ChecklistDetailPage.vue`（執行按鈕 click handler 加入前置檢查）
+### 背景
 
-**驗收條件**：測試清單無案例時，點擊「執行測試」後顯示警示訊息「測試清單為空，請先新增案例」，瀏覽器 Network tab 無 POST 請求發出。
+本 Phase 源自 2026-07-04 兩輪 `/speckit-clarify` 釐清：
 
-### Phase 23：LLM 設定 env-only + 後台唯讀遮罩（FR-027 / FR-012）
+1. **測資變數四欄表格**（FR-001/FR-005）：TestData 現有 2 欄（field_name、field_value）需擴充至 4 欄（易讀名稱、RF 變數、預設值、說明），CaseDetailPage Tab 1 需顯示 4 欄表格，編輯模式支援行內新增/編輯/刪除，RF 變數預設自動帶入 `${易讀名稱}`。
+2. **清單案例展開列**（FR-006/FR-023）：ChecklistDetailPage 的案例列需支援展開/收合，展開後顯示 4 欄測資表格（易讀名稱唯讀、RF 變數唯讀、預設值唯讀、實際值可編輯），實際值持久化至 ChecklistItem。
 
-> **設計修訂（2026-06-21）**：原規劃「DB 持久化全域預設模型 + /admin 下拉編輯 + 即時生效」，經評估後改為 **env-only**：金鑰與預設模型一律由 `.env` 配置，後台僅唯讀遮罩顯示。理由：LLM 呼叫金鑰本即讀 `.env`（`get_provider` 用 `settings.*_api_key`），DB 那層從未被實際使用；env-only 更簡單（KISS/YAGNI），且避免「寫檔到 .env」的明文落地、設定注入、並發覆蓋、重啟等風險。
+### 資料模型變更
 
-**目標**：
-1. `/admin` LLM 分頁**唯讀**顯示各 provider 的設定狀態與遮罩值（前 7 字元 + `****…` + 末 4 碼），來源為 `.env`。
-2. `/admin` 唯讀顯示目前全域預設模型（`.env` 的 `DEFAULT_LLM_MODEL`）；不提供編輯。
-3. 建立案例頁移除寫死的 `'claude-sonnet-4-6'`，改讀 `/llm-models` 的 `default`（其值來自 env）。
+**TestData（新增欄位）**:
 
-**設計決策**：
-- 金鑰與預設模型來源唯一 = `.env`；變更需修改 `.env` 並**重啟服務**生效。後台與 API **永不回傳完整明文**。
-- 遮罩採後端產生：`_mask()` 輸出「前 7 字元 + `****…` + 末 4 碼」（如 `sk-ant-****…dF3a`；長度 < 12 整串 `****`）；金鑰來源為 `settings.*_api_key`。
-- 不使用 DB（`app_setting`）儲存金鑰或模型，無 migration、無寫入端點。
-- 依 constitution III（Test-First, NON-NEGOTIABLE）：先寫 contract/unit test（確認 RED）再實作。
+| 欄位 | 型別 | 限制 | 說明 |
+|------|------|------|------|
+| rf_variable | VARCHAR(200) | nullable | RF 變數名稱（如 `${username}`）；空時前端自動顯示 `${field_name}` |
+| description | TEXT | nullable | 說明 / 備註 |
 
-**後端修改範圍**：
+**ChecklistItem（新增欄位）**:
 
-| 檔案 | 變更 |
-|------|------|
-| `services/app_setting_service.py` | 改為純讀 env：`_mask()` helper、`get_llm_keys()` 回傳 `*_key_set`＋`*_key_masked`（讀 `settings.*_api_key`）、`get_default_model()` 回 `settings.default_llm_model`；移除所有 DB/寫入 |
-| `api/admin.py` | 唯讀 `GET /llm-keys`（遮罩）、`GET /admin/llm-default-model`；移除 `PUT /llm-keys/{provider}` 與 `PUT/GET(DB) llm-default-model` 寫入端點 |
-| `api/llm_models.py` | `default` 直接回 `settings.default_llm_model`（還原 sync，無 DB） |
-| LLM 呼叫端（cases.py） | 維持 `body.llm_model or settings.default_llm_model`（env fallback） |
+| 欄位 | 型別 | 限制 | 說明 |
+|------|------|------|------|
+| actual_values | TEXT | nullable | JSON 字串，格式 `{rf_variable: actual_value, ...}`；執行時優先於案例預設值 |
 
-**前端修改範圍**：
+### 後端修改範圍
 
 | 檔案 | 變更 |
 |------|------|
-| `services/adminApi.ts` | `LlmKeyStatus` 含 `*_key_masked`；唯讀 `getLlmKeyStatus()` / `getDefaultModel()`；移除 `setLlmKey` / `setDefaultModel` / `getLlmModels` |
-| `pages/AdminPage.vue` | LLM 分頁改**唯讀**：顯示遮罩 key 與目前預設模型；移除金鑰輸入/儲存與模型下拉 |
-| `pages/CaseCreatePage.vue` | 移除寫死 `selectedModel`，改於 `onMounted` 讀 `/llm-models` 的 `default` |
-| 死碼移除 | 刪除 `components/StepsEditor/` 與 `components/LLMModelSelector/`（全前端零引用） |
+| `alembic/versions/xxx_phase25_test_data_checklist_item.py` | migration：`test_data` 加 `rf_variable`, `description`；`checklist_items` 加 `actual_values` |
+| `src/models/test_data.py` | 新增 `rf_variable: str` (nullable)、`description: str` (nullable) |
+| `src/models/checklist_item.py` | 新增 `actual_values: str` (nullable, JSON text) |
+| `src/api/cases.py` | `TestDataSchema` 加入 `rf_variable`、`description`；create/update 處理自動帶入 rf_variable 邏輯 |
+| `src/api/checklists.py` | `GET /checklists/:id/cases` 回傳每個 case 的 `test_data` 陣列；`PATCH /checklists/:id/cases/:case_id` 接受 `actual_values` JSON |
+| `src/services/checklist_service.py` | `update_checklist_item_actual_values()` 方法 |
 
-**驗收條件**：
-- `/admin` LLM 分頁載入即唯讀顯示已設定 key 的遮罩（如 `sk-ant-****…cwAA`）；未設定顯示「未設定」；API 回應不含完整金鑰。
-- `/admin` 唯讀顯示目前全域預設模型；無編輯下拉；`PUT /admin/llm-default-model` 不存在（405）。〔**模型部分已由 Phase 24 取代**：後台改為可切換「目前使用模型」下拉並存 DB；本條僅適用 Phase 23 當時狀態。金鑰仍維持 `.env` 唯讀。〕
-- 建立案例頁不再寫死模型，畫面無模型選擇器；`/llm-models` 的 `default` 反映 `.env` 設定值（Phase 24 起 `default` = DB 啟用模型，未選時 fallback `.env`）。
+**rf_variable 自動帶入規則**（後端）：
+- 前端送出 `rf_variable` 為空字串或 `null` 時，後端**不自動填入**（由前端負責顯示 fallback）
+- 前端儲存時若 `rf_variable` 未手動覆寫，送出 `${field_name}` 作為值
 
-### Phase 24：本地 Ollama 整合 + 後台「目前啟用模型」可切換（FR-012 / FR-027）
-
-> **與 Phase 23 的關係**：Phase 23 將模型設為 env-only 唯讀。Phase 24 依新釐清**部分修訂**——金鑰／`OLLAMA_BASE_URL` 維持 `.env` 唯讀（不變、機密不落地），但「目前啟用模型」改存 DB（`app_setting`）、後台改回可選下拉、即時生效；並新增本地 Ollama provider。
-
-**目標**：
-1. 新增本地 **Ollama** provider（原生 `POST /api/chat`，`stream:false`），可用模型動態查 `GET /api/tags`，id 前綴 `ollama:`。
-2. 後台「目前使用模型」下拉（跨 Claude／OpenAI／Ollama，僅列可用），存 DB、即時生效；未選 fallback `.env DEFAULT_LLM_MODEL`。
-3. 三方 provider 路由。
-
-**設計決策**：
-- **Provider 路由**：`get_provider(model_id)` ── `startswith("ollama:")` → `OllamaProvider`（去前綴取真實模型名）；`startswith("claude")` → Anthropic；其餘 → OpenAI（保留 OpenAI 為 fallback）。
-- **OllamaProvider**：以 `httpx` POST `{OLLAMA_BASE_URL}/api/chat`（`stream:false`），解析 `message.content`；實作 `complete` / `complete_with_messages`；`complete_with_vision` 多數本地模型為純文字，退化為純文字 prompt（見 Deferred）。
-- **模型清單**：`/llm-models` 整合三來源——Anthropic／OpenAI（env 金鑰有效時列硬編清單）、Ollama（`GET /api/tags` 動態，逾時/連線失敗則略過）；每模型帶 `id`、`provider`、`requires_setup`（Ollama id 為 `ollama:<name>`）。
-- **目前啟用模型（DB）**：沿用既有 `AppSettingRepository`（key=`active_llm_model`，存於既有 `encrypted_value` 欄、Fernet 加密），**零 schema 變更/無 migration**；模型 id 雖非機密，但沿用既有加密欄避免新增明文路徑。`get_active_model()` = DB 值 or `.env DEFAULT_LLM_MODEL`；`set_active_model()` 寫入即時生效、免重啟。
-- **AppSettingService 角色（C3）**：Phase 23 曾改為純讀 env；Phase 24 恢復 `db`/`AppSettingRepository`，服務變為**混合式**——金鑰仍讀 `.env`（唯讀），「啟用模型」讀寫 DB。
-- **可用性過濾**：後台下拉只列 `requires_setup=false`（雲端金鑰已設／Ollama 可連）的模型。
-- 金鑰／連線維持 `.env` 唯讀（Phase 23 不變）；僅「啟用模型」為 DB 可寫。
-- 依 constitution III（Test-First）：先寫 contract/unit test（確認 RED）再實作。
-
-**後端修改範圍**：
+### 前端修改範圍
 
 | 檔案 | 變更 |
 |------|------|
-| `core/config.py` | 新增 `ollama_base_url: str = ""`（env `OLLAMA_BASE_URL`） |
-| `core/llm_provider.py` | 新增 `OllamaProvider`（httpx `/api/chat`）；`get_provider` 改三方路由 |
-| `api/llm_models.py` | 整合 Ollama `GET /api/tags`（async httpx，逾時 fallback 空清單）；每模型標 `provider`/`requires_setup`；`default` 改回傳 `get_active_model()` |
-| `services/app_setting_service.py` | 恢復 `db`/`AppSettingRepository`（混合式）；新增 `get_active_model()`／`set_active_model(model_id)`（沿用 repo 加密 `app_setting` key=`active_llm_model`，無 migration）；`get_llm_keys` 增列 Ollama 連線狀態 |
-| `api/admin.py` | 新增 `GET /admin/active-model`、`PUT /admin/active-model`（`require_admin`；PUT 寫 DB 即時生效） |
-| `api/cases.py` | LLM 呼叫未指定模型時改用 `get_active_model()`（取代 `settings.default_llm_model`） |
-| `.env` / `.env.example` | 新增 `OLLAMA_BASE_URL=http://localhost:11434` |
+| `src/pages/CaseDetailPage.vue` | Tab 1：測試資料改為 4 欄表格；編輯模式支援行內新增/編輯/刪除；RF 變數欄位輸入時自動帶入 `${易讀名稱}` 作為預設值 |
+| `src/pages/ChecklistDetailPage.vue` | 案例列加入 ▶/▼ 展開鈕（預設收合）；展開區域顯示 4 欄測資表格；實際值欄可編輯，失焦後呼叫 PATCH API |
+| `src/services/checklistApi.ts` | 新增 `ChecklistCaseItem` type（含 `test_data`）；新增 `updateCaseActualValues(checklistId, caseId, actualValues)` |
 
-**前端修改範圍**：
+### TDD 執行順序
 
-| 檔案 | 變更 |
-|------|------|
-| `services/adminApi.ts` | 新增 `getActiveModel()`／`setActiveModel(id)`／`getLlmModels()`（含 provider 分組與 `requires_setup`） |
-| `pages/AdminPage.vue` | LLM 分頁：金鑰維持唯讀遮罩 + 顯示 Ollama 連線狀態；新增「目前使用模型」下拉（只列可用、依 provider 分組），變更即呼叫 `setActiveModel` 並提示成功 |
-| `pages/CaseCreatePage.vue` | 改讀啟用模型（`/llm-models` 的 `default` 即 active model；維持 `onMounted` 載入） |
+```
+T239（合約測試 RED：4 欄 TestData API）
+T240（合約測試 RED：ChecklistItem actual_values API）
+  ↓
+T241（Alembic migration）
+  ↓
+T242（TestData model）  ← 可平行
+T243（ChecklistItem model）
+  ↓
+T244（cases.py API）    ← 可平行
+T245（checklists.py + checklist_service.py）
+  ↓
+T246（CaseDetailPage.vue）   ← 可平行
+T247（ChecklistDetailPage.vue）
+T248（checklistApi.ts）
+```
 
-**測試（先 RED）**：
-- `test_ollama_provider`：mock httpx `/api/chat` 回應解析（`message.content`）
-- `test_llm_models_ollama`：`/api/tags` 整合、逾時 fallback 空、`provider`/`requires_setup` 欄位
-- `test_active_model_api`：`GET/PUT /admin/active-model`、非 admin → 403、PUT 後 GET 一致、`/llm-models` `default` 反映
-- 前端 `AdminPage.spec`：下拉切換呼叫 `setActiveModel`；金鑰仍唯讀
+### 驗收條件
 
-**驗收條件**：
-- `.env` 設 `OLLAMA_BASE_URL` 後，`/llm-models` 列出 `ollama:*` 已安裝模型；Ollama 離線則略過、雲端不受影響。
-- 後台選任一可用模型（含 `ollama:gemma4:e4b`）→ 即時生效，新建案例 AI 補齊採用之，無需重啟。
-- 金鑰仍 `.env` 唯讀、後台不可編輯；完整明文不外洩。
-
-**Deferred（暫不實作，待需求）**：Ollama 多模態/視覺；本地模型較慢之**程式逾時值調整**（目前沿用 35s；SC-007/SC-010 時間門檻已豁免本地 Ollama，見 spec）；後台顯示 Ollama 已安裝模型數。
-
-### Phase 20：登入畫面 + 管理後台（FR-024〜FR-027）
-
-**目標**：
-1. 登入畫面（/login）+ JWT 驗證 middleware
-2. 三角色 RBAC（admin / editor / viewer）
-3. 管理後台（/admin）：帳號管理、系統別管理、LLM API Key 管理
-4. 初始管理員 seed script
-
-**詳見 tasks.md Phase 20 任務清單。**
+- `GET /api/v1/cases/:id` 回傳 `test_data[].rf_variable` 與 `test_data[].description` 欄位。
+- `POST/PUT /api/v1/cases` 接受 `test_data[].rf_variable` 與 `test_data[].description`。
+- `GET /api/v1/checklists/:id/cases` 回傳每個 case item 的 `test_data` 陣列（4 欄）。
+- `PATCH /api/v1/checklists/:id/cases/:case_id` 接受 `actual_values` JSON 並持久化。
+- CaseDetailPage Tab 1 顯示 4 欄表格；編輯模式可新增/編輯/刪除列；RF 變數自動帶入 `${易讀名稱}`。
+- ChecklistDetailPage 案例列預設收合；點擊展開顯示 4 欄表格；實際值可編輯並持久化。
 
 ---
 
@@ -231,17 +211,6 @@ automatic_test/
 2. 遠端執行時自動在 `.robot` 頭部插入 `Library  Remote  {url}`
 3. Remote Server URL 統一在管理後台設定
 4. 同一清單中可混合本地與遠端案例，各自獨立執行
-
-**架構決策**：
-
-```
-執行路由：
-  execution_mode == 'local'  → 現行本地 robot CLI 邏輯（不變）
-  execution_mode == 'remote' → .robot 加入 Remote Library → robot CLI
-                               → RF 透過 XML-RPC 連到 Remote Server
-                               → Keyword 在 Remote Server 執行
-                               → 結果回傳本地，報告照常產生
-```
 
 **後端修改範圍**：
 
@@ -264,22 +233,3 @@ automatic_test/
 | `CaseDetailPage` | 唯讀顯示執行模式 |
 | `AdminPage` | LLM Keys tab 旁新增「Remote Server」tab，設定 URL + 連線測試按鈕 |
 | `adminApi.ts` | 新增 `getRemoteServerUrl()` / `setRemoteServerUrl()` |
-
-**Pre-flight 安全機制**（執行前自動檢查）：
-```python
-# ExecutionService：若案例包含 remote，先 ping Remote Server
-if any(c.execution_mode == 'remote' for c in cases):
-    url = await app_setting_service.get_remote_server_url()
-    if not url:
-        raise RuntimeError("Remote Server URL 未設定")
-    try:
-        server = xmlrpc.client.ServerProxy(url)
-        server.get_keyword_names()
-    except Exception:
-        raise RuntimeError(f"Remote Server {url} 連線失敗，請確認已啟動")
-```
-
-**注意事項**：
-- Remote Server 需預先手動啟動（不在本平台管理範圍）
-- XML-RPC 預設無驗證，建議限制 Remote Server 僅接受內網 IP
-- pabot 平行執行時，多個 remote case 會同時連接同一 Remote Server，需確認 Server 支援並發呼叫
