@@ -102,7 +102,8 @@ export interface ChatResponse {
 }
 
 export interface ChatMessage {
-  role: 'user' | 'assistant'
+  role: 'user' | 'assistant' | 'system'
+  type?: 'chat' | 'trial_run_result'  // Phase 27: Message type
   content: string
   created_at: string
 }
@@ -166,6 +167,14 @@ export const caseApi = {
 
   trialRun(id: string) {
     return apiClient.post<{ execution_id: string; stream_url: string }>(`/cases/${id}/trial-run`)
+  },
+
+  // Phase 27: Trial run with RF code from preview area
+  runTrialFromCode(id: string, rfCode: string, caseName?: string) {
+    return apiClient.post<{ execution_id: string; stream_url: string }>(`/cases/${id}/trial-run`, {
+      rf_code: rfCode,
+      case_name: caseName || undefined,
+    })
   },
 
   getExecutionHistory(id: string, params?: { page?: number; page_size?: number }) {

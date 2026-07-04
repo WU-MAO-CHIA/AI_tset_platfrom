@@ -8,9 +8,16 @@
         v-for="(msg, idx) in messages"
         :key="idx"
         class="chat-bubble"
-        :class="msg.role === 'user' ? 'bubble-user' : 'bubble-assistant'"
+        :class="[
+          msg.role === 'user' ? 'bubble-user' : 'bubble-assistant',
+          msg.type === 'trial_run_result' ? 'bubble-trial-result' : ''
+        ]"
       >
-        <div class="bubble-content">{{ displayContent(msg) }}</div>
+        <!-- Phase 27: Trial run result rendering -->
+        <div v-if="msg.type === 'trial_run_result'" class="bubble-content trial-result">
+          <TrialRunResult :result="parseTrialResult(msg.content)" />
+        </div>
+        <div v-else class="bubble-content">{{ displayContent(msg) }}</div>
       </div>
       <div v-if="loading" class="chat-bubble bubble-assistant loading-bubble">
         <div class="bubble-content">AI 思考中...</div>
@@ -39,6 +46,7 @@
 import { ref, onMounted, nextTick } from 'vue'
 import { caseApi } from '../../services/caseApi'
 import type { ChatMessage } from '../../services/caseApi'
+import TrialRunResult from './TrialRunResult.vue'
 
 const props = defineProps<{
   caseId?: string
@@ -94,6 +102,15 @@ function displayContent(msg: ChatMessage): string {
   if (msg.role !== 'assistant') return msg.content
   const rfIdx = msg.content.indexOf('---RF_CODE---')
   return rfIdx !== -1 ? msg.content.slice(0, rfIdx).trim() : msg.content
+}
+
+// Phase 27: Parse trial run result from JSON content
+function parseTrialResult(content: string): any {
+  try {
+    return JSON.parse(content)
+  } catch {
+    return { status: 'error', error_message: 'Failed to parse trial result' }
+  }
 }
 
 async function scrollToBottom() {
