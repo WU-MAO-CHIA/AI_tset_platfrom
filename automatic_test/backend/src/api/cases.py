@@ -445,7 +445,12 @@ async def get_chat_history(
     messages = result.scalars().all()
     return {
         "messages": [
-            {"role": m.role, "content": m.content, "created_at": m.created_at.isoformat()}
+            {
+                "role": m.role,
+                "type": m.type.value,  # Phase 27: Include message type
+                "content": m.content,
+                "created_at": m.created_at.isoformat()
+            }
             for m in messages
         ]
     }
@@ -632,8 +637,15 @@ async def get_robot_script(
     raise HTTPException(404, detail={"error": "script_not_found", "message": "尚未儲存 RF 程式碼"})
 
 
+class TrialRunRequest(BaseModel):
+    """Phase 27: Trial run request with RF code."""
+    rf_code: str
+    case_name: Optional[str] = None
+
+
 @router.post("/{case_id}/trial-run", status_code=202)
-async def trial_run(case_id: str, session: AsyncSession = Depends(get_db)):
+async def trial_run(case_id: str, request: TrialRunRequest, session: AsyncSession = Depends(get_db)):
+    """Phase 27: Execute trial run using RF code from preview area."""
     from src.repositories.test_case_repo import TestCaseRepository
     from src.services.execution_service import ExecutionService
     repo = TestCaseRepository(session)
@@ -642,5 +654,9 @@ async def trial_run(case_id: str, session: AsyncSession = Depends(get_db)):
         raise HTTPException(404, detail={"error": "not_found", "message": "案例不存在"})
 
     exec_service = ExecutionService(session)
-    record = await exec_service.run_trial(source_case_id=case_id)
+    record = await exec_service.run_trial(
+        source_case_id=case_id,
+        rf_code=request.rf_code,
+        case_name=request.case_name or case.name
+    )
     return {"execution_id": record.id, "stream_url": f"/api/v1/executions/{record.id}/stream"}
