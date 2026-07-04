@@ -567,6 +567,121 @@ function extractRFVariables(rfCode: string): string[] {
 
 ---
 
+---
+
+## 決策 14：Chat 訊息 `type` 欄位設計（Phase 27）
+
+**Decision**: ChatMessage 新增 `type: Enum` 欄位，分為兩種訊息型別：
+- `chat`：一般使用者與 AI 的對話訊息
+- `trial_run_result`：試跑結果訊息（系統自動生成）
+
+**Rationale**:
+- Tab 2 立即試跑功能需區分「使用者對話」與「系統試跑報告」，前端渲染邏輯不同
+- 試跑結果訊息不需要使用者的 sender 身份，而是系統發送的結構化結果
+- 持久化時使用 `type` 欄位可便於未來查詢與統計（如「某案例有多少試跑記錄」）
+
+**實作細節**:
+- 資料庫：`ChatMessage.type: VARCHAR(20)` 非 null，預設 `'chat'`
+- ORM（Alembic migration）：新增欄位並新增 CHECK 約束或使用 Enum 類型（SQLAlchemy 層）
+- 既有訊息應補全為 `type='chat'`（migration 中 SET）
+- API response 均包含 `type` 欄位，前端根據 `type` 決定渲染樣式
+
+**Alternatives considered**:
+- 獨立表 `TrialRunResult`：過度複雜，試跑結果本質就是對話歷史的一部分
+- 在 content 中嵌入 metadata（如 JSON `{type: "trial_run"}`）：解析複雜且容易出錯，不符 KISS 原則
+
+---
+
+## 決策 15：Trial Run Result 訊息格式規範（Phase 27）
+
+**Decision**: 試跑結果訊息（`type: "trial_run_result"`）的內容結構化為 JSON 物件，包含以下欄位：
+
+```json
+{
+  "status": "passed" | "failed" | "timeout" | "error",
+  "elapsed_ms": 12345,
+  "error_message": "...",
+  "screenshot_paths": ["path/to/screenshot1.png", "path/to/screenshot2.png"]
+}
+```
+
+**欄位說明**:
+- `status`：執行結果狀態
+  - `passed`：全部步驟通過
+  - `failed`：某個步驟失敗
+  - `timeout`：執行逾時
+  - `error`：系統內部錯誤（非測試邏輯失敗）
+- `elapsed_ms`：執行耗時（毫秒）
+- `error_message`：若 `status` 為 `failed`，包含失敗步驟的錯誤訊息；`passed` 時為空
+- `screenshot_paths`：失敗時擷取的截圖路徑陣列（最多 1-3 張），相對路徑（如 `executions/{execution_id}/screenshots/...`）
+
+**前端渲染**:
+- 在 Chat 氣泡中顯示 badge（綠色 PASS / 紅色 FAIL）+ 執行時間
+- 展開區域顯示錯誤訊息 + 截圖廊道
+- 截圖可點擊放大
+
+**Rationale**:
+- 明確的 JSON 結構便於版本化與未來擴展（如添加其他 metadata）
+- `screenshot_paths` 相對化可支援媒體搬遷
+- 格式與 ExecutionRecord XML 解析結果一致，降低轉換成本
+
+**Alternatives considered**:
+- 純文字拼接（如 "PASS in 123ms"）：不易擴展
+- 嵌入完整截圖 base64：DB 記錄過大，首頁載入變慢
+
+---
+
+## 決策 16：AI 自動分析失敗原因 Prompt 策略（Phase 27）
+
+**Decision**: 試跑失敗時，後端自動組裝包含失敗訊息的提示詞，觸發 AI 服務分析失敗原因並回應修正建議。
+
+**Prompt 結構**:
+```
+[System]
+你是 QA 自動化測試顧問。使用者提供了一份 Robot Framework 測試的執行結果。
+請分析失敗原因，並提供修正建議（包括新的 RF 程式碼片段或步驟描述）。
+
+[User]
+測試案例: {case_name}
+執行時間: {elapsed_ms}ms
+執行狀態: {status}
+
+失敗訊息:
+{error_message}
+
+當前 RF 程式碼:
+```robot
+{current_rf_code}
+```
+
+請分析失敗原因並提供修正建議。
+```
+
+**流程**:
+1. 試跑完成，`status = "failed"`
+2. 後端呼叫 `ExecutionService._generate_trial_run_analysis_prompt()` 組裝提示詞
+3. 調用 `ai_service.complete(messages=[...], max_tokens=1500)` 獲取 AI 回應
+4. AI 回應作為新的 ChatMessage（`type: "chat"`）自動附加到對話歷史
+5. 前端接收後顯示 AI 建議，使用者可直接修改步驟或 RF 程式碼
+
+**Rationale**:
+- 提示詞結構化明確，不易誤解
+- 包含原始 RF 程式碼供 AI 上下文理解
+- 自動觸發降低使用者操作步驟
+- AI 回應作為 `type: "chat"` 訊息而非 `trial_run_result`（區分系統自動 vs 使用者主動對話）
+
+**邊界案例**:
+- 若 `error_message` 為空（系統錯誤如逾時），提示詞自動簡化為「請檢查步驟是否符合預期」
+- 若 AI 服務超時（超過 SC-010 的 35 秒限制），不阻斷試跑流程，直接返回試跑結果而不附加 AI 建議
+- Prompt 長度超過模型限制時，自動截斷 `error_message` 的末尾
+
+**Alternatives considered**:
+- 使用者手動點擊「詢問 AI」按鈕才分析：增加操作步驟，用戶體驗差
+- 將分析結果存在 TrialRunResult.analysis 欄位：破壞單一職責原則，ChatMessage 已是對話記錄容器
+- 使用 fine-tuned 模型：成本高，通用 Claude 模型已足以勝任此任務
+
+---
+
 ## 所有 NEEDS CLARIFICATION 解析完畢
 
 | 問題 | 決策 |
@@ -585,3 +700,6 @@ function extractRFVariables(rfCode: string): string[] {
 | 背景任務 session | `@staticmethod` + 自建 `AsyncSessionLocal`，禁止重用 request-scoped session |
 | RF 報告持久化 | 執行後 `shutil.copytree` 至 `data/execution_reports/{id}/`，FastAPI FileResponse 服務，iframe 嵌入 |
 | Auth / Admin RBAC | JWT Token（python-jose + passlib bcrypt），三角色（admin/editor/viewer），FastAPI Depends + Vue Router guard |
+| Chat `type` 欄位 | 區分 `chat` 與 `trial_run_result`，持久化區分訊息類型 |
+| Trial run result 格式 | JSON：status / elapsed_ms / error_message / screenshot_paths |
+| AI 失敗分析 prompt | 自動組裝失敗訊息供 AI 分析，回應作為新 ChatMessage 附加 |

@@ -239,19 +239,65 @@ AI 輔助補齊測試步驟
 ---
 
 ### GET /cases/{case_id}/chat-history
-取得測試案例的 AI 對話歷史
+取得測試案例的 AI 對話歷史（含試跑結果）— Phase 27 擴充
 
 **Response 200**:
 ```json
 {
   "messages": [
-    { "role": "user", "content": "請幫我生成登入功能的測試腳本", "created_at": "2026-06-13T10:00:00Z" },
-    { "role": "assistant", "content": "好的，以下是登入功能的 Robot Framework 腳本...\n---RF_CODE---\n*** Settings ***\n...\n---END---", "created_at": "2026-06-13T10:00:05Z" }
+    {
+      "id": "msg_uuid_1",
+      "type": "chat",
+      "role": "user",
+      "content": "請幫我生成登入功能的測試腳本",
+      "created_at": "2026-06-13T10:00:00Z"
+    },
+    {
+      "id": "msg_uuid_2",
+      "type": "chat",
+      "role": "assistant",
+      "content": "好的，以下是登入功能的 Robot Framework 腳本...\n---RF_CODE---\n*** Settings ***\n...\n---END---",
+      "created_at": "2026-06-13T10:00:05Z"
+    },
+    {
+      "id": "msg_uuid_3",
+      "type": "trial_run_result",
+      "role": "system",
+      "content": {
+        "status": "failed",
+        "elapsed_ms": 5234,
+        "error_message": "步驟 'Login' 失敗：登入逾時",
+        "screenshot_paths": ["executions/abc123/screenshots/step_1.png", "executions/abc123/screenshots/step_2.png"]
+      },
+      "created_at": "2026-06-13T10:01:30Z"
+    },
+    {
+      "id": "msg_uuid_4",
+      "type": "chat",
+      "role": "assistant",
+      "content": "我分析了試跑失敗的原因。登入超時通常是因為頁面載入過慢或元素選擇器不準確...\n---RF_CODE---\n*** Settings ***\n...\n---END---",
+      "created_at": "2026-06-13T10:01:35Z"
+    }
   ]
 }
 ```
 
-**Note**: assistant content 包含完整結構化格式（含 `---RF_CODE---` 分隔符），前端解析後僅顯示前段
+**Mesage 物件結構**:
+- `id`：訊息唯一 ID
+- `type`：訊息型別（`chat` 或 `trial_run_result`）
+- `role`：發送者角色
+  - `chat` 型別：`user` / `assistant`
+  - `trial_run_result` 型別：`system`
+- `content`：訊息內容
+  - `chat` 型別：字串（包含 `---RF_CODE---` 分隔符）
+  - `trial_run_result` 型別：JSON 物件（status、elapsed_ms、error_message、screenshot_paths）
+- `created_at`：建立時間
+
+**前端解析規則**:
+- `type='chat'`：按原有邏輯解析（`role=user` 為使用者氣泡，`role=assistant` 為 AI 氣泡，提取 RF code）
+- `type='trial_run_result'`：解析 JSON content，顯示 badge（綠色 PASS / 紅色 FAIL）+ 執行時間，展開區域顯示錯誤訊息與截圖廊道
+
+**Note**: Phase 27 前的訊息自動補全 `type='chat'`，確保向後相容性
 
 ---
 
@@ -268,12 +314,47 @@ AI 輔助補齊測試步驟
 ---
 
 ### POST /cases/{case_id}/trial-run
-立即試跑
+立即試跑（Tab 2 按鈕）— Phase 27 擴充
+
+使用右側 RF 程式碼預覽區的當前內容執行試跑，無需先儲存案例。完成後將結果以 `type: "trial_run_result"` 訊息附加至左側 Chat，並自動觸發 AI 分析失敗原因（若失敗）。
+
+**Request Body** (Phase 27 新增):
+```json
+{
+  "rf_code": "*** Settings ***\nLibrary    Browser\n\n*** Test Cases ***\n登入測試\n    ...",
+  "case_name": "登入功能測試"
+}
+```
+> `rf_code`：右側預覽區當前的 RF 程式碼文字（必填）
+> `case_name`：用於錯誤訊息與 AI 分析的案例名稱（選填，若省略使用 case_id）
 
 **Response 202** (Accepted):
 ```json
 { "execution_id": "uuid", "stream_url": "/api/v1/executions/{id}/stream" }
 ```
+
+**試跑完成後自動流程**:
+1. 後端解析 RF 執行結果，生成 `trial_run_result` 訊息：
+   ```json
+   {
+     "type": "trial_run_result",
+     "role": "system",
+     "content": {
+       "status": "failed",
+       "elapsed_ms": 5234,
+       "error_message": "步驟 'Login' 失敗：登入逾時",
+       "screenshot_paths": ["executions/abc123/screenshots/step_1.png"]
+     }
+   }
+   ```
+2. 自動建立該訊息至 `case_chat_messages`（`type='trial_run_result'`）
+3. 若 `status='failed'`，自動觸發 AI 分析，組裝 prompt 並調用 AI 服務
+4. AI 回應附加為新的 `ChatMessage`（`type='chat'`，`role='assistant'`）
+5. 前端 SSE 推送兩條訊息給客戶端
+
+**Error**:
+- `404 Not Found`: 案例不存在
+- `422 Unprocessable Entity`: 請求體格式錯誤（如 rf_code 為空）
 
 ---
 
