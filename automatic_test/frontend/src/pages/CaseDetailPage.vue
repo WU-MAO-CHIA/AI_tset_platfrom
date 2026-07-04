@@ -387,11 +387,56 @@ onMounted(async () => {
   }
 })
 
-function startEdit() {
+const RF_BUILTINS = new Set([
+  'CURDIR', 'EXECDIR', 'TEMPDIR', 'OUTPUT_DIR', 'OUTPUT_FILE',
+  'LOG_FILE', 'REPORT_FILE', 'DEBUG_FILE', 'SUITE_NAME', 'SUITE_SOURCE',
+  'SUITE_DOCUMENTATION', 'SUITE_STATUS', 'SUITE_MESSAGE', 'TEST_NAME',
+  'TEST_DOCUMENTATION', 'TEST_STATUS', 'TEST_MESSAGE', 'PREV_TEST_NAME',
+  'PREV_TEST_STATUS', 'PREV_TEST_MESSAGE', 'LOG_LEVEL',
+  'True', 'False', 'None', 'null', 'EMPTY', 'SPACE',
+])
+
+function extractRFVariables(rfCode: string): string[] {
+  const seen = new Set<string>()
+  const result: string[] = []
+  for (const m of rfCode.matchAll(/\$\{([^}]+)\}/g)) {
+    const name = m[1]
+    if (!RF_BUILTINS.has(name) && !seen.has(name.toUpperCase())) {
+      seen.add(name.toUpperCase())
+      result.push(name)
+    }
+  }
+  return result
+}
+
+async function startEdit() {
   mainSteps.value = caseData.value?.main_steps ?? ''
   initEditTestData(caseData.value?.test_data ?? [])
   editTab.value = 'basic'
   editing.value = true
+
+  try {
+    const scriptRes = await caseApi.getRobotScript(caseId)
+    const vars = extractRFVariables(scriptRes.data.rf_code)
+    const existingKeys = new Set(
+      editTestData.value.map(r => (r.rf_variable || `\${${r.field_name}}`).toUpperCase())
+    )
+    for (const name of vars) {
+      const rfVar = `\${${name}}`
+      if (!existingKeys.has(rfVar.toUpperCase())) {
+        editTestData.value.push({
+          field_name: name,
+          rf_variable: rfVar,
+          field_value: '',
+          description: '',
+          _rf_auto: false,
+        })
+        existingKeys.add(rfVar.toUpperCase())
+      }
+    }
+  } catch {
+    // 404 or no RF script yet: silently skip
+  }
 }
 
 function cancelEdit() {
