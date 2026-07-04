@@ -809,20 +809,21 @@ Phase 2 完成後：
 
 ### 前端實作
 
-- [ ] T256 [P] 更新 `frontend/src/pages/CaseDetailPage.vue` Tab 2「測試步驟」右側 RF 程式碼預覽區：新增紫色「立即試跑」按鈕；點擊後呼叫 `POST /cases/{id}/trial-run` 傳入右側當前 RF 代碼文字（從 `RFCodePreview` 元件取值）與案例名稱；顯示 loading indicator 直至試跑完成
+- [ ] T256 [P] 更新 `frontend/src/pages/CaseDetailPage.vue` Tab 2「測試步驟」右側 RF 程式碼預覽區：新增紫色「立即試跑」按鈕；若 RF 程式碼為空則按鈕禁用（disabled），懸停顯示提示「RF 程式碼為空，請先透過 Chat 生成程式碼」（SR-017）；點擊後呼叫 `POST /cases/{id}/trial-run` 傳入右側當前 RF 代碼文字（從 `RFCodePreview` 元件取值）與案例名稱；顯示 loading indicator 直至試跑完成；頁面應記錄試跑開始時間並於完成後驗證耗時 ≤60 秒（SC-011）
 - [ ] T257 [P] 更新 `frontend/src/pages/CaseDetailPage.vue` Tab 2 左側 Chat 區域的訊息渲染邏輯（`ChatBubble` 元件）：支援 `type='trial_run_result'` 訊息型別；若 status='passed'，顯示綠色 PASS badge 與執行時間；若 status='failed'，顯示紅色 FAIL badge、執行時間、錯誤訊息、截圖縮圖廊道（可點擊放大）；其他 status（timeout/error）同樣顯示對應 badge
 
 ### 前端 API 更新
 
 - [ ] T258 更新 `frontend/src/services/caseApi.ts`：ChatMessageModel 型別新增 `type: 'chat' | 'trial_run_result'` 欄位；若 `type='trial_run_result'`，content 為 JSON 物件，parseable 為 `{ status, elapsed_ms, error_message, screenshot_paths }`；`getChatHistory` 回應包含 `type` 欄位；新增或更新 `runTrialFromCode(caseId: string, rfCode: string, caseName?: string) -> Promise<{ execution_id: string; stream_url: string }>` 方法
 
-### 端端測試（E2E）
+### 端端與性能測試
 
-- [ ] T259 [P] 在 `frontend/tests/e2e/trial-run.spec.ts` 新增 e2e 測試：（1）開啟案例編輯頁面進入 Tab 2；（2）輸入簡單 RF 代碼於右側預覽區或由 AI Chat 生成；（3）點擊「立即試跑」按鈕；（4）驗證試跑結果訊息出現在左側 Chat 區域；（5）若試跑失敗，驗證 AI 建議訊息隨後出現；（6）刷新頁面後驗證訊息持久化至對話歷史
+- [ ] T259 [P] 在 `frontend/tests/e2e/trial-run.spec.ts` 新增 e2e 測試：（1）開啟案例編輯頁面進入 Tab 2；（2）輸入簡單 RF 代碼於右側預覽區或由 AI Chat 生成；（3）驗證「立即試跑」按鈕啟用；（4）清空 RF 代碼區，驗證「立即試跑」按鈕禁用且提示『RF 程式碼為空，請先透過 Chat 生成程式碼』；（5）恢復 RF 代碼，點擊「立即試跑」按鈕；（6）驗證試跑結果訊息出現在左側 Chat 區域；（7）若試跑失敗，驗證 AI 建議訊息隨後出現；（8）刷新頁面後驗證訊息持久化至對話歷史
+- [ ] T260 在 `backend/tests/performance/test_trial_run_performance.py` 新增性能測試：建立簡單 RF 代碼案例，觸發試跑，驗證從請求送出到客戶端收到完整結果（含 Chat 訊息）的耗時 ≤60 秒（SC-011）；記錄實際耗時並留下效能基準線供未來優化
 
-**Checkpoint**: `pytest backend/tests/contract/test_trial_run_api.py -v` 先 RED → 實作後 GREEN；`npm run dev` 進入 CaseDetailPage Tab 2，點擊「立即試跑」後看到試跑結果訊息出現在 Chat；試跑失敗時看到 AI 分析建議；頁面刷新後訊息仍存在
+**Checkpoint**: `pytest backend/tests/contract/test_trial_run_api.py -v` 先 RED → 實作後 GREEN；`npm run dev` 進入 CaseDetailPage Tab 2，RF 代碼為空時「立即試跑」按鈕禁用；輸入 RF 代碼後按鈕啟用；點擊後看到試跑結果訊息出現在 Chat；試跑失敗時看到 AI 分析建議；頁面刷新後訊息仍存在；`pytest backend/tests/performance/test_trial_run_performance.py -v` 驗證 60 秒 SLA
 
-**Dependencies**: T252（model）必須先完成才能執行 T253/T254；T253 與 T254 可平行；T256/T257/T258 可平行，均依賴 T252/T253/T254 完成；T259（e2e）依賴前端實作完成
+**Dependencies**: T252（model）必須先完成才能執行 T253/T254；T253 與 T254 可平行；T256/T257/T258 可平行，均依賴 T252/T253/T254 完成；T259（e2e）與 T260（性能）依賴前端後端實作完成
 
 ---
 
