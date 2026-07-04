@@ -819,7 +819,7 @@ Phase 2 完成後：
 ### 端端與性能測試
 
 - [ ] T259 [P] 在 `frontend/tests/e2e/trial-run.spec.ts` 新增 e2e 測試：（1）開啟案例編輯頁面進入 Tab 2；（2）輸入簡單 RF 代碼於右側預覽區或由 AI Chat 生成；（3）驗證「立即試跑」按鈕啟用；（4）清空 RF 代碼區，驗證「立即試跑」按鈕禁用且提示『RF 程式碼為空，請先透過 Chat 生成程式碼』；（5）恢復 RF 代碼，點擊「立即試跑」按鈕；（6）驗證試跑結果訊息出現在左側 Chat 區域；（7）若試跑失敗，驗證 AI 建議訊息隨後出現；（8）刷新頁面後驗證訊息持久化至對話歷史
-- [ ] T260 在 `backend/tests/performance/test_trial_run_performance.py` 新增性能測試：建立簡單 RF 代碼案例，觸發試跑，驗證從請求送出到客戶端收到完整結果（含 Chat 訊息）的耗時 ≤60 秒（SC-011）；記錄實際耗時並留下效能基準線供未來優化
+- [X] T260 在 `backend/tests/performance/test_trial_run_performance.py` 新增性能測試：建立簡單 RF 代碼案例，觸發試跑，驗證從請求送出到客戶端收到完整結果（含 Chat 訊息）的耗時 ≤60 秒（SC-011）；記錄實際耗時並留下效能基準線供未來優化
 
 **Checkpoint**: `pytest backend/tests/contract/test_trial_run_api.py -v` 先 RED → 實作後 GREEN；`npm run dev` 進入 CaseDetailPage Tab 2，RF 代碼為空時「立即試跑」按鈕禁用；輸入 RF 代碼後按鈕啟用；點擊後看到試跑結果訊息出現在 Chat；試跑失敗時看到 AI 分析建議；頁面刷新後訊息仍存在；`pytest backend/tests/performance/test_trial_run_performance.py -v` 驗證 60 秒 SLA
 
