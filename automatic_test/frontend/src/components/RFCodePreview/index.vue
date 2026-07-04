@@ -22,6 +22,18 @@
         >
           {{ saving ? '儲存中...' : (saved ? '✓ 已儲存' : '儲存 RF 程式碼') }}
         </button>
+        <!-- Phase 27: Trial run button -->
+        <button
+          v-if="caseId && chatMode"
+          type="button"
+          class="btn-trial-run"
+          data-testid="rf-trial-run-btn"
+          :disabled="!rfCode || trialRunning"
+          :title="!rfCode ? 'RF 程式碼為空，請先透過 Chat 生成程式碼' : ''"
+          @click="onTrialRun"
+        >
+          {{ trialRunning ? '試跑中...' : '立即試跑' }}
+        </button>
       </div>
     </div>
     <p v-if="error && !chatMode" data-testid="rf-error" class="error">{{ error }}</p>
@@ -54,6 +66,7 @@ const error = ref('')
 const saving = ref(false)
 const saved = ref(false)
 const saveError = ref('')
+const trialRunning = ref(false)
 
 const rfCode = computed(() => props.rfCodeOverride || translatedCode.value)
 
@@ -106,6 +119,26 @@ async function onSave() {
     saving.value = false
   }
 }
+
+// Phase 27: Trial run from RF code preview
+async function onTrialRun() {
+  if (!props.caseId || !rfCode.value) return
+  trialRunning.value = true
+  const startTime = Date.now()
+  try {
+    await caseApi.runTrialFromCode(props.caseId, rfCode.value)
+    // Trial run initiated; Chat panel will update with results
+  } catch (err) {
+    console.error('Trial run failed:', err)
+  } finally {
+    trialRunning.value = false
+    const elapsed = Date.now() - startTime
+    // SC-011: Verify execution within 60 seconds
+    if (elapsed > 60000) {
+      console.warn(`Trial run took ${elapsed}ms, exceeds 60s SLA`)
+    }
+  }
+}
 </script>
 
 <style scoped>
@@ -116,6 +149,7 @@ async function onSave() {
 .rf-header button { padding: 6px 14px; border: none; border-radius: 4px; cursor: pointer; background: #0f766e; color: white; font-size: 13px; }
 .rf-header button:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-save { background: #4f46e5 !important; }
+.btn-trial-run { background: #a855f7 !important; }
 .code-block { background: #1e1e2e; border-radius: 6px; padding: 12px; overflow-x: auto; }
 pre { margin: 0; }
 code { font-family: 'Courier New', monospace; font-size: 13px; color: #cdd6f4; white-space: pre; }

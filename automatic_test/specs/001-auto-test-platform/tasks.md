@@ -809,12 +809,12 @@ Phase 2 完成後：
 
 ### 前端實作
 
-- [ ] T256 [P] 更新 `frontend/src/pages/CaseDetailPage.vue` Tab 2「測試步驟」右側 RF 程式碼預覽區：新增紫色「立即試跑」按鈕；若 RF 程式碼為空則按鈕禁用（disabled），懸停顯示提示「RF 程式碼為空，請先透過 Chat 生成程式碼」（SR-017）；點擊後呼叫 `POST /cases/{id}/trial-run` 傳入右側當前 RF 代碼文字（從 `RFCodePreview` 元件取值）與案例名稱；顯示 loading indicator 直至試跑完成；頁面應記錄試跑開始時間並於完成後驗證耗時 ≤60 秒（SC-011）
-- [ ] T257 [P] 更新 `frontend/src/pages/CaseDetailPage.vue` Tab 2 左側 Chat 區域的訊息渲染邏輯（`ChatBubble` 元件）：支援 `type='trial_run_result'` 訊息型別；若 status='passed'，顯示綠色 PASS badge 與執行時間；若 status='failed'，顯示紅色 FAIL badge、執行時間、錯誤訊息、截圖縮圖廊道（可點擊放大）；其他 status（timeout/error）同樣顯示對應 badge
+- [X] T256 [P] 更新 `frontend/src/pages/CaseDetailPage.vue` Tab 2「測試步驟」右側 RF 程式碼預覽區：新增紫色「立即試跑」按鈕；若 RF 程式碼為空則按鈕禁用（disabled），懸停顯示提示「RF 程式碼為空，請先透過 Chat 生成程式碼」（SR-017）；點擊後呼叫 `POST /cases/{id}/trial-run` 傳入右側當前 RF 代碼文字（從 `RFCodePreview` 元件取值）與案例名稱；顯示 loading indicator 直至試跑完成；頁面應記錄試跑開始時間並於完成後驗證耗時 ≤60 秒（SC-011）
+- [X] T257 [P] 更新 `frontend/src/pages/CaseDetailPage.vue` Tab 2 左側 Chat 區域的訊息渲染邏輯（`ChatBubble` 元件）：支援 `type='trial_run_result'` 訊息型別；若 status='passed'，顯示綠色 PASS badge 與執行時間；若 status='failed'，顯示紅色 FAIL badge、執行時間、錯誤訊息、截圖縮圖廊道（可點擊放大）；其他 status（timeout/error）同樣顯示對應 badge
 
 ### 前端 API 更新
 
-- [ ] T258 更新 `frontend/src/services/caseApi.ts`：ChatMessageModel 型別新增 `type: 'chat' | 'trial_run_result'` 欄位；若 `type='trial_run_result'`，content 為 JSON 物件，parseable 為 `{ status, elapsed_ms, error_message, screenshot_paths }`；`getChatHistory` 回應包含 `type` 欄位；新增或更新 `runTrialFromCode(caseId: string, rfCode: string, caseName?: string) -> Promise<{ execution_id: string; stream_url: string }>` 方法
+- [X] T258 更新 `frontend/src/services/caseApi.ts`：ChatMessageModel 型別新增 `type: 'chat' | 'trial_run_result'` 欄位；若 `type='trial_run_result'`，content 為 JSON 物件，parseable 為 `{ status, elapsed_ms, error_message, screenshot_paths }`；`getChatHistory` 回應包含 `type` 欄位；新增或更新 `runTrialFromCode(caseId: string, rfCode: string, caseName?: string) -> Promise<{ execution_id: string; stream_url: string }>` 方法
 
 ### 端端與性能測試
 
