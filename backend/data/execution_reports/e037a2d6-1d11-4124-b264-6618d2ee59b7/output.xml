@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<robot generator="Robot 7.4.2 (Python 3.13.1 on win32)" generated="2026-07-04T12:32:07.142214" rpa="false" schemaversion="5">
+<suite id="s1" name="Test" source="C:\Users\mark\AppData\Local\Temp\tmpa7f7x2pf\test.robot">
+<kw name="Open Login Page" type="SETUP">
+<kw name="New Browser" owner="Browser">
+<msg time="2026-07-04T12:32:07.368992" level="INFO">{"browser": "chromium", "headless": true, "chromiumSandbox": false, "devtools": false, "handleSIGHUP": true, "handleSIGINT": true, "handleSIGTERM": true, "slowMo": 0.0, "timeout": 30000.0, "tracesDir": "C:\\Users\\mark\\AppData\\Local\\Temp\\tmpa7f7x2pf\\browser\\traces\\temp\\8129be59-99f0-480f-a8c0-0c11f002f340"}</msg>
+<msg time="2026-07-04T12:32:07.390270" level="INFO">Starting Browser process C:\Users\mark\Desktop\AI_Auto_test\automatic_test\backend\.venv\Lib\site-packages\Browser\wrapper\index.js using at 127.0.0.1:63392</msg>
+<msg time="2026-07-04T12:32:08.513393" level="INFO">Successfully created browser with options: {"browser":"chromium","headless":true,"chromiumSandbox":false,"devtools":false,"handleSIGHUP":true,"handleSIGINT":true,"handleSIGTERM":true,"slowMo":0,"timeout":30000,"tracesDir":"C:\\Users\\mark\\AppData\\Local\\Temp\\tmpa7f7x2pf\\browser\\traces\\temp\\8129be59-99f0-480f-a8c0-0c11f002f340"}</msg>
+<arg>chromium</arg>
+<arg>headless=True</arg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Create a new playwright Browser with specified options.</doc>
+<status status="PASS" start="2026-07-04T12:32:07.368347" elapsed="1.145314"/>
+</kw>
+<kw name="New Context" owner="Browser">
+<msg time="2026-07-04T12:32:08.515364" level="INFO">{
+  "acceptDownloads": true,
+  "bypassCSP": false,
+  "forcedColors": "none",
+  "ignoreHTTPSErrors": false,
+  "javaScriptEnabled": true,
+  "offline": false,
+  "reducedMotion": "no-preference",
+  "serviceWorkers": "allow",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  }
+}</msg>
+<msg time="2026-07-04T12:32:08.526541" level="INFO">Successfully created context. </msg>
+<msg time="2026-07-04T12:32:08.526612" level="INFO">{'acceptDownloads': True, 'bypassCSP': False, 'forcedColors': 'none', 'ignoreHTTPSErrors': False, 'javaScriptEnabled': True, 'offline': False, 'reducedMotion': 'no-preference', 'serviceWorkers': 'allow', 'viewport': {'width': 1280, 'height': 720}}</msg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Create a new BrowserContext with specified options.</doc>
+<status status="PASS" start="2026-07-04T12:32:08.513982" elapsed="0.012705"/>
+</kw>
+<kw name="New Page" owner="Browser">
+<msg time="2026-07-04T12:32:09.500240" level="INFO">Successfully initialized new page object and opened url: https://mma.sinopac.com/MemberPortal/Member/NextWebLogin.aspx</msg>
+<arg>${BASE_URL}</arg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Open a new Page.</doc>
+<status status="PASS" start="2026-07-04T12:32:08.526852" elapsed="0.973641"/>
+</kw>
+<status status="PASS" start="2026-07-04T12:32:07.367823" elapsed="2.132785"/>
+</kw>
+<test id="s1-t1" name="TC01 正常登入成功" line="20">
+<kw name="Wait For Elements State" owner="Browser">
+<msg time="2026-07-04T12:32:19.665022" level="INFO" html="true">&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td colspan="3"&gt;&lt;a href="browser/screenshot/fail-screenshot-1.png" target="_blank"&gt;&lt;img src="browser/screenshot/fail-screenshot-1.png" width="800px"/&gt;&lt;/a&gt;</msg>
+<msg time="2026-07-04T12:32:19.665190" level="INFO">See also file:///C:/Users/mark/AppData/Local/Temp/tmpa7f7x2pf/playwright-log.txt for additional details.</msg>
+<msg time="2026-07-04T12:32:19.665583" level="FAIL">TimeoutError: locator.waitFor: Timeout 10000ms exceeded.
+Call log:
+  - waiting for locator('id=ContentPlaceHolder1_txtIDNo') to be visible
+</msg>
+<arg>id=ContentPlaceHolder1_txtIDNo</arg>
+<arg>visible</arg>
+<arg>timeout=10s</arg>
+<tag>PageContent</tag>
+<tag>Wait</tag>
+<doc>Waits for the element found by ``selector`` to satisfy state option.</doc>
+<status status="FAIL" start="2026-07-04T12:32:09.510928" elapsed="10.159347">TimeoutError: locator.waitFor: Timeout 10000ms exceeded.
+Call log:
+  - waiting for locator('id=ContentPlaceHolder1_txtIDNo') to be visible
+</status>
+</kw>
+<kw name="Fill Text" owner="Browser">
+<arg>id=ContentPlaceHolder1_txtIDNo</arg>
+<arg>${ID_NUMBER}</arg>
+<tag>PageContent</tag>
+<tag>Setter</tag>
+<doc>Clears and fills the given ``txt`` into the text field found by ``selector``.</doc>
+<status status="NOT RUN" start="2026-07-04T12:32:19.670552" elapsed="0.000120"/>
+</kw>
+<kw name="Fill Text" owner="Browser">
+<arg>id=ContentPlaceHolder1_txtMemberID</arg>
+<arg>${USERNAME}</arg>
+<tag>PageContent</tag>
+<tag>Setter</tag>
+<doc>Clears and fills the given ``txt`` into the text field found by ``selector``.</doc>
+<status status="NOT RUN" start="2026-07-04T12:32:19.670803" elapsed="0.000081"/>
+</kw>
+<kw name="Fill Text" owner="Browser">
+<arg>id=ContentPlaceHolder1_txtPassword</arg>
+<arg>${PASSWORD}</arg>
+<tag>PageContent</tag>
+<tag>Setter</tag>
+<doc>Clears and fills the given ``txt`` into the text field found by ``selector``.</doc>
+<status status="NOT RUN" start="2026-07-04T12:32:19.671009" elapsed="0.000078"/>
+</kw>
+<kw name="Click" owner="Browser">
+<arg>id=ContentPlaceHolder1_btnLogin</arg>
+<tag>PageContent</tag>
+<tag>Setter</tag>
+<doc>Simulates mouse click on the element found by ``selector``.</doc>
+<status status="NOT RUN" start="2026-07-04T12:32:19.671214" elapsed="0.000079"/>
+</kw>
+<kw name="Wait For Elements State" owner="Browser">
+<arg>id=ContentPlaceHolder1_lblWelcome</arg>
+<arg>visible</arg>
+<arg>timeout=15s</arg>
+<tag>PageContent</tag>
+<tag>Wait</tag>
+<doc>Waits for the element found by ``selector`` to satisfy state option.</doc>
+<status status="NOT RUN" start="2026-07-04T12:32:19.671428" elapsed="0.000086"/>
+</kw>
+<doc>使用有效的身分證字號、使用者代碼與網路密碼進行登入，驗證成功進入會員頁面</doc>
+<tag>login</tag>
+<tag>positive</tag>
+<tag>smoke</tag>
+<status status="FAIL" start="2026-07-04T12:32:09.500714" elapsed="10.171018">TimeoutError: locator.waitFor: Timeout 10000ms exceeded.
+Call log:
+  - waiting for locator('id=ContentPlaceHolder1_txtIDNo') to be visible
+</status>
+</test>
+<kw name="Close Browser" owner="Browser" type="TEARDOWN">
+<msg time="2026-07-04T12:32:19.736807" level="INFO">Closed browser</msg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Closes the current browser.</doc>
+<status status="PASS" start="2026-07-04T12:32:19.680478" elapsed="0.056549"/>
+</kw>
+<status status="FAIL" start="2026-07-04T12:32:07.143347" elapsed="12.593787"/>
+</suite>
+<statistics>
+<total>
+<stat pass="0" fail="1" skip="0">All Tests</stat>
+</total>
+<tag>
+<stat pass="0" fail="1" skip="0">login</stat>
+<stat pass="0" fail="1" skip="0">positive</stat>
+<stat pass="0" fail="1" skip="0">smoke</stat>
+</tag>
+<suite>
+<stat name="Test" id="s1" pass="0" fail="1" skip="0">Test</stat>
+</suite>
+</statistics>
+<errors>
+</errors>
+</robot>
