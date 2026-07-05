@@ -15,7 +15,7 @@
 ### 1. 建立虛擬環境（首次）
 
 ```powershell
-cd automatic_test\backend
+cd backend
 python -m venv .venv
 ```
 
@@ -30,6 +30,7 @@ python -m venv .venv
 
 ```powershell
 pip install -r requirements.txt
+pip install -r requirements-dev.txt   # 執行測試（pytest）必需
 ```
 
 ### 4. 設定環境變數
@@ -40,7 +41,7 @@ pip install -r requirements.txt
 Copy-Item .env.example .env
 ```
 
-編輯 `.env`，至少填入一組 LLM API Key：
+編輯 `.env`，至少填入一組 LLM API Key，並務必自行設定 `JWT_SECRET_KEY`：
 
 ```dotenv
 DATABASE_URL=sqlite+aiosqlite:///./data/autotest.db
@@ -52,8 +53,21 @@ PARALLEL_MAX_WORKERS=5
 ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=sk-...
 
-DEFAULT_LLM_MODEL=claude-3-5-sonnet-20241022
+DEFAULT_LLM_MODEL=claude-sonnet-4-6
+
+# 本地 Ollama 原生 API base URL（留空＝不啟用本地模型）
+OLLAMA_BASE_URL=http://localhost:11434
+
+# 必須設定為固定值，否則每次重啟 API Server 都會讓既有登入 token 失效（造成 401）
+JWT_SECRET_KEY=change-me-to-a-strong-random-secret-key
+JWT_EXPIRE_HOURS=168
+
+# 初始管理員帳號（供 scripts/seed_admin.py 使用，見下方步驟 6）
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=change-me-strong-password
 ```
+
+> **注意**：`.env.example` 內 `ADMIN_PASSWORD` 的預設值是 `change-me-strong-password`，而非 `admin`。若要沿用步驟 6 表格中的 `admin`/`admin` 測試帳密，請把這一行改回（或直接刪除該行以套用程式碼中的內建預設值）。
 
 ### 5. 初始化資料庫
 
@@ -63,9 +77,15 @@ alembic upgrade head
 
 > 資料庫檔案會建立在 `data/autotest.db`
 
-### 6. 初始管理員帳號
+### 6. 建立初始管理員帳號
 
-資料庫初始化完成後，系統會自動建立預設管理員帳號：
+資料庫初始化後**不會**自動建立任何帳號，需手動執行 seed 腳本：
+
+```powershell
+python -m scripts.seed_admin
+```
+
+預設帳號密碼如下（可於 `.env` 中設定 `ADMIN_USERNAME` / `ADMIN_PASSWORD` 覆寫）：
 
 | 欄位 | 值 |
 |------|-----|
@@ -73,8 +93,8 @@ alembic upgrade head
 | 密碼 | `admin` |
 | 角色 | `admin`（最高權限）|
 
-> **建議**：首次登入後請至後台（/admin → 帳號管理）修改預設密碼。  
-> 帳號密碼也可透過 `.env` 中的 `ADMIN_USERNAME` / `ADMIN_PASSWORD` 在初始化前預先設定。
+> 若該帳號已存在，腳本會印出訊息並跳過，可安全重複執行。
+> **建議**：首次登入後請至後台（/admin → 帳號管理）修改預設密碼。
 
 ---
 
@@ -104,7 +124,7 @@ API 文件可在以下位置查看：
 ## 二、前端啟動
 
 ```powershell
-cd automatic_test\frontend
+cd frontend
 npm install          # 首次安裝
 npm run dev          # 啟動開發伺服器
 ```
@@ -120,7 +140,7 @@ npm run dev          # 啟動開發伺服器
 ### 後端測試
 
 ```powershell
-cd automatic_test\backend
+cd backend
 # 確認虛擬環境已啟動
 
 pytest                    # 執行全部測試
@@ -133,9 +153,13 @@ pytest -k "test_name"     # 執行特定測試
 ### 前端測試
 
 ```powershell
-cd automatic_test\frontend
-npm run test              # 執行一次
+cd frontend
+npm run test              # 執行一次（unit tests）
 npm run test:watch        # 監看模式
+
+# E2E（Playwright，首次需安裝瀏覽器二進位檔）
+npx playwright install
+npm run test:e2e          # 需要後端已啟動；前端 dev server 會自動啟動
 ```
 
 ---
@@ -143,7 +167,7 @@ npm run test:watch        # 監看模式
 ## 四、資料庫管理
 
 ```powershell
-cd automatic_test\backend
+cd backend
 
 # 查看 migration 狀態
 alembic current
@@ -163,7 +187,7 @@ alembic revision --autogenerate -m "說明"
 ## 五、目錄結構
 
 ```
-automatic_test/
+.
 ├── backend/
 │   ├── src/
 │   │   ├── api/           # FastAPI 路由（cases, checklists, executions...）
@@ -175,22 +199,32 @@ automatic_test/
 │   ├── tests/
 │   │   ├── unit/          # 單元測試
 │   │   ├── contract/      # API 合約測試（httpx ASGITransport）
-│   │   └── integration/   # 整合測試
+│   │   ├── integration/   # 整合測試
+│   │   ├── load/          # 負載測試
+│   │   └── performance/   # 效能測試
+│   ├── scripts/           # 維運腳本（seed_admin.py 等，需手動執行）
+│   ├── libs/              # Robot Framework 自訂 library（CaptchaSolverLibrary 等）
 │   ├── alembic/           # 資料庫 migration
 │   ├── data/              # SQLite DB + 媒體檔案（執行時建立）
 │   ├── robot_scripts/     # Robot Framework .robot 腳本（執行時產生）
 │   ├── .env               # 環境變數（需手動建立）
 │   ├── .env.example       # 環境變數範本
-│   └── requirements.txt   # Python 相依套件
+│   ├── requirements.txt   # Python 相依套件
+│   └── requirements-dev.txt  # 測試相依套件（pytest 等）
 │
-└── frontend/
-    ├── src/
-    │   ├── components/    # Vue 元件
-    │   ├── pages/         # 頁面元件
-    │   ├── services/      # API 呼叫（axios）
-    │   ├── stores/        # Pinia 狀態管理
-    │   └── router/        # Vue Router 設定
-    └── package.json
+├── frontend/
+│   ├── src/
+│   │   ├── components/    # Vue 元件
+│   │   ├── pages/         # 頁面元件
+│   │   ├── services/      # API 呼叫（axios）
+│   │   ├── stores/        # Pinia 狀態管理
+│   │   └── router/        # Vue Router 設定
+│   ├── tests/
+│   │   ├── unit/          # Vitest 單元測試
+│   │   └── e2e/           # Playwright E2E 測試
+│   └── package.json
+│
+└── specs/                 # Spec Kit 規格文件（spec / plan / tasks）
 ```
 
 ---
