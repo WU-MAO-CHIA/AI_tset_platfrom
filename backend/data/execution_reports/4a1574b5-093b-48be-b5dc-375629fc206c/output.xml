@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<robot generator="Robot 7.4.2 (Python 3.13.1 on win32)" generated="2026-07-11T17:12:37.807422" rpa="false" schemaversion="5">
+<suite id="s1" name="Test" source="C:\Users\mark\AppData\Local\Temp\tmp1cw4bkdt\test.robot">
+<kw name="Open Login Page" type="SETUP">
+<kw name="New Browser" owner="Browser">
+<msg time="2026-07-11T17:12:38.067286" level="INFO">{"browser": "chromium", "headless": true, "chromiumSandbox": false, "devtools": false, "handleSIGHUP": true, "handleSIGINT": true, "handleSIGTERM": true, "slowMo": 0.0, "timeout": 30000.0, "tracesDir": "C:\\Users\\mark\\AppData\\Local\\Temp\\tmp1cw4bkdt\\browser\\traces\\temp\\f4f2d128-9f94-44df-ad9e-7bddf4494b5b"}</msg>
+<msg time="2026-07-11T17:12:38.097779" level="INFO">Starting Browser process C:\Users\mark\Desktop\Automatic_Test\backend\.venv\Lib\site-packages\Browser\wrapper\index.js using at 127.0.0.1:63364</msg>
+<msg time="2026-07-11T17:12:39.240209" level="INFO">Successfully created browser with options: {"browser":"chromium","headless":true,"chromiumSandbox":false,"devtools":false,"handleSIGHUP":true,"handleSIGINT":true,"handleSIGTERM":true,"slowMo":0,"timeout":30000,"tracesDir":"C:\\Users\\mark\\AppData\\Local\\Temp\\tmp1cw4bkdt\\browser\\traces\\temp\\f4f2d128-9f94-44df-ad9e-7bddf4494b5b"}</msg>
+<arg>chromium</arg>
+<arg>headless=True</arg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Create a new playwright Browser with specified options.</doc>
+<status status="PASS" start="2026-07-11T17:12:38.066687" elapsed="1.173799"/>
+</kw>
+<kw name="New Context" owner="Browser">
+<msg time="2026-07-11T17:12:39.243819" level="INFO">{
+  "acceptDownloads": true,
+  "bypassCSP": false,
+  "forcedColors": "none",
+  "ignoreHTTPSErrors": false,
+  "javaScriptEnabled": true,
+  "offline": false,
+  "reducedMotion": "no-preference",
+  "serviceWorkers": "allow",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  }
+}</msg>
+<msg time="2026-07-11T17:12:39.258320" level="INFO">Successfully created context. </msg>
+<msg time="2026-07-11T17:12:39.258416" level="INFO">{'acceptDownloads': True, 'bypassCSP': False, 'forcedColors': 'none', 'ignoreHTTPSErrors': False, 'javaScriptEnabled': True, 'offline': False, 'reducedMotion': 'no-preference', 'serviceWorkers': 'allow', 'viewport': {'width': 1280, 'height': 720}}</msg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Create a new BrowserContext with specified options.</doc>
+<status status="PASS" start="2026-07-11T17:12:39.241228" elapsed="0.017288"/>
+</kw>
+<kw name="New Page" owner="Browser">
+<msg time="2026-07-11T17:12:41.465135" level="INFO">Successfully initialized new page object and opened url: https://mma.sinopac.com/MemberPortal/Member/NextWebLogin.aspx</msg>
+<arg>${BASE_URL}</arg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Open a new Page.</doc>
+<status status="PASS" start="2026-07-11T17:12:39.258760" elapsed="2.206603"/>
+</kw>
+<status status="PASS" start="2026-07-11T17:12:38.066154" elapsed="3.399319"/>
+</kw>
+<test id="s1-t1" name="TC-001 正常登入成功" line="15">
+<kw name="Navigate To Login Page" type="SETUP">
+<kw name="New Browser" owner="Browser">
+<msg time="2026-07-11T17:12:41.481499" level="INFO">Switching browser to browser=05219cf5-709a-4cc6-a15b-7ac6dc174959</msg>
+<msg time="2026-07-11T17:12:41.485831" level="INFO">Successfully changed active browser: browser=05219cf5-709a-4cc6-a15b-7ac6dc174959</msg>
+<msg time="2026-07-11T17:12:41.486002" level="INFO">Reusing existing browser with id: browser=05219cf5-709a-4cc6-a15b-7ac6dc174959</msg>
+<arg>chromium</arg>
+<arg>headless=True</arg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Create a new playwright Browser with specified options.</doc>
+<status status="PASS" start="2026-07-11T17:12:41.480884" elapsed="0.005205"/>
+</kw>
+<kw name="New Context" owner="Browser">
+<msg time="2026-07-11T17:12:41.487735" level="INFO">{
+  "acceptDownloads": true,
+  "bypassCSP": false,
+  "forcedColors": "none",
+  "ignoreHTTPSErrors": false,
+  "javaScriptEnabled": true,
+  "offline": false,
+  "reducedMotion": "no-preference",
+  "serviceWorkers": "allow",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  }
+}</msg>
+<msg time="2026-07-11T17:12:41.495384" level="INFO">Successfully created context. </msg>
+<msg time="2026-07-11T17:12:41.495481" level="INFO">{'acceptDownloads': True, 'bypassCSP': False, 'forcedColors': 'none', 'ignoreHTTPSErrors': False, 'javaScriptEnabled': True, 'offline': False, 'reducedMotion': 'no-preference', 'serviceWorkers': 'allow', 'viewport': {'width': 1280, 'height': 720}}</msg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Create a new BrowserContext with specified options.</doc>
+<status status="PASS" start="2026-07-11T17:12:41.486314" elapsed="0.009271"/>
+</kw>
+<kw name="New Page" owner="Browser">
+<msg time="2026-07-11T17:12:42.712803" level="INFO">Successfully initialized new page object and opened url: https://mma.sinopac.com/MemberPortal/Member/NextWebLogin.aspx</msg>
+<arg>${BASE_URL}</arg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Open a new Page.</doc>
+<status status="PASS" start="2026-07-11T17:12:41.495786" elapsed="1.217175"/>
+</kw>
+<status status="PASS" start="2026-07-11T17:12:41.480414" elapsed="1.232643"/>
+</kw>
+<kw name="Fill Text" owner="Browser">
+<msg time="2026-07-11T17:12:42.713686" level="INFO">Fills the text 'A128514133' in the given field.</msg>
+<msg time="2026-07-11T17:12:52.854294" level="INFO" html="true">&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td colspan="3"&gt;&lt;a href="browser/screenshot/fail-screenshot-1.png" target="_blank"&gt;&lt;img src="browser/screenshot/fail-screenshot-1.png" width="800px"/&gt;&lt;/a&gt;</msg>
+<msg time="2026-07-11T17:12:52.854409" level="INFO">See also file:///C:/Users/mark/AppData/Local/Temp/tmp1cw4bkdt/playwright-log.txt for additional details.</msg>
+<msg time="2026-07-11T17:12:52.854685" level="FAIL">TimeoutError: locator.fill: Timeout 10000ms exceeded.
+Call log:
+  - waiting for locator('id=ContentPlaceHolder1_txtIDNo')
+</msg>
+<arg>id=ContentPlaceHolder1_txtIDNo</arg>
+<arg>${ID_NUMBER}</arg>
+<tag>PageContent</tag>
+<tag>Setter</tag>
+<doc>Clears and fills the given ``txt`` into the text field found by ``selector``.</doc>
+<status status="FAIL" start="2026-07-11T17:12:42.713178" elapsed="10.145579">TimeoutError: locator.fill: Timeout 10000ms exceeded.
+Call log:
+  - waiting for locator('id=ContentPlaceHolder1_txtIDNo')
+</status>
+</kw>
+<kw name="Fill Text" owner="Browser">
+<arg>id=ContentPlaceHolder1_txtUserID</arg>
+<arg>${USER_ID}</arg>
+<tag>PageContent</tag>
+<tag>Setter</tag>
+<doc>Clears and fills the given ``txt`` into the text field found by ``selector``.</doc>
+<status status="NOT RUN" start="2026-07-11T17:12:52.858942" elapsed="0.000100"/>
+</kw>
+<kw name="Fill Text" owner="Browser">
+<arg>id=ContentPlaceHolder1_txtPassword</arg>
+<arg>${PASSWORD}</arg>
+<tag>PageContent</tag>
+<tag>Setter</tag>
+<doc>Clears and fills the given ``txt`` into the text field found by ``selector``.</doc>
+<status status="NOT RUN" start="2026-07-11T17:12:52.859174" elapsed="0.000080"/>
+</kw>
+<kw name="處理圖形驗證碼（如存在）">
+<doc>若頁面存在圖形驗證碼，截圖後以 Claude Vision 辨識並填入</doc>
+<status status="NOT RUN" start="2026-07-11T17:12:52.859445" elapsed="0.000067"/>
+</kw>
+<kw name="Click" owner="Browser">
+<arg>id=ContentPlaceHolder1_btnLogin</arg>
+<tag>PageContent</tag>
+<tag>Setter</tag>
+<doc>Simulates mouse click on the element found by ``selector``.</doc>
+<status status="NOT RUN" start="2026-07-11T17:12:52.859597" elapsed="0.000058"/>
+</kw>
+<kw name="Wait For Elements State" owner="Browser">
+<arg>role=heading</arg>
+<arg>visible</arg>
+<arg>timeout=10s</arg>
+<tag>PageContent</tag>
+<tag>Wait</tag>
+<doc>Waits for the element found by ``selector`` to satisfy state option.</doc>
+<status status="NOT RUN" start="2026-07-11T17:12:52.859782" elapsed="0.000089"/>
+</kw>
+<kw name="Close Browser" owner="Browser" type="TEARDOWN">
+<msg time="2026-07-11T17:12:52.936791" level="INFO">Closed browser</msg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Closes the current browser.</doc>
+<status status="PASS" start="2026-07-11T17:12:52.860133" elapsed="0.076808"/>
+</kw>
+<doc>使用有效的身分證字號、使用者代號與密碼進行登入，驗證成功進入會員首頁</doc>
+<tag>login</tag>
+<tag>smoke</tag>
+<tag>TC-001</tag>
+<status status="FAIL" start="2026-07-11T17:12:41.465563" elapsed="11.471596">TimeoutError: locator.fill: Timeout 10000ms exceeded.
+Call log:
+  - waiting for locator('id=ContentPlaceHolder1_txtIDNo')
+</status>
+</test>
+<kw name="Close Browser" owner="Browser" type="TEARDOWN">
+<msg time="2026-07-11T17:12:52.945270" level="INFO">No browser open, doing nothing</msg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Closes the current browser.</doc>
+<status status="PASS" start="2026-07-11T17:12:52.942845" elapsed="0.002591"/>
+</kw>
+<status status="FAIL" start="2026-07-11T17:12:37.809184" elapsed="15.136338"/>
+</suite>
+<statistics>
+<total>
+<stat pass="0" fail="1" skip="0">All Tests</stat>
+</total>
+<tag>
+<stat pass="0" fail="1" skip="0">login</stat>
+<stat pass="0" fail="1" skip="0">smoke</stat>
+<stat pass="0" fail="1" skip="0">TC-001</stat>
+</tag>
+<suite>
+<stat name="Test" id="s1" pass="0" fail="1" skip="0">Test</stat>
+</suite>
+</statistics>
+<errors>
+<msg time="2026-07-11T17:12:38.064937" level="ERROR">Error in file 'C:\Users\mark\AppData\Local\Temp\tmp1cw4bkdt\test.robot' on line 3: Library 'C:\Users\mark\AppData\Local\Temp\libs\CaptchaSolverLibrary.py' does not exist.</msg>
+</errors>
+</robot>
