@@ -163,6 +163,7 @@ class ExecutionService:
                 role="system",
                 type=ChatMessageType.TRIAL_RUN_RESULT,
                 content=json.dumps({
+                    "execution_id": execution_id,
                     "status": case_status,
                     "elapsed_ms": result.get("elapsed_ms", 0),
                     "error_message": result.get("failure_message") or "",

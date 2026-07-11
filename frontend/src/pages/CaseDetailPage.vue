@@ -107,6 +107,7 @@
           <AIChatPanel
             :case-id="caseData.id"
             :selected-model="selectedModel"
+            :watch-execution-id="trialExecutionId"
             @rf-updated="rfCode = $event"
           />
         </section>
@@ -117,6 +118,7 @@
             :selected-model="selectedModel"
             :rf-code-override="rfCode"
             :chat-mode="true"
+            @trial-started="trialExecutionId = $event"
           />
         </section>
       </div>
@@ -288,6 +290,7 @@ const caseData = ref<TestCaseDetail | null>(null)
 const history = ref<any[]>([])
 const historyLoaded = ref(false)
 const trialRunning = ref(false)
+const trialExecutionId = ref<string | undefined>(undefined)
 const editing = ref(false)
 const editTab = ref<'basic' | 'steps'>('basic')
 const viewTab = ref<'basic' | 'steps'>('basic')
