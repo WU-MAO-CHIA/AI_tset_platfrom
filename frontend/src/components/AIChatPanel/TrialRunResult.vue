@@ -2,13 +2,18 @@
   <div class="trial-result-container">
     <!-- Status Badge -->
     <div class="status-badge" :class="`status-${result.status}`">
-      {{ statusLabel }}
+      {{ statusLabel() }}
     </div>
 
     <!-- Elapsed Time -->
     <div class="elapsed-time">
       執行時間：{{ (result.elapsed_ms / 1000).toFixed(2) }}s
     </div>
+
+    <!-- RF Report Link -->
+    <a v-if="result.execution_id" class="report-link" :href="`/executions/${result.execution_id}`" target="_blank">
+      查看完整測試報告 →
+    </a>
 
     <!-- Error Message -->
     <div v-if="result.status !== 'passed' && result.error_message" class="error-message">
@@ -35,6 +40,7 @@
 
 <script setup lang="ts">
 interface TrialResult {
+  execution_id?: string
   status: 'passed' | 'failed' | 'timeout' | 'error'
   elapsed_ms: number
   error_message?: string
@@ -107,6 +113,17 @@ function showFullImage(path: string) {
 .elapsed-time {
   font-size: 13px;
   color: #666;
+}
+
+.report-link {
+  font-size: 13px;
+  color: #3b82f6;
+  text-decoration: none;
+  width: fit-content;
+}
+
+.report-link:hover {
+  text-decoration: underline;
 }
 
 .error-message {

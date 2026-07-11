@@ -60,6 +60,8 @@ const props = defineProps<{
   caseId?: string
 }>()
 
+const emit = defineEmits<{ (e: 'trial-started', executionId: string): void }>()
+
 const loading = ref(false)
 const translatedCode = ref('')
 const error = ref('')
@@ -126,8 +128,8 @@ async function onTrialRun() {
   trialRunning.value = true
   const startTime = Date.now()
   try {
-    await caseApi.runTrialFromCode(props.caseId, rfCode.value)
-    // Trial run initiated; Chat panel will update with results
+    const res = await caseApi.runTrialFromCode(props.caseId, rfCode.value)
+    emit('trial-started', res.data.execution_id)
   } catch (err) {
     console.error('Trial run failed:', err)
   } finally {

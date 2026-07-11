@@ -22,6 +22,9 @@
       <div v-if="loading" class="chat-bubble bubble-assistant loading-bubble">
         <div class="bubble-content">AI 思考中...</div>
       </div>
+      <div v-if="trialInProgress" class="chat-bubble bubble-assistant loading-bubble">
+        <div class="bubble-content">試跑執行中，完成後將自動顯示結果...</div>
+      </div>
     </div>
 
     <div class="chat-input-area">
@@ -43,14 +46,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { caseApi } from '../../services/caseApi'
+import { streamExecution } from '../../services/executionApi'
 import type { ChatMessage } from '../../services/caseApi'
 import TrialRunResult from './TrialRunResult.vue'
 
 const props = defineProps<{
   caseId?: string
   selectedModel: string
+  watchExecutionId?: string
 }>()
 
 const emit = defineEmits<{
@@ -60,19 +65,39 @@ const emit = defineEmits<{
 const messages = ref<ChatMessage[]>([])
 const inputText = ref('')
 const loading = ref(false)
+const trialInProgress = ref(false)
 const messagesContainer = ref<HTMLElement | null>(null)
 
-onMounted(async () => {
-  if (props.caseId) {
-    try {
-      const res = await caseApi.getChatHistory(props.caseId)
-      messages.value = res.data.messages
-      scrollToBottom()
-    } catch {
-      // no history yet
-    }
+let evtSource: EventSource | null = null
+
+async function loadHistory() {
+  if (!props.caseId) return
+  try {
+    const res = await caseApi.getChatHistory(props.caseId)
+    messages.value = res.data.messages
+    scrollToBottom()
+  } catch {
+    // no history yet
   }
+}
+
+onMounted(loadHistory)
+
+watch(() => props.watchExecutionId, (executionId) => {
+  if (!executionId) return
+  evtSource?.close()
+  trialInProgress.value = true
+  evtSource = streamExecution(executionId, (data) => {
+    const event = data as { event?: string }
+    if (event.event === 'execution_completed' || event.event === 'execution_error') {
+      evtSource = null
+      trialInProgress.value = false
+      loadHistory()
+    }
+  })
 })
+
+onUnmounted(() => evtSource?.close())
 
 async function sendMessage() {
   const text = inputText.value.trim()
