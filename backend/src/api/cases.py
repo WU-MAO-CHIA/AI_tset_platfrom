@@ -638,13 +638,13 @@ async def get_robot_script(
 
 
 class TrialRunRequest(BaseModel):
-    """Phase 27: Trial run request with RF code."""
-    rf_code: str
+    """Phase 27: Trial run request with optional RF code override."""
+    rf_code: Optional[str] = None
     case_name: Optional[str] = None
 
 
 @router.post("/{case_id}/trial-run", status_code=202)
-async def trial_run(case_id: str, request: TrialRunRequest, session: AsyncSession = Depends(get_db)):
+async def trial_run(case_id: str, request: TrialRunRequest = TrialRunRequest(), session: AsyncSession = Depends(get_db)):
     """Phase 27: Execute trial run using RF code from preview area."""
     from src.repositories.test_case_repo import TestCaseRepository
     from src.services.execution_service import ExecutionService

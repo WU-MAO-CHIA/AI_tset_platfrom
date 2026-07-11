@@ -50,9 +50,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getExecution, getExecutionResults, exportReport, type ExecutionRecord, type CaseResultItem } from '../services/executionApi'
+import { getExecution, getExecutionResults, exportReport, streamExecution, type ExecutionRecord, type CaseResultItem } from '../services/executionApi'
 
 const route = useRoute()
 const router = useRouter()
@@ -72,6 +72,8 @@ const rfReportPrefix = computed(() => {
 
 const executionId = computed(() => route.params.id as string)
 
+let evtSource: EventSource | null = null
+
 async function fetchResults() {
   loading.value = true
   fetchError.value = null
@@ -79,6 +81,18 @@ async function fetchResults() {
     execution.value = await getExecution(executionId.value)
     const data = await getExecutionResults(executionId.value)
     caseResults.value = data.items
+
+    // 試跑／執行在背景非同步進行，剛導頁進來時通常還是 running，
+    // 訂閱 SSE 等待完成後再重新抓一次以取得最終狀態與報告
+    if (execution.value.status !== 'completed' && execution.value.status !== 'failed' && !evtSource) {
+      evtSource = streamExecution(executionId.value, (data) => {
+        const event = data as { event?: string }
+        if (event.event === 'execution_completed' || event.event === 'execution_error') {
+          evtSource = null
+          fetchResults()
+        }
+      })
+    }
   } catch (e: any) {
     if (e.message !== 'Unauthorized') {
       fetchError.value = e.message || '載入失敗'
@@ -106,6 +120,7 @@ async function handleExportReport() {
 }
 
 onMounted(fetchResults)
+onUnmounted(() => evtSource?.close())
 </script>
 
 <style scoped>
