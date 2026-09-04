@@ -1,0 +1,276 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<robot generator="Robot 7.4.2 (Python 3.13.1 on win32)" generated="2026-07-11T22:40:58.929755" rpa="false" schemaversion="5">
+<suite id="s1" name="Test" source="C:\Users\mark\AppData\Local\Temp\tmpmog93gqm\robot_scripts\test.robot">
+<kw name="初始化瀏覽器並開啟登入頁" type="SETUP">
+<kw name="New Browser" owner="Browser">
+<msg time="2026-07-11T22:40:59.156922" level="INFO">{"browser": "chromium", "headless": true, "chromiumSandbox": false, "devtools": false, "handleSIGHUP": true, "handleSIGINT": true, "handleSIGTERM": true, "slowMo": 0.0, "timeout": 30000.0, "tracesDir": "C:\\Users\\mark\\AppData\\Local\\Temp\\tmpmog93gqm\\browser\\traces\\temp\\dbd88d43-2b0b-42ad-a94f-28791a54f625"}</msg>
+<msg time="2026-07-11T22:40:59.223318" level="INFO">Starting Browser process C:\Users\mark\Desktop\Automatic_Test\backend\.venv\Lib\site-packages\Browser\wrapper\index.js using at 127.0.0.1:55131</msg>
+<msg time="2026-07-11T22:41:00.368937" level="INFO">Successfully created browser with options: {"browser":"chromium","headless":true,"chromiumSandbox":false,"devtools":false,"handleSIGHUP":true,"handleSIGINT":true,"handleSIGTERM":true,"slowMo":0,"timeout":30000,"tracesDir":"C:\\Users\\mark\\AppData\\Local\\Temp\\tmpmog93gqm\\browser\\traces\\temp\\dbd88d43-2b0b-42ad-a94f-28791a54f625"}</msg>
+<arg>chromium</arg>
+<arg>headless=True</arg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Create a new playwright Browser with specified options.</doc>
+<status status="PASS" start="2026-07-11T22:40:59.156284" elapsed="1.212919"/>
+</kw>
+<kw name="New Context" owner="Browser">
+<msg time="2026-07-11T22:41:00.371174" level="INFO">{
+  "acceptDownloads": true,
+  "bypassCSP": false,
+  "forcedColors": "none",
+  "ignoreHTTPSErrors": false,
+  "javaScriptEnabled": true,
+  "offline": false,
+  "reducedMotion": "no-preference",
+  "serviceWorkers": "allow",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  }
+}</msg>
+<msg time="2026-07-11T22:41:00.381344" level="INFO">Successfully created context. </msg>
+<msg time="2026-07-11T22:41:00.381419" level="INFO">{'acceptDownloads': True, 'bypassCSP': False, 'forcedColors': 'none', 'ignoreHTTPSErrors': False, 'javaScriptEnabled': True, 'offline': False, 'reducedMotion': 'no-preference', 'serviceWorkers': 'allow', 'viewport': {'width': 1280, 'height': 720}}</msg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Create a new BrowserContext with specified options.</doc>
+<status status="PASS" start="2026-07-11T22:41:00.369462" elapsed="0.012029"/>
+</kw>
+<kw name="New Page" owner="Browser">
+<msg time="2026-07-11T22:41:01.375051" level="INFO">Successfully initialized new page object and opened url: https://mma.sinopac.com/MemberPortal/Member/NextWebLogin.aspx</msg>
+<arg>${BASE_URL}</arg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Open a new Page.</doc>
+<status status="PASS" start="2026-07-11T22:41:00.381657" elapsed="0.993549"/>
+</kw>
+<kw name="Wait For Elements State" owner="Browser">
+<msg time="2026-07-11T22:41:01.400618" level="INFO">Waited for Element with selector css=input[placeholder="身分證字號(統一編號)"] at state visible</msg>
+<arg>${LOC_ID_NUMBER}</arg>
+<arg>visible</arg>
+<arg>timeout=${TIMEOUT}</arg>
+<tag>PageContent</tag>
+<tag>Wait</tag>
+<doc>Waits for the element found by ``selector`` to satisfy state option.</doc>
+<status status="PASS" start="2026-07-11T22:41:01.375352" elapsed="0.025396"/>
+</kw>
+<doc>Suite Setup：建立單一 Browser / Context / Page 並導航至登入頁</doc>
+<status status="PASS" start="2026-07-11T22:40:59.155750" elapsed="2.245104"/>
+</kw>
+<test id="s1-t1" name="TC-001 正常登入成功" line="25">
+<kw name="導航至登入頁" type="SETUP">
+<kw name="Go To" owner="Browser">
+<msg time="2026-07-11T22:41:02.112946" level="INFO">Successfully opened URL https://mma.sinopac.com/MemberPortal/Member/NextWebLogin.aspx</msg>
+<arg>${BASE_URL}</arg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Navigates to the given ``url``.</doc>
+<status status="PASS" start="2026-07-11T22:41:01.407362" elapsed="0.705711"/>
+</kw>
+<kw name="Wait For Elements State" owner="Browser">
+<msg time="2026-07-11T22:41:02.127297" level="INFO">Waited for Element with selector css=input[placeholder="身分證字號(統一編號)"] at state visible</msg>
+<arg>${LOC_ID_NUMBER}</arg>
+<arg>visible</arg>
+<arg>timeout=${TIMEOUT}</arg>
+<tag>PageContent</tag>
+<tag>Wait</tag>
+<doc>Waits for the element found by ``selector`` to satisfy state option.</doc>
+<status status="PASS" start="2026-07-11T22:41:02.113216" elapsed="0.014215"/>
+</kw>
+<doc>TC Setup：每個 TC 執行前重新導航至登入頁，複用同一 Browser</doc>
+<status status="PASS" start="2026-07-11T22:41:01.407038" elapsed="0.720502"/>
+</kw>
+<kw name="Wait For Elements State" owner="Browser">
+<msg time="2026-07-11T22:41:02.133675" level="INFO">Waited for Element with selector css=input[placeholder="身分證字號(統一編號)"] at state visible</msg>
+<arg>${LOC_ID_NUMBER}</arg>
+<arg>visible</arg>
+<arg>timeout=${TIMEOUT}</arg>
+<tag>PageContent</tag>
+<tag>Wait</tag>
+<doc>Waits for the element found by ``selector`` to satisfy state option.</doc>
+<status status="PASS" start="2026-07-11T22:41:02.127674" elapsed="0.006130"/>
+</kw>
+<kw name="Wait For Elements State" owner="Browser">
+<msg time="2026-07-11T22:41:02.153938" level="INFO">Waited for Element with selector css=input[placeholder="身分證字號(統一編號)"] at state enabled</msg>
+<arg>${LOC_ID_NUMBER}</arg>
+<arg>enabled</arg>
+<arg>timeout=${TIMEOUT}</arg>
+<tag>PageContent</tag>
+<tag>Wait</tag>
+<doc>Waits for the element found by ``selector`` to satisfy state option.</doc>
+<status status="PASS" start="2026-07-11T22:41:02.133960" elapsed="0.020105"/>
+</kw>
+<kw name="Fill Text" owner="Browser">
+<msg time="2026-07-11T22:41:02.154658" level="INFO">Fills the text 'A128514133' in the given field.</msg>
+<arg>${LOC_ID_NUMBER}</arg>
+<arg>${ID_NUMBER}</arg>
+<tag>PageContent</tag>
+<tag>Setter</tag>
+<doc>Clears and fills the given ``txt`` into the text field found by ``selector``.</doc>
+<status status="PASS" start="2026-07-11T22:41:02.154212" elapsed="0.010762"/>
+</kw>
+<kw name="Fill Text" owner="Browser">
+<msg time="2026-07-11T22:41:02.165603" level="INFO">Fills the text 'markwu0821' in the given field.</msg>
+<arg>${LOC_USER_ID}</arg>
+<arg>${USER_ID}</arg>
+<tag>PageContent</tag>
+<tag>Setter</tag>
+<doc>Clears and fills the given ``txt`` into the text field found by ``selector``.</doc>
+<status status="PASS" start="2026-07-11T22:41:02.165147" elapsed="0.013766"/>
+</kw>
+<kw name="Fill Text" owner="Browser">
+<msg time="2026-07-11T22:41:02.179525" level="INFO">Fills the text '9907mkmnK' in the given field.</msg>
+<arg>${LOC_PASSWORD}</arg>
+<arg>${PASSWORD}</arg>
+<tag>PageContent</tag>
+<tag>Setter</tag>
+<doc>Clears and fills the given ``txt`` into the text field found by ``selector``.</doc>
+<status status="PASS" start="2026-07-11T22:41:02.179074" elapsed="0.009748"/>
+</kw>
+<kw name="處理圖形驗證碼">
+<kw name="Wait For Elements State" owner="Browser">
+<msg time="2026-07-11T22:41:02.194471" level="INFO">Waited for Element with selector id=imgCode at state visible</msg>
+<arg>${LOC_CAPTCHA_IMG}</arg>
+<arg>visible</arg>
+<arg>timeout=${TIMEOUT}</arg>
+<tag>PageContent</tag>
+<tag>Wait</tag>
+<doc>Waits for the element found by ``selector`` to satisfy state option.</doc>
+<status status="PASS" start="2026-07-11T22:41:02.189301" elapsed="0.005287"/>
+</kw>
+<kw name="Take Screenshot" owner="Browser">
+<msg time="2026-07-11T22:41:02.281486" level="INFO" html="true">&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td colspan="3"&gt;&lt;a href="captcha_TC-001%20%E6%AD%A3%E5%B8%B8%E7%99%BB%E5%85%A5%E6%88%90%E5%8A%9F.png" target="_blank"&gt;&lt;img src="captcha_TC-001%20%E6%AD%A3%E5%B8%B8%E7%99%BB%E5%85%A5%E6%88%90%E5%8A%9F.png" width="800px"/&gt;&lt;/a&gt;</msg>
+<msg time="2026-07-11T22:41:02.281651" level="INFO">${captcha_path} = C:\Users\mark\AppData\Local\Temp\tmpmog93gqm\captcha_TC-001 正常登入成功.png</msg>
+<var>${captcha_path}</var>
+<arg>filename=${OUTPUT DIR}/captcha_${TEST NAME}.png</arg>
+<arg>selector=${LOC_CAPTCHA_IMG}</arg>
+<tag>PageContent</tag>
+<doc>Takes a screenshot of the current window or element and saves it to disk.</doc>
+<status status="PASS" start="2026-07-11T22:41:02.194734" elapsed="0.086945"/>
+</kw>
+<kw name="Solve Captcha From File" owner="CaptchaSolverLibrary">
+<msg time="2026-07-11T22:41:07.843553" level="INFO">HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"</msg>
+<msg time="2026-07-11T22:41:07.865326" level="INFO">${captcha_text} = 843238</msg>
+<var>${captcha_text}</var>
+<arg>${captcha_path}</arg>
+<doc>Read a CAPTCHA image from *image_path* and return the recognised text.</doc>
+<status status="PASS" start="2026-07-11T22:41:02.281936" elapsed="5.583424"/>
+</kw>
+<kw name="Log" owner="BuiltIn">
+<msg time="2026-07-11T22:41:07.865873" level="INFO">CAPTCHA 辨識結果：843238</msg>
+<arg>CAPTCHA 辨識結果：${captcha_text}</arg>
+<arg>level=INFO</arg>
+<doc>Logs the given message with the given level.</doc>
+<status status="PASS" start="2026-07-11T22:41:07.865497" elapsed="0.000420"/>
+</kw>
+<kw name="Fill Text" owner="Browser">
+<msg time="2026-07-11T22:41:07.866379" level="INFO">Fills the text '843238' in the given field.</msg>
+<arg>${LOC_CAPTCHA_INPUT}</arg>
+<arg>${captcha_text}</arg>
+<tag>PageContent</tag>
+<tag>Setter</tag>
+<doc>Clears and fills the given ``txt`` into the text field found by ``selector``.</doc>
+<status status="PASS" start="2026-07-11T22:41:07.866013" elapsed="0.011970"/>
+</kw>
+<doc>截圖驗證碼圖片後以 Claude Vision 辨識並填入</doc>
+<status status="PASS" start="2026-07-11T22:41:02.189022" elapsed="5.689074"/>
+</kw>
+<kw name="Click" owner="Browser">
+<msg time="2026-07-11T22:41:07.878659" level="INFO">Clicks the element 'id=MMA_Login'.</msg>
+<arg>${LOC_LOGIN_BTN}</arg>
+<tag>PageContent</tag>
+<tag>Setter</tag>
+<doc>Simulates mouse click on the element found by ``selector``.</doc>
+<status status="PASS" start="2026-07-11T22:41:07.878212" elapsed="0.259787"/>
+</kw>
+<kw name="Sleep" owner="BuiltIn">
+<msg time="2026-07-11T22:41:09.139676" level="INFO">Slept 1 second.</msg>
+<arg>1s</arg>
+<doc>Pauses the test executed for the given time.</doc>
+<status status="PASS" start="2026-07-11T22:41:08.138422" elapsed="1.001618"/>
+</kw>
+<kw name="Take Screenshot" owner="Browser">
+<msg time="2026-07-11T22:41:09.219476" level="INFO" html="true">&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td colspan="3"&gt;&lt;a href="after_click_TC-001%20%E6%AD%A3%E5%B8%B8%E7%99%BB%E5%85%A5%E6%88%90%E5%8A%9F.png" target="_blank"&gt;&lt;img src="after_click_TC-001%20%E6%AD%A3%E5%B8%B8%E7%99%BB%E5%85%A5%E6%88%90%E5%8A%9F.png" width="800px"/&gt;&lt;/a&gt;</msg>
+<arg>filename=${OUTPUT DIR}/after_click_${TEST NAME}.png</arg>
+<tag>PageContent</tag>
+<doc>Takes a screenshot of the current window or element and saves it to disk.</doc>
+<status status="PASS" start="2026-07-11T22:41:09.140651" elapsed="0.078945"/>
+</kw>
+<kw name="Wait For Load State" owner="Browser">
+<msg time="2026-07-11T22:41:09.220183" level="INFO">Waiting page load to state to receive load in 20000.0</msg>
+<msg time="2026-07-11T22:41:09.223576" level="INFO">Load state load got in 20000</msg>
+<arg>load</arg>
+<arg>timeout=${TIMEOUT}</arg>
+<tag>PageContent</tag>
+<tag>Wait</tag>
+<doc>Waits that the page reaches the required load state.</doc>
+<status status="PASS" start="2026-07-11T22:41:09.219729" elapsed="0.003931"/>
+</kw>
+<kw name="Get Url" owner="Browser">
+<msg time="2026-07-11T22:41:09.226128" level="INFO">${current_url} = https://mma.sinopac.com/MemberPortal/Member/NextWebLogin.aspx</msg>
+<var>${current_url}</var>
+<tag>Assertion</tag>
+<tag>Getter</tag>
+<tag>PageContent</tag>
+<doc>Returns the current URL.</doc>
+<status status="PASS" start="2026-07-11T22:41:09.223780" elapsed="0.002389"/>
+</kw>
+<kw name="Should Not Contain" owner="BuiltIn">
+<msg time="2026-07-11T22:41:09.226947" level="FAIL">'https://mma.sinopac.com/MemberPortal/Member/NextWebLogin.aspx' contains 'NextWebLogin'</msg>
+<arg>${current_url}</arg>
+<arg>NextWebLogin</arg>
+<doc>Fails if ``container`` contains ``item`` one or more times.</doc>
+<status status="FAIL" start="2026-07-11T22:41:09.226330" elapsed="0.000726">'https://mma.sinopac.com/MemberPortal/Member/NextWebLogin.aspx' contains 'NextWebLogin'</status>
+</kw>
+<kw name="測試後截圖留存" type="TEARDOWN">
+<if>
+<branch type="IF" condition="'${TEST STATUS}' == 'FAIL'">
+<kw name="Take Screenshot" owner="Browser">
+<msg time="2026-07-11T22:41:09.286559" level="INFO" html="true">&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td colspan="3"&gt;&lt;a href="FAILED_TC-001%20%E6%AD%A3%E5%B8%B8%E7%99%BB%E5%85%A5%E6%88%90%E5%8A%9F.png" target="_blank"&gt;&lt;img src="FAILED_TC-001%20%E6%AD%A3%E5%B8%B8%E7%99%BB%E5%85%A5%E6%88%90%E5%8A%9F.png" width="800px"/&gt;&lt;/a&gt;</msg>
+<arg>filename=${OUTPUT DIR}/FAILED_${TEST NAME}.png</arg>
+<tag>PageContent</tag>
+<doc>Takes a screenshot of the current window or element and saves it to disk.</doc>
+<status status="PASS" start="2026-07-11T22:41:09.228034" elapsed="0.058653"/>
+</kw>
+<status status="PASS" start="2026-07-11T22:41:09.227821" elapsed="0.058931"/>
+</branch>
+<status status="PASS" start="2026-07-11T22:41:09.227796" elapsed="0.059007"/>
+</if>
+<doc>TC Teardown：測試失敗時自動截圖，不關閉 Browser</doc>
+<status status="PASS" start="2026-07-11T22:41:09.227504" elapsed="0.059350"/>
+</kw>
+<doc>使用有效的身分證字號、使用者代號與密碼進行登入，驗證成功進入會員首頁</doc>
+<tag>login</tag>
+<tag>smoke</tag>
+<tag>TC-001</tag>
+<status status="FAIL" start="2026-07-11T22:41:01.400935" elapsed="7.885971">'https://mma.sinopac.com/MemberPortal/Member/NextWebLogin.aspx' contains 'NextWebLogin'</status>
+</test>
+<kw name="關閉所有瀏覽器" type="TEARDOWN">
+<kw name="Close Browser" owner="Browser">
+<msg time="2026-07-11T22:41:09.348963" level="INFO">Closed all browsers</msg>
+<arg>ALL</arg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Closes the current browser.</doc>
+<status status="PASS" start="2026-07-11T22:41:09.292520" elapsed="0.056576"/>
+</kw>
+<doc>Suite Teardown：統一關閉所有瀏覽器實例</doc>
+<status status="PASS" start="2026-07-11T22:41:09.292179" elapsed="0.057011"/>
+</kw>
+<status status="FAIL" start="2026-07-11T22:40:58.930871" elapsed="10.418364"/>
+</suite>
+<statistics>
+<total>
+<stat pass="0" fail="1" skip="0">All Tests</stat>
+</total>
+<tag>
+<stat pass="0" fail="1" skip="0">login</stat>
+<stat pass="0" fail="1" skip="0">smoke</stat>
+<stat pass="0" fail="1" skip="0">TC-001</stat>
+</tag>
+<suite>
+<stat name="Test" id="s1" pass="0" fail="1" skip="0">Test</stat>
+</suite>
+</statistics>
+<errors>
+</errors>
+</robot>

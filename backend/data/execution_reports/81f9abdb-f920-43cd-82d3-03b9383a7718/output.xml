@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<robot generator="Robot 7.4.2 (Python 3.13.1 on win32)" generated="2026-07-11T20:47:49.533557" rpa="false" schemaversion="5">
+<suite id="s1" name="Test" source="C:\Users\mark\AppData\Local\Temp\tmp9nuptcs7\test.robot">
+<kw name="初始化瀏覽器並開啟登入頁" type="SETUP">
+<kw name="New Browser" owner="Browser">
+<msg time="2026-07-11T20:47:49.751701" level="INFO">{"browser": "chromium", "headless": false, "chromiumSandbox": false, "devtools": false, "handleSIGHUP": true, "handleSIGINT": true, "handleSIGTERM": true, "slowMo": 0.0, "timeout": 30000.0, "tracesDir": "C:\\Users\\mark\\AppData\\Local\\Temp\\tmp9nuptcs7\\browser\\traces\\temp\\4e34fa1e-4f23-45de-97e5-665fad671728"}</msg>
+<msg time="2026-07-11T20:47:49.773132" level="INFO">Starting Browser process C:\Users\mark\Desktop\Automatic_Test\backend\.venv\Lib\site-packages\Browser\wrapper\index.js using at 127.0.0.1:51998</msg>
+<msg time="2026-07-11T20:47:51.118292" level="INFO">Successfully created browser with options: {"browser":"chromium","headless":false,"chromiumSandbox":false,"devtools":false,"handleSIGHUP":true,"handleSIGINT":true,"handleSIGTERM":true,"slowMo":0,"timeout":30000,"tracesDir":"C:\\Users\\mark\\AppData\\Local\\Temp\\tmp9nuptcs7\\browser\\traces\\temp\\4e34fa1e-4f23-45de-97e5-665fad671728"}</msg>
+<arg>chromium</arg>
+<arg>headless=False</arg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Create a new playwright Browser with specified options.</doc>
+<status status="PASS" start="2026-07-11T20:47:49.751130" elapsed="1.367789"/>
+</kw>
+<kw name="New Context" owner="Browser">
+<msg time="2026-07-11T20:47:51.124436" level="INFO">{
+  "acceptDownloads": true,
+  "bypassCSP": false,
+  "forcedColors": "none",
+  "ignoreHTTPSErrors": false,
+  "javaScriptEnabled": true,
+  "offline": false,
+  "reducedMotion": "no-preference",
+  "serviceWorkers": "allow",
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  }
+}</msg>
+<msg time="2026-07-11T20:47:51.146083" level="INFO">Successfully created context. </msg>
+<msg time="2026-07-11T20:47:51.146158" level="INFO">{'acceptDownloads': True, 'bypassCSP': False, 'forcedColors': 'none', 'ignoreHTTPSErrors': False, 'javaScriptEnabled': True, 'offline': False, 'reducedMotion': 'no-preference', 'serviceWorkers': 'allow', 'viewport': {'width': 1280, 'height': 800}}</msg>
+<arg>viewport={'width': 1280, 'height': 800}</arg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Create a new BrowserContext with specified options.</doc>
+<status status="PASS" start="2026-07-11T20:47:51.119690" elapsed="0.026552"/>
+</kw>
+<kw name="New Page" owner="Browser">
+<msg time="2026-07-11T20:47:55.821199" level="INFO">Successfully initialized new page object and opened url: https://mma.sinopac.com/MemberPortal/Member/NextWebLogin.aspx</msg>
+<arg>${BASE_URL}</arg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Open a new Page.</doc>
+<status status="PASS" start="2026-07-11T20:47:51.146435" elapsed="4.674944"/>
+</kw>
+<kw name="Wait For Load State" owner="Browser">
+<msg time="2026-07-11T20:47:55.822294" level="INFO">Waiting page load to state to receive networkidle in 20000.0</msg>
+<msg time="2026-07-11T20:48:16.013995" level="INFO" html="true">&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td colspan="3"&gt;&lt;a href="browser/screenshot/fail-screenshot-1.png" target="_blank"&gt;&lt;img src="browser/screenshot/fail-screenshot-1.png" width="800px"/&gt;&lt;/a&gt;</msg>
+<msg time="2026-07-11T20:48:16.014114" level="INFO">See also file:///C:/Users/mark/AppData/Local/Temp/tmp9nuptcs7/playwright-log.txt for additional details.</msg>
+<msg time="2026-07-11T20:48:16.014386" level="FAIL">TimeoutError: page.waitForLoadState: Timeout 20000ms exceeded.</msg>
+<arg>networkidle</arg>
+<arg>timeout=${TIMEOUT}</arg>
+<tag>PageContent</tag>
+<tag>Wait</tag>
+<doc>Waits that the page reaches the required load state.</doc>
+<status status="FAIL" start="2026-07-11T20:47:55.821541" elapsed="20.209883">TimeoutError: page.waitForLoadState: Timeout 20000ms exceeded.</status>
+</kw>
+<kw name="Wait For Elements State" owner="Browser">
+<arg>id=ContentPlaceHolder1_txtIDNo</arg>
+<arg>visible</arg>
+<arg>timeout=${TIMEOUT}</arg>
+<tag>PageContent</tag>
+<tag>Wait</tag>
+<doc>Waits for the element found by ``selector`` to satisfy state option.</doc>
+<status status="NOT RUN" start="2026-07-11T20:48:16.031649" elapsed="0.000090"/>
+</kw>
+<doc>Suite Setup：建立單一 Browser / Context / Page 並導航至登入頁</doc>
+<status status="FAIL" start="2026-07-11T20:47:49.750632" elapsed="26.281228">TimeoutError: page.waitForLoadState: Timeout 20000ms exceeded.</status>
+</kw>
+<test id="s1-t1" name="TC-001 正常登入成功" line="17">
+<doc>使用有效的身分證字號、使用者代號與密碼進行登入，驗證成功進入會員首頁</doc>
+<tag>login</tag>
+<tag>smoke</tag>
+<tag>TC-001</tag>
+<status status="FAIL" start="2026-07-11T20:48:16.031945" elapsed="0.007022">Parent suite setup failed:
+TimeoutError: page.waitForLoadState: Timeout 20000ms exceeded.</status>
+</test>
+<kw name="關閉所有瀏覽器" type="TEARDOWN">
+<kw name="Close Browser" owner="Browser">
+<msg time="2026-07-11T20:48:16.209251" level="INFO">Closed all browsers</msg>
+<arg>ALL</arg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Closes the current browser.</doc>
+<status status="PASS" start="2026-07-11T20:48:16.045743" elapsed="0.163641"/>
+</kw>
+<doc>Suite Teardown：關閉所有瀏覽器實例</doc>
+<status status="PASS" start="2026-07-11T20:48:16.045486" elapsed="0.163999"/>
+</kw>
+<status status="FAIL" start="2026-07-11T20:47:49.534672" elapsed="26.674857">Suite setup failed:
+TimeoutError: page.waitForLoadState: Timeout 20000ms exceeded.</status>
+</suite>
+<statistics>
+<total>
+<stat pass="0" fail="1" skip="0">All Tests</stat>
+</total>
+<tag>
+<stat pass="0" fail="1" skip="0">login</stat>
+<stat pass="0" fail="1" skip="0">smoke</stat>
+<stat pass="0" fail="1" skip="0">TC-001</stat>
+</tag>
+<suite>
+<stat name="Test" id="s1" pass="0" fail="1" skip="0">Test</stat>
+</suite>
+</statistics>
+<errors>
+<msg time="2026-07-11T20:47:49.749450" level="ERROR">Error in file 'C:\Users\mark\AppData\Local\Temp\tmp9nuptcs7\test.robot' on line 3: Library 'C:\Users\mark\AppData\Local\Temp\libs\CaptchaSolverLibrary.py' does not exist.</msg>
+</errors>
+</robot>

@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<robot generator="Robot 7.4.2 (Python 3.13.1 on win32)" generated="2026-07-11T19:46:51.437304" rpa="false" schemaversion="5">
+<suite id="s1" name="Test" source="C:\Users\mark\AppData\Local\Temp\tmp1yx0qq9k\test.robot">
+<kw name="Open Login Page" type="SETUP">
+<kw name="New Browser" owner="Browser">
+<msg time="2026-07-11T19:46:51.656758" level="INFO">{"browser": "chromium", "headless": true, "chromiumSandbox": false, "devtools": false, "handleSIGHUP": true, "handleSIGINT": true, "handleSIGTERM": true, "slowMo": 0.0, "timeout": 30000.0, "tracesDir": "C:\\Users\\mark\\AppData\\Local\\Temp\\tmp1yx0qq9k\\browser\\traces\\temp\\29a61aa1-f5a9-484a-9ba9-1695358fdab6"}</msg>
+<msg time="2026-07-11T19:46:51.685533" level="INFO">Starting Browser process C:\Users\mark\Desktop\Automatic_Test\backend\.venv\Lib\site-packages\Browser\wrapper\index.js using at 127.0.0.1:58718</msg>
+<msg time="2026-07-11T19:46:52.810442" level="INFO">Successfully created browser with options: {"browser":"chromium","headless":true,"chromiumSandbox":false,"devtools":false,"handleSIGHUP":true,"handleSIGINT":true,"handleSIGTERM":true,"slowMo":0,"timeout":30000,"tracesDir":"C:\\Users\\mark\\AppData\\Local\\Temp\\tmp1yx0qq9k\\browser\\traces\\temp\\29a61aa1-f5a9-484a-9ba9-1695358fdab6"}</msg>
+<arg>chromium</arg>
+<arg>headless=True</arg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Create a new playwright Browser with specified options.</doc>
+<status status="PASS" start="2026-07-11T19:46:51.656200" elapsed="1.154433"/>
+</kw>
+<kw name="New Context" owner="Browser">
+<msg time="2026-07-11T19:46:52.812106" level="INFO">{
+  "acceptDownloads": true,
+  "bypassCSP": false,
+  "forcedColors": "none",
+  "ignoreHTTPSErrors": false,
+  "javaScriptEnabled": true,
+  "offline": false,
+  "reducedMotion": "no-preference",
+  "serviceWorkers": "allow",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  }
+}</msg>
+<msg time="2026-07-11T19:46:52.822287" level="INFO">Successfully created context. </msg>
+<msg time="2026-07-11T19:46:52.822359" level="INFO">{'acceptDownloads': True, 'bypassCSP': False, 'forcedColors': 'none', 'ignoreHTTPSErrors': False, 'javaScriptEnabled': True, 'offline': False, 'reducedMotion': 'no-preference', 'serviceWorkers': 'allow', 'viewport': {'width': 1280, 'height': 720}}</msg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Create a new BrowserContext with specified options.</doc>
+<status status="PASS" start="2026-07-11T19:46:52.810886" elapsed="0.011543"/>
+</kw>
+<kw name="New Page" owner="Browser">
+<msg time="2026-07-11T19:47:02.883660" level="INFO">Keyword 'Take Screenshot  fail-screenshot-{index}' could not be run on failure:
+Error: Tried to take screenshot, but no page was open.</msg>
+<msg time="2026-07-11T19:47:02.883773" level="INFO">See also file:///C:/Users/mark/AppData/Local/Temp/tmp1yx0qq9k/playwright-log.txt for additional details.</msg>
+<msg time="2026-07-11T19:47:02.884183" level="FAIL">TimeoutError: page.goto: Timeout 10000ms exceeded.
+Call log:
+  - navigating to "https://mma.sinopac.com/MemberPortal/Member/NextWebLogin.aspx", waiting until "load"
+</msg>
+<arg>${BASE_URL}</arg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Open a new Page.</doc>
+<status status="FAIL" start="2026-07-11T19:46:52.822600" elapsed="10.081668">TimeoutError: page.goto: Timeout 10000ms exceeded.
+Call log:
+  - navigating to "https://mma.sinopac.com/MemberPortal/Member/NextWebLogin.aspx", waiting until "load"
+</status>
+</kw>
+<status status="FAIL" start="2026-07-11T19:46:51.655711" elapsed="11.248708">TimeoutError: page.goto: Timeout 10000ms exceeded.
+Call log:
+  - navigating to "https://mma.sinopac.com/MemberPortal/Member/NextWebLogin.aspx", waiting until "load"
+</status>
+</kw>
+<test id="s1-t1" name="TC-001 正常登入成功" line="15">
+<doc>使用有效的身分證字號、使用者代號與密碼進行登入，驗證成功進入會員首頁</doc>
+<tag>login</tag>
+<tag>smoke</tag>
+<tag>TC-001</tag>
+<status status="FAIL" start="2026-07-11T19:47:02.904511" elapsed="0.006747">Parent suite setup failed:
+TimeoutError: page.goto: Timeout 10000ms exceeded.
+Call log:
+  - navigating to "https://mma.sinopac.com/MemberPortal/Member/NextWebLogin.aspx", waiting until "load"
+</status>
+</test>
+<kw name="Close Browser" owner="Browser" type="TEARDOWN">
+<msg time="2026-07-11T19:47:02.966072" level="INFO">Closed browser</msg>
+<tag>BrowserControl</tag>
+<tag>Setter</tag>
+<doc>Closes the current browser.</doc>
+<status status="PASS" start="2026-07-11T19:47:02.917100" elapsed="0.049103"/>
+</kw>
+<status status="FAIL" start="2026-07-11T19:46:51.438427" elapsed="11.527845">Suite setup failed:
+TimeoutError: page.goto: Timeout 10000ms exceeded.
+Call log:
+  - navigating to "https://mma.sinopac.com/MemberPortal/Member/NextWebLogin.aspx", waiting until "load"
+</status>
+</suite>
+<statistics>
+<total>
+<stat pass="0" fail="1" skip="0">All Tests</stat>
+</total>
+<tag>
+<stat pass="0" fail="1" skip="0">login</stat>
+<stat pass="0" fail="1" skip="0">smoke</stat>
+<stat pass="0" fail="1" skip="0">TC-001</stat>
+</tag>
+<suite>
+<stat name="Test" id="s1" pass="0" fail="1" skip="0">Test</stat>
+</suite>
+</statistics>
+<errors>
+<msg time="2026-07-11T19:46:51.654578" level="ERROR">Error in file 'C:\Users\mark\AppData\Local\Temp\tmp1yx0qq9k\test.robot' on line 3: Library 'C:\Users\mark\AppData\Local\Temp\libs\CaptchaSolverLibrary.py' does not exist.</msg>
+</errors>
+</robot>
