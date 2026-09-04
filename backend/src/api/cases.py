@@ -408,7 +408,9 @@ async def chat_with_ai(
     stmt = select(CaseChatMessage).where(CaseChatMessage.case_id == case_id).order_by(CaseChatMessage.created_at)
     result = await session.execute(stmt)
     history = result.scalars().all()
-    messages = [{"role": m.role, "content": m.content} for m in history]
+    # Trial-run-result messages (role="system") are for UI display only — the
+    # Anthropic Messages API rejects a bare "system" role turn mid-conversation.
+    messages = [{"role": m.role, "content": m.content} for m in history if m.role != "system"]
 
     settings = get_settings()
     model = body.llm_model or await AppSettingService(session).get_active_model()

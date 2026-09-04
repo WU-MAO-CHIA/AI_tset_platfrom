@@ -20,6 +20,21 @@ def _resolve_venv_python() -> str:
 
 _PYTHON_EXE = _resolve_venv_python()
 
+
+def _load_backend_env() -> dict:
+    """Read backend/.env into a dict (does not mutate os.environ)."""
+    backend_root = Path(__file__).parent.parent.parent
+    env_path = backend_root / ".env"
+    values: dict = {}
+    if env_path.exists():
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            values[key.strip()] = val.strip().strip('"').strip("'")
+    return values
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import AsyncSessionLocal
@@ -522,10 +537,20 @@ class ExecutionService:
             return {"status": "skipped", "elapsed_ms": 0, "failure_message": "No robot code available"}
 
         with tempfile.TemporaryDirectory() as tmp_dir:
-            robot_file = os.path.join(tmp_dir, "test.robot")
+            # Mirror the real robot_scripts/../libs layout so that scripts using
+            # ${CURDIR}/../libs/... library imports still resolve when copied here.
+            scripts_dir = os.path.join(tmp_dir, "robot_scripts")
+            os.makedirs(scripts_dir, exist_ok=True)
+            robot_file = os.path.join(scripts_dir, "test.robot")
             output_xml = os.path.join(tmp_dir, "output.xml")
             with open(robot_file, "w", encoding="utf-8") as f:
                 f.write(robot_code)
+
+            from src.core.config import get_settings
+            real_libs_dir = os.path.join(os.path.dirname(get_settings().robot_scripts_dir), "libs")
+            if os.path.isdir(real_libs_dir):
+                import shutil as _shutil
+                _shutil.copytree(real_libs_dir, os.path.join(tmp_dir, "libs"), dirs_exist_ok=True)
 
             try:
                 result = await asyncio.wait_for(
@@ -552,6 +577,7 @@ class ExecutionService:
         start_ms = int(time.time() * 1000)
 
         def _run_sync() -> subprocess.CompletedProcess:
+            env = {**os.environ, **_load_backend_env()}
             return subprocess.run(
                 [_PYTHON_EXE, "-m", "robot",
                  "--outputdir", os.path.dirname(output_xml),
@@ -560,6 +586,7 @@ class ExecutionService:
                  robot_file],
                 capture_output=True,
                 timeout=timeout_sec,
+                env=env,
             )
 
         loop = asyncio.get_event_loop()

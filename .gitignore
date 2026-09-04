@@ -67,3 +67,6 @@ automatic_test/frontend/.nuxt/
 .specify/
 .codebase-memory/
 .claude/
+
+# MCP
+/Usersmark.mcpcodebase-memory/
