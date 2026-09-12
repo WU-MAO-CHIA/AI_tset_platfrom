@@ -1,5 +1,24 @@
 <template>
   <div class="ai-chat-panel">
+    <div class="chat-header">
+      <div class="rf-context-indicator" v-if="hasRfCode">
+        <span class="indicator-dot" :class="contextMode"></span>
+        <span class="indicator-text">RF 程式碼：{{ contextModeLabel }}</span>
+        <select
+          v-model="contextMode"
+          class="context-mode-select"
+          data-testid="rf-context-mode-select"
+        >
+          <option value="full">完整</option>
+          <option value="summary">摘要</option>
+          <option value="none">無</option>
+        </select>
+      </div>
+      <div v-else class="rf-context-indicator no-rf">
+        <span class="indicator-text">無 RF 程式碼上下文</span>
+      </div>
+    </div>
+
     <div class="chat-messages" ref="messagesContainer">
       <div v-if="messages.length === 0" class="empty-hint">
         <p>向 AI 描述你想測試的功能，AI 將協助你產生測試步驟與 Robot Framework 腳本。</p>
@@ -46,7 +65,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, watch, nextTick, computed } from 'vue'
 import { caseApi } from '../../services/caseApi'
 import { streamExecution } from '../../services/executionApi'
 import type { ChatMessage } from '../../services/caseApi'
@@ -68,6 +87,20 @@ const loading = ref(false)
 const trialInProgress = ref(false)
 const messagesContainer = ref<HTMLElement | null>(null)
 
+/** RF context mode: full, summary, none */
+const contextMode = ref<'full' | 'summary' | 'none'>('full')
+
+/** Check if case has RF code available */
+const hasRfCode = ref(false)
+
+const contextModeLabel = computed(() => {
+  switch (contextMode.value) {
+    case 'full': return '完整模式'
+    case 'summary': return '摘要模式'
+    case 'none': return '無上下文'
+  }
+})
+
 let evtSource: EventSource | null = null
 
 async function loadHistory() {
@@ -81,7 +114,20 @@ async function loadHistory() {
   }
 }
 
-onMounted(loadHistory)
+async function checkRfCodeAvailability() {
+  if (!props.caseId) return
+  try {
+    const res = await caseApi.getRobotScript(props.caseId)
+    hasRfCode.value = !!res.data.rf_code
+  } catch {
+    hasRfCode.value = false
+  }
+}
+
+onMounted(async () => {
+  await loadHistory()
+  await checkRfCodeAvailability()
+})
 
 watch(() => props.watchExecutionId, (executionId) => {
   if (!executionId) return
@@ -109,7 +155,7 @@ async function sendMessage() {
   scrollToBottom()
 
   try {
-    const res = await caseApi.chatWithAI(props.caseId ?? '', text, props.selectedModel)
+    const res = await caseApi.chatWithAI(props.caseId ?? '', text, props.selectedModel, contextMode.value)
     const { assistant_message, rf_code } = res.data
     messages.value.push({ role: 'assistant', content: assistant_message, created_at: new Date().toISOString() })
     if (rf_code) {
@@ -152,6 +198,55 @@ async function scrollToBottom() {
   flex-direction: column;
   height: 100%;
   min-height: 400px;
+}
+
+.chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #f8f9fa;
+  border-radius: 8px 8px 0 0;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.rf-context-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #495057;
+}
+
+.rf-context-indicator.no-rf {
+  color: #adb5bd;
+}
+
+.indicator-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.indicator-dot.full { background: #28a745; }
+.indicator-dot.summary { background: #ffc107; }
+.indicator-dot.none { background: #dc3545; }
+
+.context-mode-select {
+  padding: 2px 8px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  background: white;
+  font-size: 12px;
+  color: #495057;
+  cursor: pointer;
+}
+
+.context-mode-select:focus {
+  outline: none;
+  border-color: #80bdff;
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
 }
 
 .chat-messages {

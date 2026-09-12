@@ -7,9 +7,12 @@ vi.mock('@/services/caseApi', () => ({
   caseApi: {
     createCase: vi.fn().mockResolvedValue({ data: { id: 'case-1', case_number: 'TC-001', version: 1, created_at: '2026-01-01' } }),
     updateCase: vi.fn().mockResolvedValue({ data: {} }),
+    getRobotScript: vi.fn().mockResolvedValue({ data: { rf_code: '*** Test ***\nLog    Hello', case_number: 'TC-001' } }),
+    uploadRobotScript: vi.fn().mockResolvedValue({ data: { rf_code: '*** Uploaded ***\nLog    World', case_number: 'TC-001', file_path: '/tmp/TC-001.robot', size_bytes: 100, encoding: 'utf-8' } }),
     aiComplete: vi.fn().mockResolvedValue({ data: { completed_steps: 'AI filled steps', model_used: 'claude' } }),
     aiCompletePreview: vi.fn().mockResolvedValue({ data: { completed_steps: 'AI filled steps', model_used: 'claude' } }),
     trialRun: vi.fn().mockResolvedValue({ data: { execution_id: 'exec-1', stream_url: '/stream' } }),
+    listCategories: vi.fn().mockResolvedValue({ data: { items: ['web', 'api'] } }),
   },
 }))
 
@@ -19,6 +22,7 @@ const globalStubs = {
   stubs: {
     MediaUploader: { template: '<div class="media-uploader" />', props: ['caseId'], emits: ['uploaded'] },
     LLMModelSelector: { template: '<div class="llm-selector" />', props: ['modelValue'], emits: ['update:modelValue'] },
+    RFCodePreview: { template: '<div class="rf-preview" data-testid="rf-preview"><slot/></div>', props: ['mainSteps', 'selectedModel', 'rfCodeOverride', 'caseId', 'chatMode'], emits: ['trial-started'] },
   },
 }
 
@@ -95,5 +99,80 @@ describe('TestCaseForm validation', () => {
     // Phase 12: LLMModelSelector moved to AIChatPanel in Tab 2
     const wrapper = mount(TestCaseForm, { global: globalStubs })
     expect(wrapper.find('.llm-selector').exists()).toBe(false)
+  })
+})
+
+describe('TestCaseForm RF code upload integration', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+
+  it('should show RFCodeUpload component in create mode', () => {
+    const wrapper = mount(TestCaseForm, {
+      props: { selectedModel: 'claude-sonnet-4-6' },
+      global: globalStubs,
+    })
+    expect(wrapper.find('[data-testid="rf-upload"]').exists()).toBe(true)
+  })
+
+  it('should show RFCodePreview with existing RF code when editing', async () => {
+    const wrapper = mount(TestCaseForm, {
+      props: { caseId: 'case-1', initialData: { main_steps: 'steps' }, selectedModel: 'claude-sonnet-4-6' },
+      global: globalStubs,
+    })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="rf-preview"]').exists()).toBe(true)
+    expect(caseApi.getRobotScript).toHaveBeenCalledWith('case-1')
+  })
+
+  it('should upload pending RF code after case creation', async () => {
+    const wrapper = mount(TestCaseForm, {
+      props: { selectedModel: 'claude-sonnet-4-6' },
+      global: globalStubs,
+    })
+
+    // Simulate file loaded event
+    const rfUpload = wrapper.findComponent({ name: 'RFCodeUpload' })
+    rfUpload.vm.$emit('file-loaded', '*** Test ***\nLog    Uploaded')
+
+    await wrapper.find('button[type="submit"]').trigger('click')
+    await flushPromises()
+
+    expect(caseApi.createCase).toHaveBeenCalled()
+    expect(caseApi.uploadRobotScript).toHaveBeenCalled()
+  })
+
+  it('should upload pending RF code after case update', async () => {
+    const wrapper = mount(TestCaseForm, {
+      props: { caseId: 'case-1', initialData: { main_steps: 'steps' }, selectedModel: 'claude-sonnet-4-6' },
+      global: globalStubs,
+    })
+    await flushPromises()
+
+    // Simulate file loaded event
+    const rfUpload = wrapper.findComponent({ name: 'RFCodeUpload' })
+    rfUpload.vm.$emit('file-loaded', '*** Test ***\nLog    Uploaded')
+
+    await wrapper.find('button[type="submit"]').trigger('click')
+    await flushPromises()
+
+    expect(caseApi.updateCase).toHaveBeenCalled()
+    expect(caseApi.uploadRobotScript).toHaveBeenCalledWith('case-1', expect.any(File))
+  })
+
+  it('should clear RF code when file-cleared emitted', async () => {
+    const wrapper = mount(TestCaseForm, {
+      props: { selectedModel: 'claude-sonnet-4-6' },
+      global: globalStubs,
+    })
+
+    const rfUpload = wrapper.findComponent({ name: 'RFCodeUpload' })
+    rfUpload.vm.$emit('file-loaded', '*** Test ***\nLog    Hello')
+    rfUpload.vm.$emit('file-cleared')
+
+    await flushPromises()
+    // RFCodePreview should not be shown when cleared
+    expect(wrapper.find('[data-testid="rf-preview"]').exists()).toBe(false)
   })
 })

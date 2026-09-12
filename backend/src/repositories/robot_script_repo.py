@@ -65,3 +65,11 @@ class RobotScriptRepository(BaseRepository[RobotScript]):
         await self.session.flush()
         await self.session.refresh(record)
         return record
+
+    async def delete_by_case_id(self, test_case_id: str) -> bool:
+        existing = await self.get_by_case_id(test_case_id)
+        if existing is None:
+            return False
+        await self.session.delete(existing)
+        await self.session.flush()
+        return True

@@ -9,13 +9,7 @@ class CaseService:
 
     async def generate_case_number(self, system_category: Optional[str]) -> str:
         prefix = (system_category or "TC").strip()
-        cases = await self.repo.list_by_prefix(prefix)
-        max_num = 0
-        for c in cases:
-            parts = c.case_number.rsplit("-", 1)
-            if len(parts) == 2 and parts[-1].isdigit():
-                max_num = max(max_num, int(parts[-1]))
-        return f"{prefix}-{str(max_num + 1).zfill(3)}"
+        return await self.repo.get_next_case_number(prefix)
 
     async def create(
         self,

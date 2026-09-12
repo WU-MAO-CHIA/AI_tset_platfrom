@@ -6,6 +6,8 @@ import * as caseApiModule from '../../src/services/caseApi'
 vi.mock('../../src/services/caseApi', () => ({
   caseApi: {
     previewRfCode: vi.fn(),
+    saveRobotScript: vi.fn(),
+    getRobotScript: vi.fn(),
   },
 }))
 
@@ -79,5 +81,71 @@ describe('RFCodePreview', () => {
 
     expect(wrapper.find('button[data-testid="rf-translate-btn"]').attributes('disabled')).toBeDefined()
     resolve!({ data: { rf_code: '' } })
+  })
+
+  it('renders save button when caseId and rfCode provided', () => {
+    const wrapper = mount(RFCodePreview, {
+      props: {
+        mainSteps: '1. 步驟',
+        selectedModel: 'claude-3-5-sonnet-20241022',
+        caseId: 'case-1',
+        rfCodeOverride: '*** Test ***\nLog    Hello',
+        chatMode: false,
+      },
+    })
+    expect(wrapper.find('button[data-testid="rf-save-btn"]').exists()).toBe(true)
+  })
+
+  it('calls saveRobotScript when save button clicked', async () => {
+    vi.mocked(caseApiModule.caseApi.saveRobotScript).mockResolvedValue({
+      data: { case_number: 'TC-001', file_path: '/tmp/TC-001.robot' },
+    } as any)
+
+    const wrapper = mount(RFCodePreview, {
+      props: {
+        mainSteps: '1. 步驟',
+        selectedModel: 'claude-3-5-sonnet-20241022',
+        caseId: 'case-1',
+        rfCodeOverride: '*** Test ***\nLog    Hello',
+        chatMode: false,
+      },
+    })
+    await wrapper.find('button[data-testid="rf-save-btn"]').trigger('click')
+    await wrapper.vm.$nextTick()
+
+    expect(caseApiModule.caseApi.saveRobotScript).toHaveBeenCalledWith('case-1', '*** Test ***\nLog    Hello')
+  })
+
+  it('shows saved state after successful save', async () => {
+    vi.mocked(caseApiModule.caseApi.saveRobotScript).mockResolvedValue({
+      data: { case_number: 'TC-001', file_path: '/tmp/TC-001.robot' },
+    } as any)
+
+    const wrapper = mount(RFCodePreview, {
+      props: {
+        mainSteps: '1. 步驟',
+        selectedModel: 'claude-3-5-sonnet-20241022',
+        caseId: 'case-1',
+        rfCodeOverride: '*** Test ***\nLog    Hello',
+        chatMode: false,
+      },
+    })
+    await wrapper.find('button[data-testid="rf-save-btn"]').trigger('click')
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('button[data-testid="rf-save-btn"]').text()).toContain('已儲存')
+  })
+
+  it('shows trial run button in chat mode when rfCode available', () => {
+    const wrapper = mount(RFCodePreview, {
+      props: {
+        mainSteps: '1. 步驟',
+        selectedModel: 'claude-3-5-sonnet-20241022',
+        caseId: 'case-1',
+        rfCodeOverride: '*** Test ***\nLog    Hello',
+        chatMode: true,
+      },
+    })
+    expect(wrapper.find('button[data-testid="rf-trial-run-btn"]').exists()).toBe(true)
   })
 })

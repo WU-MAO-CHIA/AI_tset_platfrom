@@ -44,8 +44,10 @@ export async function getExecutionResults(
 }
 
 export function streamExecution(executionId: string, onEvent: (data: unknown) => void): EventSource {
-  const token = localStorage.getItem('access_token') ?? ''
-  const evtSource = new EventSource(`/api/v1/executions/${executionId}/stream?token=${encodeURIComponent(token)}`)
+  // Token is now sent via HttpOnly cookie, no need to pass in URL
+  const evtSource = new EventSource(`/api/v1/executions/${executionId}/stream`, {
+    withCredentials: true
+  })
   evtSource.onmessage = (e) => {
     try {
       const data = JSON.parse(e.data)

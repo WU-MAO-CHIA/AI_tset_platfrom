@@ -193,8 +193,8 @@ export const caseApi = {
     return apiClient.post(`/cases/${id}/import-test-data/confirm`, { import_token: importToken })
   },
 
-  chatWithAI(caseId: string, message: string, model: string) {
-    return apiClient.post<ChatResponse>(`/cases/${caseId}/chat`, { message, llm_model: model })
+  chatWithAI(caseId: string, message: string, model: string, rfContextMode: 'full' | 'summary' | 'none' = 'full') {
+    return apiClient.post<ChatResponse>(`/cases/${caseId}/chat`, { message, llm_model: model, rf_context_mode: rfContextMode })
   },
 
   getChatHistory(caseId: string) {
@@ -203,6 +203,14 @@ export const caseApi = {
 
   saveRobotScript(caseId: string, rfCode: string) {
     return apiClient.put<{ case_number: string; file_path: string }>(`/cases/${caseId}/robot-script`, { rf_code: rfCode })
+  },
+
+  uploadRobotScript(caseId: string, file: File) {
+    const form = new FormData()
+    form.append('file', file)
+    return apiClient.post<{ rf_code: string; case_number: string; file_path: string; size_bytes: number; encoding: string }>(`/cases/${caseId}/robot-script/upload`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
   },
 
   getRobotScript(caseId: string) {

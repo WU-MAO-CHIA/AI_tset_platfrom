@@ -235,9 +235,13 @@
         <div class="steps-right rf-panel">
           <div class="rf-panel-header">最新 RF 程式碼（唯讀）</div>
           <div class="steps-panel-body">
-            <div v-if="rfCode" class="rf-readonly">
-              <pre class="rf-code">{{ rfCode }}</pre>
-            </div>
+            <RFCodeEditor
+              v-if="rfCode"
+              :model-value="rfCode"
+              :read-only="true"
+              language="robotframework"
+              style="height: 100%; min-height: 400px;"
+            />
             <div v-else class="rf-empty">尚無 RF 程式碼（請先透過 AI 對話生成）</div>
           </div>
         </div>
@@ -278,6 +282,7 @@ import FileImporter from '../components/FileImporter/index.vue'
 import TestCaseForm from '../components/TestCaseForm/index.vue'
 import AIChatPanel from '../components/AIChatPanel/index.vue'
 import RFCodePreview from '../components/RFCodePreview/index.vue'
+import RFCodeEditor from '../components/RFCodeEditor/index.vue'
 import { useAuthStore } from '../stores/authStore'
 
 const authStore = useAuthStore()
