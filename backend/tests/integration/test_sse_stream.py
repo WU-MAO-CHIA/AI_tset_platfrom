@@ -115,9 +115,10 @@ class TestStreamAuth:
         assert "執行逾時" not in resp.text
         assert "execution_error" not in resp.text
 
-    async def test_stream_with_query_token_still_works(self, client, token):
+    async def test_stream_with_query_token_rejected(self, client, token):
+        """?token= 已移除（避免 JWT 進 log/history），必須 401，僅接受 HttpOnly cookie。"""
         resp = await client.get(f"/api/v1/executions/exec-1/stream?token={token}")
-        assert resp.status_code == 200
+        assert resp.status_code == 401
 
 
 class TestTrialRunGuard:

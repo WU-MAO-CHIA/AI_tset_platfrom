@@ -1,4 +1,5 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+import uuid
 
 import bcrypt
 from jose import JWTError, jwt
@@ -14,8 +15,9 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 
 def create_access_token(sub: str, role: str) -> str:
-    expire = datetime.utcnow() + timedelta(hours=settings.jwt_expire_hours)
-    payload = {"sub": sub, "role": role, "exp": expire}
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(hours=settings.jwt_expire_hours)
+    payload = {"sub": sub, "role": role, "iat": now, "jti": uuid.uuid4().hex, "exp": expire}
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=ALGORITHM)
 
 

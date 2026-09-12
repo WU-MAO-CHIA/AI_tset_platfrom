@@ -8,8 +8,10 @@ from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.core.config import get_settings
 from src.core.database import AsyncSessionLocal, get_db
 from src.core.dependencies import get_current_user
+from src.core.path_utils import safe_join
 from src.models.case_result import CaseResult
 from src.models.execution_media import ExecutionMedia
 from src.models.execution_record import ExecutionRecord
@@ -85,15 +87,12 @@ async def get_execution_results(execution_id: str, db: AsyncSession = Depends(ge
 @router.get("/{execution_id}/stream")
 async def stream_execution(
     execution_id: str,
-    token: str | None = None,
     access_token: str | None = Cookie(default=None),
     db: AsyncSession = Depends(get_db)
 ):
-    # SSE cannot send Authorization header; accept token as query param or cookie.
-    # Cookie name must match login (auth_service sets key="access_token").
-    # NOTE: plain `str | None = None` would bind a *query* param, not a cookie —
-    # FastAPI only reads cookies for parameters annotated with Cookie().
-    token = token or access_token
+    # SSE 無法自訂 Authorization header，一律走 HttpOnly cookie（登入時寫入）。
+    # 不再接受 ?token= query，避免 JWT 進 access log / browser history / Referer。
+    token = access_token
     
     if token:
         from src.core.security import decode_token
@@ -222,26 +221,35 @@ async def export_report(execution_id: str, db: AsyncSession = Depends(get_db)):
     )
 
 
-@router.get("/{execution_id}/rf-report/{filename:path}")
+@router.get("/{execution_id}/rf-report/{filename:path}", dependencies=_auth)
 async def get_rf_report(execution_id: str, filename: str, db: AsyncSession = Depends(get_db)):
-    from src.core.config import get_settings
     settings = get_settings()
-    file_path = os.path.join(settings.execution_reports_dir, execution_id, filename)
-    if not os.path.isfile(file_path):
+    # 先確認 execution 存在，避免任意檔案存在性 oracle。
+    repo = ExecutionRepository(db)
+    record = await repo.get(execution_id)
+    if record is None:
         raise HTTPException(status_code=404, detail="報告尚未生成或不存在")
-    return FileResponse(file_path)
+    try:
+        file_path = safe_join(settings.execution_reports_dir, execution_id, filename)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="報告尚未生成或不存在")
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail="報告尚未生成或不存在")
+    return FileResponse(str(file_path))
 
 
-@router.get("/{execution_id}/rf-report-status")
+@router.get("/{execution_id}/rf-report-status", dependencies=_auth)
 async def get_rf_report_status(
     execution_id: str, filename: str = "report.html", db: AsyncSession = Depends(get_db)
 ):
     """Check whether an RF report file exists (lets the UI avoid iframing a 404 JSON)."""
-    from src.core.config import get_settings
     settings = get_settings()
     repo = ExecutionRepository(db)
     record = await repo.get(execution_id)
     if record is None:
         raise HTTPException(status_code=404, detail={"error": "not_found"})
-    file_path = os.path.join(settings.execution_reports_dir, execution_id, filename)
-    return {"available": os.path.isfile(file_path)}
+    try:
+        file_path = safe_join(settings.execution_reports_dir, execution_id, filename)
+    except ValueError:
+        return {"available": False}
+    return {"available": file_path.is_file()}

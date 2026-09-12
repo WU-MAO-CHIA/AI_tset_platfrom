@@ -366,7 +366,7 @@ class ExecuteRequest(BaseModel):
     max_workers: int = 1
 
 
-@router.post("/{checklist_id}/execute", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/{checklist_id}/execute", status_code=status.HTTP_202_ACCEPTED, dependencies=[Depends(require_editor_or_above)])
 async def execute_checklist(
     checklist_id: str,
     body: ExecuteRequest,

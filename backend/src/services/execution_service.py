@@ -35,6 +35,45 @@ def _load_backend_env() -> dict:
             values[key.strip()] = val.strip().strip('"').strip("'")
     return values
 
+
+# 不得透傳給 Robot 子程序的敏感鍵（洩漏即 LLM 額度盜用 / JWT 偽造）。
+_SENSITIVE_ENV_KEYS = frozenset({
+    "JWT_SECRET_KEY", "JWT_SECRET", "SECRET_KEY",
+    "ADMIN_PASSWORD", "ADMIN_USERNAME",
+    "ANTHROPIC_API_KEY", "OPENAI_API_KEY",
+    "DATABASE_URL",
+})
+
+
+def _build_robot_env() -> dict:
+    """最小化子程序環境：PATH/系統必要變數 + 非敏感 .env，其餘透傳但過濾敏感鍵。"""
+    import logging as _logging
+    env: dict = {}
+    for k, v in os.environ.items():
+        if k.upper() in _SENSITIVE_ENV_KEYS:
+            continue
+        env[k] = v
+    try:
+        for k, v in _load_backend_env().items():
+            if k.upper() in _SENSITIVE_ENV_KEYS:
+                continue
+            # .env 僅允許非敏感的執行期開關覆寫（避免 PATH 劫持則不覆寫 PATH）。
+            if k.upper() in ("PATH", "PYTHONPATH", "SYSTEMROOT", "COMSPEC"):
+                continue
+            env.setdefault(k, v)
+    except Exception as exc:
+        _logging.getLogger(__name__).warning("load backend env for robot failed: %s", exc)
+    # 確保子程序找得到 python / 系統 dll
+    env.setdefault("PATH", os.environ.get("PATH", ""))
+    if os.name == "nt":
+        for k in ("SYSTEMROOT", "COMSPEC", "TEMP", "TMP"):
+            if k in os.environ:
+                env.setdefault(k, os.environ[k])
+    return env
+
+
+MAX_RF_CODE_BYTES = 200 * 1024  # trial-run / 上傳單檔上限外再加一道防線
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import AsyncSessionLocal
@@ -547,6 +586,8 @@ class ExecutionService:
     ) -> dict:
         if robot_code is None:
             return {"status": "skipped", "elapsed_ms": 0, "failure_message": "尚無 RF 程式碼（請先透過 AI 對話生成或上傳）"}
+        if len(robot_code.encode("utf-8")) > MAX_RF_CODE_BYTES:
+            return {"status": "error", "elapsed_ms": 0, "failure_message": "RF code too large"}
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             # Mirror the real robot_scripts/../libs layout so that scripts using
@@ -589,7 +630,7 @@ class ExecutionService:
         start_ms = int(time.time() * 1000)
 
         def _run_sync() -> subprocess.CompletedProcess:
-            env = {**os.environ, **_load_backend_env()}
+            env = _build_robot_env()
             return subprocess.run(
                 [_PYTHON_EXE, "-m", "robot",
                  "--outputdir", os.path.dirname(output_xml),

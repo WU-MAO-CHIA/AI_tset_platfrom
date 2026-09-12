@@ -153,7 +153,15 @@ def validate_explore_url(url: str) -> str:
             addr = ipaddress.ip_address(ip)
         except ValueError:
             continue
-        if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_multicast or addr.is_reserved:
+        if (
+            addr.is_private
+            or addr.is_loopback
+            or addr.is_link_local
+            or addr.is_multicast
+            or addr.is_reserved
+            or addr.is_unspecified
+            or not addr.is_global
+        ):
             raise ValueError("不允許探索內網 / 本機位址")
     return url
 

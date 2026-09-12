@@ -22,7 +22,12 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.setItem('username', data.username)
   }
 
-  function logout() {
+  async function logout() {
+    try {
+      await axios.post('/api/v1/auth/logout', {}, { withCredentials: true })
+    } catch {
+      // 後端清 cookie 失敗仍繼續清前端狀態，避免卡登出
+    }
     token.value = null
     role.value = null
     username.value = null

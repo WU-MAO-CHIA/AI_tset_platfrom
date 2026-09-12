@@ -37,12 +37,69 @@ class TestQueryExecution:
         assert len(result["rows"]) == 1
         assert result["rows"][0]["value"] == 1
 
-    async def test_execute_ddl_returns_empty_rows(self):
-        # DDL statements return no rows; service should handle gracefully
+    async def test_execute_ddl_rejected(self):
+        # 唯讀政策：DDL 一律拒絕（過去曾允許，現改為只讀 SELECT）
         service = DBConnectionService()
-        result = await service.execute_query("sqlite:///:memory:", "CREATE TABLE t (id INTEGER, name TEXT)")
-        assert result["columns"] == []
-        assert result["rows"] == []
+        with pytest.raises(ValueError, match="query_error"):
+            await service.execute_query("sqlite:///:memory:", "CREATE TABLE t (id INTEGER, name TEXT)")
+
+    async def test_execute_dml_rejected(self):
+        service = DBConnectionService()
+        for sql in [
+            "INSERT INTO t VALUES (1)",
+            "UPDATE t SET id = 2",
+            "DELETE FROM t",
+            "DROP TABLE t",
+            "ATTACH DATABASE '/tmp/x.db' AS x",
+            "PRAGMA journal_mode=WAL",
+        ]:
+            with pytest.raises(ValueError, match="query_error"):
+                await service.execute_query("sqlite:///:memory:", sql)
+
+    async def test_execute_stacked_query_rejected(self):
+        service = DBConnectionService()
+        with pytest.raises(ValueError, match="query_error"):
+            await service.execute_query("sqlite:///:memory:", "SELECT 1; DROP TABLE t")
+
+    async def test_execute_select_with_trailing_semicolon_ok(self):
+        service = DBConnectionService()
+        result = await service.execute_query("sqlite:///:memory:", "SELECT 1 AS value;")
+        assert result["rows"][0]["value"] == 1
+
+    async def test_execute_select_with_leading_comment_ok(self):
+        service = DBConnectionService()
+        result = await service.execute_query("sqlite:///:memory:", "-- comment\nSELECT 1 AS value")
+        assert result["rows"][0]["value"] == 1
+
+    async def test_execute_cte_select_ok(self):
+        service = DBConnectionService()
+        result = await service.execute_query(
+            "sqlite:///:memory:", "WITH x AS (SELECT 1 AS v) SELECT * FROM x"
+        )
+        assert result["rows"][0]["v"] == 1
+
+    async def test_execute_cte_with_delete_rejected(self):
+        service = DBConnectionService()
+        with pytest.raises(ValueError, match="query_error"):
+            await service.execute_query(
+                "sqlite:///:memory:", "WITH x AS (SELECT 1) DELETE FROM t"
+            )
+
+    async def test_execute_select_with_string_literal_ok(self):
+        # 字串值內的關鍵字（如 'delete'）不應誤判
+        service = DBConnectionService()
+        result = await service.execute_query(
+            "sqlite:///:memory:", "SELECT 'delete' AS op"
+        )
+        assert result["rows"][0]["op"] == "delete"
+
+    async def test_execute_select_with_semicolon_in_string_ok(self):
+        # 字串值內的分號（如 'a;b'）不應誤判為堆疊查詢
+        service = DBConnectionService()
+        result = await service.execute_query(
+            "sqlite:///:memory:", "SELECT 'a;b' AS v"
+        )
+        assert result["rows"][0]["v"] == "a;b"
 
     async def test_execute_arithmetic_select(self):
         service = DBConnectionService()
