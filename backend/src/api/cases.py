@@ -647,12 +647,12 @@ async def upload_attachment(
 
 
 def _serialize_attachment(a) -> dict:
+    # 不回傳內部 file_path，避免洩露伺服器佈局；前端改走 /media 下載端點。
     return {
         "id": a.id,
         "attachment_type": a.attachment_type,
         "filename": a.filename,
         "url": a.url,
-        "file_path": a.file_path,
         "file_size_bytes": a.file_size_bytes,
         "mime_type": a.mime_type,
     }
@@ -876,15 +876,19 @@ class TrialRunRequest(BaseModel):
     case_name: Optional[str] = None
 
 
-@router.post("/{case_id}/trial-run", status_code=202)
+@router.post("/{case_id}/trial-run", status_code=202, dependencies=[Depends(require_editor_or_above)])
 async def trial_run(case_id: str, request: TrialRunRequest = TrialRunRequest(), session: AsyncSession = Depends(get_db)):
     """Phase 27: Execute trial run using RF code from preview area."""
+    import logging
     from src.repositories.test_case_repo import TestCaseRepository
-    from src.services.execution_service import ExecutionService
+    from src.services.execution_service import ExecutionService, MAX_RF_CODE_BYTES
     repo = TestCaseRepository(session)
     case = await repo.get(case_id)
     if not case:
         raise HTTPException(404, detail={"error": "not_found", "message": "案例不存在"})
+    if request.rf_code and len(request.rf_code.encode("utf-8")) > MAX_RF_CODE_BYTES:
+        raise HTTPException(413, detail={"error": "file_too_large", "message": "RF code too large"})
+    logging.getLogger(__name__).info("trial-run requested case_id=%s", case_id)
 
     # Fail fast with a clear message when there is no RF code to run —
     # otherwise the trial would instantly record a confusing failure.

@@ -1,3 +1,4 @@
+import html
 import re
 import xml.etree.ElementTree as ET
 from datetime import datetime
@@ -24,8 +25,15 @@ def _ts_diff_ms(start: str, end: str) -> int:
 
 
 class ReportService:
+    MAX_XML_BYTES = 5 * 1024 * 1024
+
+    def _check_xml_size(self, xml_content: str) -> bool:
+        return len(xml_content.encode("utf-8")) <= self.MAX_XML_BYTES
+
     def parse_per_test_results(self, xml_content: str) -> list[dict]:
         """Extract per-test results from output.xml, keyed by suite source file basename."""
+        if not self._check_xml_size(xml_content):
+            return []
         try:
             root = ET.fromstring(xml_content)
         except ET.ParseError:
@@ -66,6 +74,8 @@ class ReportService:
         return results
 
     def parse_xml(self, xml_content: str) -> dict:
+        if not self._check_xml_size(xml_content):
+            return {"status": "error", "passed_count": 0, "failed_count": 0, "elapsed_ms": 0, "failure_message": "XML too large"}
         try:
             root = ET.fromstring(xml_content)
         except ET.ParseError:
@@ -120,6 +130,8 @@ class ReportService:
 
     def extract_media_paths(self, xml_content: str) -> list[str]:
         paths = []
+        if not self._check_xml_size(xml_content):
+            return paths
         try:
             root = ET.fromstring(xml_content)
         except ET.ParseError:
@@ -145,7 +157,7 @@ class ReportService:
             except Exception:
                 pass
 
-        # Inline fallback template
+        # Inline fallback template（主模板遺失時）：所有外部字串一律 escape，避免 Stored XSS。
         passed = sum(1 for r in case_results if r.get("status") == "passed")
         failed = len(case_results) - passed
         rows = ""
@@ -153,19 +165,19 @@ class ReportService:
             status_class = "pass" if r.get("status") == "passed" else "fail"
             rows += (
                 f"<tr class='{status_class}'>"
-                f"<td>{r.get('case_name', '')}</td>"
-                f"<td>{r.get('status', '')}</td>"
-                f"<td>{r.get('elapsed_ms', 0)}ms</td>"
-                f"<td>{r.get('failure_message', '') or ''}</td>"
+                f"<td>{html.escape(str(r.get('case_name', '')))}</td>"
+                f"<td>{html.escape(str(r.get('status', '')))}</td>"
+                f"<td>{html.escape(str(r.get('elapsed_ms', 0)))}ms</td>"
+                f"<td>{html.escape(str(r.get('failure_message', '') or ''))}</td>"
                 f"</tr>"
             )
         return f"""<!DOCTYPE html>
 <html lang="zh-TW">
-<head><meta charset="UTF-8"><title>執行報告 {execution_data.get('id', '')}</title></head>
+<head><meta charset="UTF-8"><title>執行報告 {html.escape(str(execution_data.get('id', '')))}</title></head>
 <body>
 <h1>執行報告</h1>
-<p>執行 ID：{execution_data.get('id', '')}</p>
-<p>狀態：{execution_data.get('status', '')} | 通過：{passed} | 失敗：{failed}</p>
+<p>執行 ID：{html.escape(str(execution_data.get('id', '')))}</p>
+<p>狀態：{html.escape(str(execution_data.get('status', '')))} | 通過：{passed} | 失敗：{failed}</p>
 <table border="1">
 <thead><tr><th>案例名稱</th><th>狀態</th><th>耗時</th><th>失敗訊息</th></tr></thead>
 <tbody>{rows}</tbody>

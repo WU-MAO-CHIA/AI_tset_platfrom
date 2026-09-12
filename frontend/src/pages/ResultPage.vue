@@ -56,6 +56,7 @@
             :src="`/api/v1/executions/${executionId}/rf-report/${rfReportPrefix}report.html`"
             class="rf-iframe"
             title="RF 測試報告"
+            sandbox="allow-same-origin"
           />
           <div v-else class="rf-report-placeholder" data-testid="rf-report-missing">
             尚無 RF 測試報告{{ missingReason ? `：${missingReason}` : '' }}

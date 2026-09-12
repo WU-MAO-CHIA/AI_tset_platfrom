@@ -15,6 +15,19 @@ from httpx import ASGITransport, AsyncClient
 from unittest.mock import patch
 
 from src.main import app
+from src.core.dependencies import get_current_user
+
+
+class _DummyUser:
+    username = "test"
+    role = "editor"
+
+
+@pytest.fixture(autouse=True)
+def _auth_override():
+    app.dependency_overrides[get_current_user] = lambda: _DummyUser()
+    yield
+    app.dependency_overrides.pop(get_current_user, None)
 
 
 @pytest.fixture
@@ -24,6 +37,16 @@ async def client():
 
 
 class TestServeAttachment:
+    async def test_unauthenticated_returns_401(self, client):
+        app.dependency_overrides.pop(get_current_user, None)
+        try:
+            r = await client.get(
+                f"/api/v1/media/attachments/{uuid.uuid4()}/nonexistent.png"
+            )
+            assert r.status_code == 401
+        finally:
+            app.dependency_overrides[get_current_user] = lambda: _DummyUser()
+
     async def test_missing_file_returns_404(self, client):
         r = await client.get(
             f"/api/v1/media/attachments/{uuid.uuid4()}/nonexistent.png"

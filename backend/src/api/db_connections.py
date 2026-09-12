@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_db
-from src.core.dependencies import get_current_user
+from src.core.dependencies import get_current_user, require_editor_or_above
 from src.models.db_connection import DBConnection
 from src.services.db_connect_service import DBConnectionService
 
@@ -32,8 +32,18 @@ class DBConnectionResponse(BaseModel):
     last_test_success: Optional[bool] = None
 
 
-@router.post("", status_code=status.HTTP_201_CREATED, response_model=DBConnectionResponse)
+@router.post("", status_code=status.HTTP_201_CREATED, response_model=DBConnectionResponse, dependencies=[Depends(require_editor_or_above)])
 async def create_connection(body: DBConnectionCreateRequest, db: AsyncSession = Depends(get_db)):
+    from src.services.db_connect_service import _validate_sqlite_only
+
+    if not body.name.strip() or len(body.name) > 100:
+        raise HTTPException(status_code=422, detail="Invalid name")
+    if len(body.connection_string) > 2000:
+        raise HTTPException(status_code=422, detail="connection_string too long")
+    try:
+        _validate_sqlite_only(body.connection_string)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
     conn = DBConnection(
         name=body.name,
         connection_string=body.connection_string,
@@ -60,7 +70,7 @@ async def list_connections(db: AsyncSession = Depends(get_db)):
     }
 
 
-@router.post("/{conn_id}/test")
+@router.post("/{conn_id}/test", dependencies=[Depends(require_editor_or_above)])
 async def test_connection(conn_id: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(DBConnection).where(DBConnection.id == conn_id))
     conn = result.scalar_one_or_none()
@@ -78,8 +88,10 @@ async def test_connection(conn_id: str, db: AsyncSession = Depends(get_db)):
     return test_result
 
 
-@router.post("/{conn_id}/query")
+@router.post("/{conn_id}/query", dependencies=[Depends(require_editor_or_above)])
 async def execute_query(conn_id: str, body: QueryRequest, db: AsyncSession = Depends(get_db)):
+    if len(body.sql) > 20000:
+        raise HTTPException(status_code=422, detail="sql too long")
     result = await db.execute(select(DBConnection).where(DBConnection.id == conn_id))
     conn = result.scalar_one_or_none()
     if conn is None:

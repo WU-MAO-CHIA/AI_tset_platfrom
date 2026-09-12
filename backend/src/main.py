@@ -19,9 +19,19 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://localhost:3000"],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
 )
+
+
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    """最小安全標頭（不依賴額外套件）。iframe 需同源顯示 RF 報告，故用 SAMEORIGIN。"""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    return response
 
 
 @app.exception_handler(ValueError)
@@ -68,6 +78,17 @@ async def startup_event() -> None:
     from src.core.config import get_settings
     settings = get_settings()
     os.makedirs(settings.execution_reports_dir, exist_ok=True)
+    # 啟動期弱配置檢查：prod 直接拒絕啟動，dev/test 僅警告（避免誤傷本地開發）。
+    if settings.app_env == "prod":
+        if settings.is_default_secret():
+            raise RuntimeError("Refusing to start in prod with default JWT_SECRET_KEY")
+        if settings.is_default_admin_password():
+            raise RuntimeError("Refusing to start in prod with default ADMIN_PASSWORD")
+    else:
+        if settings.is_default_secret():
+            logger.warning("Using default JWT_SECRET_KEY — set a strong value via .env for any shared deployment")
+        if settings.is_default_admin_password():
+            logger.warning("Using default ADMIN_PASSWORD — change it via .env")
     asyncio.create_task(_cleanup_trial_runs())
 
 

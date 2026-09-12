@@ -7,8 +7,18 @@ import aiofiles
 
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
 ALLOWED_VIDEO_TYPES = {"video/mp4", "video/webm", "video/quicktime"}
+ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".mp4", ".webm", ".mov"}
 IMAGE_MAX_BYTES = 10 * 1024 * 1024   # 10 MB
 VIDEO_MAX_BYTES = 100 * 1024 * 1024  # 100 MB
+
+
+def _validate_url(url: str) -> str:
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url.strip())
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        raise ValueError("invalid_url: only http/https allowed")
+    return url.strip()
 
 
 class MediaService:
@@ -16,7 +26,14 @@ class MediaService:
         self.media_root = Path(media_root)
 
     def generate_file_path(self, case_id: str, filename: str) -> str:
+        if not case_id or "/" in case_id or "\\" in case_id or ".." in case_id:
+            raise ValueError("invalid case_id")
         safe_name = Path(filename).name
+        if not safe_name or safe_name in (".", ".."):
+            raise ValueError("invalid filename")
+        ext = Path(safe_name).suffix.lower()
+        if ext not in ALLOWED_EXTENSIONS:
+            raise ValueError("unsupported_file_type")
         dest_dir = self.media_root / "attachments" / case_id
         dest_dir.mkdir(parents=True, exist_ok=True)
         unique_name = f"{uuid.uuid4()}_{safe_name}"
@@ -25,6 +42,9 @@ class MediaService:
     async def validate_file(self, file) -> dict:
         content_type = getattr(file, "content_type", "") or ""
         filename = getattr(file, "filename", "") or ""
+        ext = Path(filename).suffix.lower()
+        if ext not in ALLOWED_EXTENSIONS:
+            raise ValueError("unsupported_file_type")
         data = await file.read()
         size = len(data)
 
@@ -48,9 +68,10 @@ class MediaService:
 
     async def upload_attachment(self, case_id: str, file, url: Optional[str] = None):
         if url:
+            safe_url = _validate_url(url)
             return {
                 "attachment_type": "url",
-                "url": url,
+                "url": safe_url,
                 "filename": None,
                 "file_path": None,
                 "file_size_bytes": None,
@@ -73,8 +94,12 @@ class MediaService:
         }
 
     async def delete_attachment(self, file_path: str) -> bool:
-        path = Path(file_path)
-        if path.exists():
-            path.unlink()
-            return True
-        return False
+        base = Path(self.media_root).resolve()
+        try:
+            path = Path(file_path).resolve()
+        except Exception:
+            return False
+        if not path.is_relative_to(base) or not path.is_file():
+            return False
+        path.unlink()
+        return True

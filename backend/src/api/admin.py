@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_db
@@ -17,6 +17,27 @@ class CreateUserRequest(BaseModel):
     username: str
     password: str
     role: str = "viewer"
+
+    @field_validator("username")
+    @classmethod
+    def _validate_username(cls, v: str) -> str:
+        if not v or not v.strip() or len(v.strip()) > 64:
+            raise ValueError("無效的使用者名稱")
+        return v.strip()
+
+    @field_validator("password")
+    @classmethod
+    def _validate_password(cls, v: str) -> str:
+        if len(v) < 8 or len(v) > 128:
+            raise ValueError("密碼長度需為 8-128 字元")
+        return v
+
+    @field_validator("role")
+    @classmethod
+    def _validate_role(cls, v: str) -> str:
+        if v not in ("admin", "editor", "viewer"):
+            raise ValueError("無效的角色")
+        return v
 
 
 class UpdateUserRequest(BaseModel):

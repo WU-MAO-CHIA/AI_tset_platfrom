@@ -17,23 +17,29 @@ class AuthService:
         if not verify_password(password, user.hashed_password):
             raise HTTPException(status_code=401, detail="帳號或密碼錯誤")
         token = create_access_token(sub=user.username, role=user.role)
-        
+
         if response is not None:
             settings = get_settings()
-            # Set HttpOnly cookie for SSE authentication
+            # HttpOnly cookie 僅供 SSE（EventSource 無法自訂 header）使用；
+            # 一般 API 仍走 Authorization: Bearer。prod 強制 Secure。
             response.set_cookie(
                 key="access_token",
                 value=token,
                 httponly=True,
-                secure=settings.jwt_secret_key != "dev-secret-key-change-in-production",  # Secure in production
+                secure=settings.app_env == "prod",
                 samesite="lax",
                 max_age=settings.jwt_expire_hours * 3600,
                 path="/",
             )
-        
+
         return {
             "access_token": token,
             "token_type": "bearer",
             "role": user.role,
             "username": user.username,
         }
+
+    @staticmethod
+    def build_logout_response(response: Response) -> dict:
+        response.delete_cookie(key="access_token", path="/")
+        return {"logged_out": True}

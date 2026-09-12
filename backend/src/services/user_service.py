@@ -13,6 +13,12 @@ class UserService:
         return await self.repo.list_all()
 
     async def create(self, username: str, plain_pw: str, role: str = "viewer"):
+        if not username or not username.strip() or len(username.strip()) > 64:
+            raise HTTPException(status_code=422, detail="無效的使用者名稱")
+        if role not in ("admin", "editor", "viewer"):
+            raise HTTPException(status_code=422, detail="無效的角色")
+        if len(plain_pw) < 8 or len(plain_pw) > 128:
+            raise HTTPException(status_code=422, detail="密碼長度需為 8-128 字元")
         existing = await self.repo.get_by_username(username)
         if existing:
             raise HTTPException(status_code=409, detail=f"使用者 '{username}' 已存在")
@@ -34,6 +40,8 @@ class UserService:
         return user
 
     async def reset_password(self, user_id: str, new_pw: str):
+        if len(new_pw) < 8 or len(new_pw) > 128:
+            raise HTTPException(status_code=422, detail="密碼長度需為 8-128 字元")
         hashed = hash_password(new_pw)
         user = await self.repo.update(user_id, hashed_password=hashed)
         if not user:
