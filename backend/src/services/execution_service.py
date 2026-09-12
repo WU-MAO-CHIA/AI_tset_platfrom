@@ -428,7 +428,11 @@ class ExecutionService:
             "processes": max_workers,
         })
 
-        with tempfile.TemporaryDirectory() as tmp_dir:
+        import shutil as _shutil
+        report_dest = os.path.join(settings.execution_reports_dir, execution_id)
+        tmp_dir = None
+        try:
+            tmp_dir = tempfile.mkdtemp()
             output_dir = os.path.join(tmp_dir, "results")
             os.makedirs(output_dir, exist_ok=True)
             output_xml = os.path.join(output_dir, "output.xml")
@@ -450,7 +454,6 @@ class ExecutionService:
             stderr_bytes = _pabot_result.stderr
 
             if not os.path.exists(output_xml):
-                # pabot may have written partial output; try alternate location
                 for fname in os.listdir(output_dir):
                     if fname == "output.xml":
                         output_xml = os.path.join(output_dir, fname)
@@ -518,11 +521,13 @@ class ExecutionService:
                     "message": f"pabot 執行失敗：{stderr_text[:200]}",
                 })
 
-            # Persist RF native reports before tempdir is deleted
-            import shutil as _shutil
-            report_dest = os.path.join(settings.execution_reports_dir, execution_id)
             if os.path.isdir(output_dir):
-                _shutil.copytree(output_dir, report_dest, dirs_exist_ok=True)
+                if os.path.exists(report_dest):
+                    _shutil.rmtree(report_dest)
+                _shutil.copytree(output_dir, report_dest)
+        finally:
+            if tmp_dir and os.path.exists(tmp_dir):
+                _shutil.rmtree(tmp_dir, ignore_errors=True)
 
         return passed, failed, len(case_ids)
 

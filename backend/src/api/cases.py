@@ -67,6 +67,7 @@ class PreviewRFRequest(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     llm_model: Optional[str] = None
+    rf_context_mode: Optional[str] = "full"
 
 
 class RobotScriptRequest(BaseModel):
@@ -395,6 +396,7 @@ async def chat_with_ai(
 ):
     """Multi-turn AI chat for test step generation; persists messages to DB."""
     from src.repositories.test_case_repo import TestCaseRepository
+    from src.repositories.robot_script_repo import RobotScriptRepository
     from src.models.case_chat_message import CaseChatMessage
     from src.models.base import generate_uuid
 
@@ -412,6 +414,11 @@ async def chat_with_ai(
     # Anthropic Messages API rejects a bare "system" role turn mid-conversation.
     messages = [{"role": m.role, "content": m.content} for m in history if m.role != "system"]
 
+    # Fetch RF code for context injection
+    rf_repo = RobotScriptRepository(session)
+    rf_record = await rf_repo.get_by_case_id(case_id)
+    rf_code = rf_record.rf_code if rf_record else None
+
     settings = get_settings()
     model = body.llm_model or await AppSettingService(session).get_active_model()
     provider = get_provider(model, settings)
@@ -421,6 +428,8 @@ async def chat_with_ai(
         messages=messages,
         user_message=body.message,
         llm_model=model,
+        rf_code=rf_code,
+        rf_context_mode=body.rf_context_mode or "full",
     )
 
     # Persist user message and assistant response
@@ -558,7 +567,10 @@ async def import_test_data_preview(
     try:
         result = await parser.parse_file(file.filename or "upload.csv", data)
     except ValueError as e:
-        raise HTTPException(400, detail={"error": str(e), "message": "檔案解析失敗"})
+        msg = str(e)
+        if msg.startswith("file_too_large"):
+            raise HTTPException(413, detail={"error": "file_too_large", "message": "檔案大小超過限制 (最大 10MB)"})
+        raise HTTPException(400, detail={"error": msg, "message": "檔案解析失敗"})
 
     return {
         "preview": result["preview"],
@@ -587,15 +599,26 @@ async def save_robot_script(
     service: CaseService = Depends(get_case_service),
     session: AsyncSession = Depends(get_db),
 ):
-    """Save Robot Framework script — write to DB and sync to disk."""
+    """Save Robot Framework script — write to DB and sync to disk. Empty rf_code deletes the record."""
     from src.repositories.robot_script_repo import RobotScriptRepository
     try:
         case = await service.get(case_id)
     except ValueError:
         raise HTTPException(404, detail={"error": "not_found", "message": "案例不存在"})
 
-    # Persist to DB (source of truth)
     repo = RobotScriptRepository(session)
+
+    # Empty rf_code = delete RF script
+    if not body.rf_code or not body.rf_code.strip():
+        await repo.delete_by_case_id(case_id)
+        # Remove disk file
+        settings = get_settings()
+        file_path = os.path.join(settings.robot_scripts_dir, f"{case.case_number}.robot")
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        return {"case_number": case.case_number, "deleted": True}
+
+    # Persist to DB (source of truth)
     await repo.upsert(test_case_id=case_id, rf_code=body.rf_code)
 
     # Sync to disk so RF CLI can execute it
@@ -607,6 +630,73 @@ async def save_robot_script(
         f.write(body.rf_code)
 
     return {"case_number": case.case_number, "file_path": file_path}
+
+
+@router.post("/{case_id}/robot-script/upload", dependencies=[Depends(require_editor_or_above)])
+async def upload_robot_script(
+    case_id: str,
+    file: UploadFile = File(..., description="Robot Framework .robot file"),
+    service: CaseService = Depends(get_case_service),
+    session: AsyncSession = Depends(get_db),
+):
+    """Upload Robot Framework script file — validate and persist."""
+    from src.repositories.robot_script_repo import RobotScriptRepository
+
+    # Validate file extension
+    if not file.filename or not file.filename.lower().endswith('.robot'):
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "invalid_extension", "message": "只接受 .robot 檔案"}
+        )
+
+    # Read file content
+    content = await file.read()
+    if len(content) > 500 * 1024:
+        raise HTTPException(
+            status_code=413,
+            detail={"error": "file_too_large", "message": "檔案超過 500KB 限制"}
+        )
+
+    # Decode with fallback encodings
+    rf_code: str | None = None
+    for encoding in ['utf-8', 'utf-8-sig', 'big5', 'gbk']:
+        try:
+            rf_code = content.decode(encoding)
+            break
+        except UnicodeDecodeError:
+            continue
+
+    if rf_code is None:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "encoding_error", "message": "無法解碼檔案內容，請確認檔案為 UTF-8、Big5 或 GBK 編碼"}
+        )
+
+    # Verify case exists
+    try:
+        case = await service.get(case_id)
+    except ValueError:
+        raise HTTPException(404, detail={"error": "not_found", "message": "案例不存在"})
+
+    # Persist to DB
+    repo = RobotScriptRepository(session)
+    await repo.upsert(test_case_id=case_id, rf_code=rf_code)
+
+    # Sync to disk
+    settings = get_settings()
+    script_dir = settings.robot_scripts_dir
+    os.makedirs(script_dir, exist_ok=True)
+    file_path = os.path.join(script_dir, f"{case.case_number}.robot")
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(rf_code)
+
+    return {
+        "rf_code": rf_code,
+        "case_number": case.case_number,
+        "file_path": file_path,
+        "size_bytes": len(content),
+        "encoding": "utf-8"
+    }
 
 
 @router.get("/{case_id}/robot-script")

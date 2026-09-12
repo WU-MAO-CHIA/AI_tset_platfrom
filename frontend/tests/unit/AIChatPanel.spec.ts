@@ -53,6 +53,7 @@ describe('AIChatPanel', () => {
       'test-case-id',
       '測試訊息',
       'claude-3-5-sonnet-20241022',
+      'full',
     )
   })
 

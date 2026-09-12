@@ -1,7 +1,8 @@
 from typing import Optional
 
-from sqlalchemy import select, func, and_, or_
+from sqlalchemy import select, func, and_, or_, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
 
 from src.models.test_case import TestCase
 from src.models.base import generate_uuid
@@ -120,6 +121,31 @@ class TestCaseRepository(BaseRepository[TestCase]):
             select(TestCase).where(TestCase.case_number.like(f"{prefix}-%"))
         )
         return list(result.scalars().all())
+
+    async def get_next_case_number(self, prefix: str) -> str:
+        """Atomically generate the next case number for a prefix using DB-level locking.
+        Uses a separate sequence table to avoid race conditions.
+        """
+        # Create sequence table if not exists (SQLite compatible)
+        await self.session.execute(text("""
+            CREATE TABLE IF NOT EXISTS case_number_sequences (
+                prefix VARCHAR(100) PRIMARY KEY,
+                last_number INTEGER NOT NULL DEFAULT 0
+            )
+        """))
+        
+        # Atomically increment and get the next number
+        result = await self.session.execute(
+            text("""
+                INSERT INTO case_number_sequences (prefix, last_number)
+                VALUES (:prefix, 1)
+                ON CONFLICT(prefix) DO UPDATE SET last_number = last_number + 1
+                RETURNING last_number
+            """),
+            {"prefix": prefix}
+        )
+        next_num = result.scalar_one()
+        return f"{prefix}-{str(next_num).zfill(3)}"
 
     async def get_referencing_checklists_with_names(self, case_id: str) -> list[dict]:
         """Return list of {id, name} for checklists that contain this case and are not deleted."""

@@ -244,3 +244,75 @@ class TestTrialRunEndpoints:
         # Poll or wait for execution to complete (in integration test this would use proper async wait)
         # For contract test, we just verify the endpoint accepts the request
         # Actual verification of message persistence happens in integration tests
+
+
+class TestRobotScriptUpload:
+    """Tests for POST /cases/{case_id}/robot-script/upload endpoint."""
+
+    async def test_upload_valid_robot_file_returns_200(self, client, valid_case_payload, auth_headers):
+        create_resp = await client.post("/api/v1/cases", json=valid_case_payload, headers=auth_headers)
+        case_id = create_resp.json()["id"]
+
+        rf_content = "*** Settings ***\nLibrary    Browser\n\n*** Test Cases ***\n登入測試\n    Log    Hello World"
+        files = {"file": ("test.robot", rf_content, "text/plain")}
+        response = await client.post(
+            f"/api/v1/cases/{case_id}/robot-script/upload",
+            files=files,
+            headers=auth_headers
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["rf_code"] == rf_content
+        assert data["case_number"] == valid_case_payload["case_number"]
+        assert "file_path" in data
+        assert data["size_bytes"] == len(rf_content.encode("utf-8"))
+        assert data["encoding"] == "utf-8"
+
+    async def test_upload_non_robot_extension_returns_400(self, client, valid_case_payload, auth_headers):
+        create_resp = await client.post("/api/v1/cases", json=valid_case_payload, headers=auth_headers)
+        case_id = create_resp.json()["id"]
+
+        files = {"file": ("test.txt", "some content", "text/plain")}
+        response = await client.post(
+            f"/api/v1/cases/{case_id}/robot-script/upload",
+            files=files,
+            headers=auth_headers
+        )
+
+        assert response.status_code == 400
+        body = response.json()
+        error = body.get("detail") or body
+        assert error["error"] == "invalid_extension"
+        assert "只接受 .robot 檔案" in error["message"]
+
+    async def test_upload_file_too_large_returns_413(self, client, valid_case_payload, auth_headers):
+        create_resp = await client.post("/api/v1/cases", json=valid_case_payload, headers=auth_headers)
+        case_id = create_resp.json()["id"]
+
+        large_content = "x" * (500 * 1024 + 1)
+        files = {"file": ("large.robot", large_content, "text/plain")}
+        response = await client.post(
+            f"/api/v1/cases/{case_id}/robot-script/upload",
+            files=files,
+            headers=auth_headers
+        )
+
+        assert response.status_code == 413
+        body = response.json()
+        error = body.get("detail") or body
+        assert error["error"] == "file_too_large"
+        assert "500KB" in error["message"]
+
+    async def test_upload_nonexistent_case_returns_404(self, client, auth_headers):
+        files = {"file": ("test.robot", "*** Test Cases ***\nTest\n    Pass", "text/plain")}
+        response = await client.post(
+            "/api/v1/cases/nonexistent-id/robot-script/upload",
+            files=files,
+            headers=auth_headers
+        )
+
+        assert response.status_code == 404
+        body = response.json()
+        error = body.get("detail") or body
+        assert error["error"] == "not_found"

@@ -83,8 +83,16 @@ async def get_execution_results(execution_id: str, db: AsyncSession = Depends(ge
 
 
 @router.get("/{execution_id}/stream")
-async def stream_execution(execution_id: str, token: str | None = None, db: AsyncSession = Depends(get_db)):
-    # SSE cannot send Authorization header; accept token as query param
+async def stream_execution(
+    execution_id: str, 
+    token: str | None = None, 
+    access_token_cookie: str | None = None,
+    db: AsyncSession = Depends(get_db)
+):
+    # SSE cannot send Authorization header; accept token as query param or cookie
+    # Cookie is preferred (HttpOnly, not exposed in URLs/logs)
+    token = token or access_token_cookie
+    
     if token:
         from src.core.security import decode_token
         from src.repositories.user_repo import UserRepository
@@ -110,42 +118,48 @@ async def stream_execution(execution_id: str, token: str | None = None, db: Asyn
         raise HTTPException(status_code=404, detail={"error": "not_found"})
 
     async def event_generator():
-        from src.execution.listener import get_execution_queue
+        from src.execution.listener import get_execution_queue, mark_queue_accessed, clear_execution_queue
+
+        mark_queue_accessed(execution_id)
+        queue = get_execution_queue(execution_id)
 
         yield f"data: {json.dumps({'event': 'execution_started', 'execution_id': execution_id, 'status': record.status, 'total_cases': record.total_count})}\n\n"
 
         # If already completed (e.g., no cases), emit completion immediately
         if record.status in ("completed", "failed", "error"):
             yield f"data: {json.dumps({'event': 'execution_completed', 'execution_id': execution_id, 'status': record.status, 'passed': record.passed_count, 'failed': record.failed_count, 'total': record.total_count, 'report_url': f'/api/v1/executions/{execution_id}/results', '__done__': True})}\n\n"
+            clear_execution_queue(execution_id)
             return
 
-        queue = get_execution_queue(execution_id)
         timeout_ticks = 0
         max_ticks = 600  # 10 minutes
 
-        while timeout_ticks < max_ticks:
-            try:
-                event = await asyncio.wait_for(queue.get(), timeout=1.0)
-            except asyncio.TimeoutError:
-                timeout_ticks += 1
-                # Fallback DB check every 5 seconds to catch missed done events
-                if timeout_ticks % 5 == 0:
-                    async with AsyncSessionLocal() as poll_session:
-                        poll_repo = ExecutionRepository(poll_session)
-                        updated = await poll_repo.get(execution_id)
-                    if updated and updated.status in ("completed", "failed", "error"):
-                        yield f"data: {json.dumps({'event': 'execution_completed', 'execution_id': execution_id, 'status': updated.status, 'passed': updated.passed_count, 'failed': updated.failed_count, 'total': updated.total_count, 'report_url': f'/api/v1/executions/{execution_id}/results', '__done__': True})}\n\n"
-                        return
-                continue
+        try:
+            while timeout_ticks < max_ticks:
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=1.0)
+                except asyncio.TimeoutError:
+                    timeout_ticks += 1
+                    mark_queue_accessed(execution_id)
+                    # Fallback DB check every 5 seconds to catch missed done events
+                    if timeout_ticks % 5 == 0:
+                        async with AsyncSessionLocal() as poll_session:
+                            poll_repo = ExecutionRepository(poll_session)
+                            updated = await poll_repo.get(execution_id)
+                        if updated and updated.status in ("completed", "failed", "error"):
+                            yield f"data: {json.dumps({'event': 'execution_completed', 'execution_id': execution_id, 'status': updated.status, 'passed': updated.passed_count, 'failed': updated.failed_count, 'total': updated.total_count, 'report_url': f'/api/v1/executions/{execution_id}/results', '__done__': True})}\n\n"
+                            return
+                    continue
 
-            # Strip internal sentinel before sending to client
-            send_event = {k: v for k, v in event.items() if k != "__done__"}
-            yield f"data: {json.dumps(send_event)}\n\n"
+                # Strip internal sentinel before sending to client
+                send_event = {k: v for k, v in event.items() if k != "__done__"}
+                yield f"data: {json.dumps(send_event)}\n\n"
 
-            if event.get("__done__"):
-                return
-
-        yield f"data: {json.dumps({'event': 'execution_error', 'execution_id': execution_id, 'message': '執行逾時'})}\n\n"
+                if event.get("__done__"):
+                    return
+        finally:
+            clear_execution_queue(execution_id)
+            yield f"data: {json.dumps({'event': 'execution_error', 'execution_id': execution_id, 'message': '執行逾時'})}\n\n"
 
     return StreamingResponse(
         event_generator(),

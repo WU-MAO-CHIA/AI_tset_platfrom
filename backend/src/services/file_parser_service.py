@@ -5,10 +5,18 @@ from typing import Optional
 
 
 class FileParserService:
+    # Default 10MB limit, can be overridden per call
+    MAX_FILE_SIZE = 10 * 1024 * 1024
+
     def _generate_import_token(self) -> str:
         return str(uuid.uuid4())
 
+    def _check_file_size(self, data: bytes) -> None:
+        if len(data) > self.MAX_FILE_SIZE:
+            raise ValueError(f"file_too_large: File size {len(data)} bytes exceeds limit {self.MAX_FILE_SIZE} bytes")
+
     async def parse_excel(self, data: bytes) -> dict:
+        self._check_file_size(data)
         try:
             import openpyxl
         except ImportError as e:
@@ -45,6 +53,7 @@ class FileParserService:
         }
 
     async def parse_csv(self, data: bytes, delimiter: str = ",") -> dict:
+        self._check_file_size(data)
         if not data:
             raise ValueError("empty_file")
 
@@ -64,6 +73,7 @@ class FileParserService:
         }
 
     async def parse_text(self, data: bytes, delimiter: Optional[str] = None) -> dict:
+        self._check_file_size(data)
         if not data:
             raise ValueError("empty_file")
         auto_delimiter = "\t" if b"\t" in data else ","

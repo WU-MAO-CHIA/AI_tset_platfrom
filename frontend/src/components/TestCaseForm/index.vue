@@ -41,6 +41,27 @@
       />
     </div>
 
+    <!-- RF 程式碼上傳與預覽區塊 -->
+    <div class="field">
+      <label>RF 程式碼</label>
+      <RFCodeUpload
+        v-if="!rfCode || !savedRfCode"
+        :case-id="caseId"
+        @file-loaded="onRfFileLoaded"
+        @file-cleared="onRfFileCleared"
+        data-testid="rf-upload"
+      />
+      <RFCodePreview
+        v-else
+        :main-steps="effectiveMainSteps"
+        :selected-model="selectedModel"
+        :rf-code-override="rfCode"
+        :case-id="caseId"
+        :chat-mode="false"
+        data-testid="rf-preview"
+      />
+    </div>
+
     <div class="field">
       <label>媒體附件</label>
       <MediaUploader ref="mediaUploaderRef" :case-id="caseId" @uploaded="onAttachmentUploaded" />
@@ -59,12 +80,15 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import MediaUploader from '../MediaUploader/index.vue'
+import RFCodeUpload from '../RFCodeUpload/index.vue'
+import RFCodePreview from '../RFCodePreview/index.vue'
 import { caseApi } from '../../services/caseApi'
 
 const props = defineProps<{
   caseId?: string
   initialData?: Record<string, any>
   mainSteps?: string
+  selectedModel?: string
 }>()
 
 const emit = defineEmits<{
@@ -97,6 +121,14 @@ const trialRunning = ref(false)
 const categories = ref<string[]>([])
 const mediaUploaderRef = ref<InstanceType<typeof MediaUploader> | null>(null)
 
+/** Buffer for uploaded RF file content before case is created. */
+const pendingRfContent = ref<string | null>(null)
+/** RF code to display in preview (from upload or existing case). */
+const rfCode = ref<string | null>(null)
+/** Whether RF code has been saved to backend (persisted). */
+const savedRfCode = ref(false)
+const selectedModel = ref(props.selectedModel || '')
+
 onMounted(async () => {
   try {
     const res = await caseApi.listCategories()
@@ -110,6 +142,16 @@ onMounted(async () => {
       internalMainSteps.value = props.initialData.main_steps
     }
   }
+  // Load existing RF script if editing
+  if (props.caseId) {
+    try {
+      const res = await caseApi.getRobotScript(props.caseId)
+      rfCode.value = res.data.rf_code
+      savedRfCode.value = true
+    } catch {
+      // no saved script yet
+    }
+  }
 })
 
 async function onSubmit() {
@@ -119,17 +161,39 @@ async function onSubmit() {
     const payload = { ...form, main_steps: effectiveMainSteps.value, created_by: 'current_user' }
     if (props.caseId) {
       await caseApi.updateCase(props.caseId, payload)
+      // If there's pending RF content, upload it
+      if (pendingRfContent.value) {
+        await uploadPendingRfCode(props.caseId)
+      }
       emit('saved', props.caseId)
     } else {
       const res = await caseApi.createCase(payload)
       // 建立案例前暫存的媒體附件／網址，於此一併上傳到新案例
       await mediaUploaderRef.value?.flushPending(res.data.id)
+      // Upload pending RF code after case creation
+      if (pendingRfContent.value) {
+        await uploadPendingRfCode(res.data.id)
+      }
       emit('saved', res.data.id)
     }
   } catch (e: any) {
     saveError.value = e.message
   } finally {
     saving.value = false
+  }
+}
+
+async function uploadPendingRfCode(caseId: string) {
+  if (!pendingRfContent.value) return
+  try {
+    // Create a File object from the buffered content
+    const file = new File([pendingRfContent.value], 'upload.robot', { type: 'text/plain' })
+    const res = await caseApi.uploadRobotScript(caseId, file)
+    rfCode.value = res.data.rf_code
+    savedRfCode.value = true
+    pendingRfContent.value = null
+  } catch (e: any) {
+    saveError.value = `RF 程式碼上傳失敗：${e.message}`
   }
 }
 
@@ -154,6 +218,18 @@ function handleMainStepsInput(e: Event) {
   if (externalSteps.value) {
     emit('update:main-steps', value)
   }
+}
+
+function onRfFileLoaded(content: string) {
+  pendingRfContent.value = content
+  rfCode.value = content
+  savedRfCode.value = false
+}
+
+function onRfFileCleared() {
+  pendingRfContent.value = null
+  rfCode.value = null
+  savedRfCode.value = false
 }
 </script>
 

@@ -1,6 +1,8 @@
 import asyncio
 from typing import Optional
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from src.core.llm_provider import LLMProvider
 
 _RF_RULES = """\
@@ -163,11 +165,14 @@ class AIService:
         case_version: int,
         llm_model: Optional[str] = None,
         timeout_sec: float = 35.0,
+        session: Optional[AsyncSession] = None,
     ) -> Optional[str]:
         """Generate Robot Framework code from natural language steps.
         Returns None when:
         - LLM marks steps as UNABLE_TO_GENERATE
         - Timeout exceeded
+        
+        If session is provided, checks DB (RobotScript table) first and persists on success.
         """
         cache_key = f"{case_number}:v{case_version}"
         cached = await self._get_cached_code(cache_key)
@@ -175,6 +180,18 @@ class AIService:
             if cached.generation_status == "success":
                 return cached.code_content
             return None
+
+        if session is not None:
+            from src.repositories.robot_script_repo import RobotScriptRepository
+            from src.repositories.test_case_repo import TestCaseRepository
+            case_repo = TestCaseRepository(session)
+            case = await case_repo.get_by_case_number(case_number)
+            if case:
+                robot_repo = RobotScriptRepository(session)
+                record = await robot_repo.get_by_case_id(case.id)
+                if record and record.rf_code:
+                    await self._cache_code(cache_key, record.rf_code, "success", None)
+                    return record.rf_code
 
         prompt = _GENERATE_ROBOT_PROMPT.format(
             case_number=case_number,
@@ -198,6 +215,16 @@ class AIService:
             return None
 
         await self._cache_code(cache_key, code, "success", None)
+
+        if session is not None:
+            from src.repositories.robot_script_repo import RobotScriptRepository
+            from src.repositories.test_case_repo import TestCaseRepository
+            case_repo = TestCaseRepository(session)
+            case = await case_repo.get_by_case_number(case_number)
+            if case:
+                robot_repo = RobotScriptRepository(session)
+                await robot_repo.upsert(test_case_id=case.id, rf_code=code)
+
         return code
 
     async def preview_robot_code(
@@ -222,22 +249,60 @@ class AIService:
             return None
         return code
 
+    def _build_rf_context_block(self, rf_code: str, mode: str) -> str:
+        """Build RF code context block for system prompt based on mode."""
+        if mode == "full":
+            return f"\n\n---UPLOADED RF CODE---\n{rf_code}\n---END RF CODE---"
+        elif mode == "summary":
+            # Generate a concise summary of the RF code
+            lines = rf_code.strip().split("\n")
+            # Extract key sections: Settings, Test Cases names, Keywords
+            summary_lines = []
+            in_test_case = False
+            for line in lines:
+                stripped = line.strip()
+                if stripped.startswith("*** Settings ***") or stripped.startswith("*** Variables ***") or stripped.startswith("*** Keywords ***"):
+                    summary_lines.append(stripped)
+                elif stripped.startswith("*** Test Cases ***"):
+                    summary_lines.append(stripped)
+                    in_test_case = True
+                elif in_test_case and stripped and not stripped.startswith("#"):
+                    # Capture test case names (lines not indented with spaces/tabs)
+                    if not line.startswith(" ") and not line.startswith("\t") and stripped:
+                        summary_lines.append(f"  {stripped}")
+            summary = "\n".join(summary_lines[:30])  # Limit summary length
+            if len(summary) > 1000:
+                summary = summary[:1000] + "\n... (truncated)"
+            return f"\n\n---UPLOADED RF CODE (SUMMARY)---\n{summary}\n---END RF CODE---"
+        return ""
+
     async def chat_and_generate_rf(
         self,
         messages: list[dict],
         user_message: str,
         llm_model: str,
+        rf_code: Optional[str] = None,
+        rf_context_mode: str = "full",
         timeout_sec: float = 35.0,
     ) -> dict:
         """Multi-turn chat that returns assistant reply and RF code.
 
         messages: existing history [{role, content}]
+        user_message: current user message
+        llm_model: model identifier
+        rf_code: optional RF code to inject as context
+        rf_context_mode: "full" | "summary" | "none"
         Returns { assistant_message: str, rf_code: str }
         """
+        # Build system prompt with optional RF code context
+        system_prompt = _CHAT_SYSTEM_PROMPT
+        if rf_code and rf_code.strip() and rf_context_mode != "none":
+            system_prompt += self._build_rf_context_block(rf_code, rf_context_mode)
+
         conversation = [*messages, {"role": "user", "content": user_message}]
         try:
             raw = await asyncio.wait_for(
-                self.provider.complete_with_messages(conversation, system=_CHAT_SYSTEM_PROMPT),
+                self.provider.complete_with_messages(conversation, system=system_prompt),
                 timeout=timeout_sec,
             )
         except asyncio.TimeoutError:
@@ -245,8 +310,8 @@ class AIService:
         except Exception as exc:
             return {"assistant_message": f"抱歉，AI 服務發生錯誤：{exc}", "rf_code": ""}
 
-        assistant_message, rf_code = self._parse_chat_response(raw)
-        return {"assistant_message": assistant_message, "rf_code": rf_code}
+        assistant_message, rf_code_result = self._parse_chat_response(raw)
+        return {"assistant_message": assistant_message, "rf_code": rf_code_result}
 
     def _parse_chat_response(self, raw: str) -> tuple[str, str]:
         """Parse the structured chat response into (message, rf_code).

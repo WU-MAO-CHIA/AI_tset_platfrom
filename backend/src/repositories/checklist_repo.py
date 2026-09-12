@@ -139,12 +139,33 @@ class ChecklistRepository(BaseRepository[TestChecklist]):
 
     async def get_active_executions(self, checklist_id: str) -> list[str]:
         from src.models.execution_record import ExecutionRecord
+        from src.models.checklist_item import ChecklistItem
+        
+        # Check for checklist executions
         result = await self.session.execute(
             select(ExecutionRecord.id)
             .where(ExecutionRecord.checklist_id == checklist_id)
             .where(ExecutionRecord.status.in_(["pending", "running"]))
         )
-        return [row[0] for row in result.all()]
+        checklist_executions = [row[0] for row in result.all()]
+        
+        # Also check for trial runs using cases from this checklist
+        case_ids_result = await self.session.execute(
+            select(ChecklistItem.test_case_id).where(ChecklistItem.checklist_id == checklist_id)
+        )
+        case_ids = [row[0] for row in case_ids_result.all()]
+        
+        if case_ids:
+            trial_result = await self.session.execute(
+                select(ExecutionRecord.id)
+                .where(ExecutionRecord.source_case_id.in_(case_ids))
+                .where(ExecutionRecord.execution_type == "trial_run")
+                .where(ExecutionRecord.status.in_(["pending", "running"]))
+            )
+            trial_executions = [row[0] for row in trial_result.all()]
+            return checklist_executions + trial_executions
+        
+        return checklist_executions
 
     async def get_execution_history(self, checklist_id: str):
         from src.models.execution_record import ExecutionRecord
