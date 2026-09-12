@@ -34,7 +34,11 @@ apiClient.interceptors.response.use(
       }
       return Promise.reject(new Error('Unauthorized'))
     }
-    const message = error.response?.data?.message ?? error.message
+    const detail = (error.response?.data as any)?.detail
+    const message =
+      (typeof detail === 'string' ? detail : detail?.message) ??
+      (error.response?.data as any)?.message ??
+      error.message
     return Promise.reject(new Error(message))
   }
 )

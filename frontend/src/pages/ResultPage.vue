@@ -23,23 +23,43 @@
         <span>失敗：{{ execution.failed_count }}</span>
       </div>
 
+      <div v-if="caseResults.length" class="case-results" data-testid="case-results">
+        <h2>案例結果</h2>
+        <table class="results-table">
+          <thead><tr><th>案例編號</th><th>名稱</th><th>狀態</th><th>耗時(ms)</th><th>失敗訊息</th></tr></thead>
+          <tbody>
+            <tr v-for="cr in caseResults" :key="cr.id" :class="`row-${cr.status}`">
+              <td>{{ cr.case_number }}</td>
+              <td>{{ cr.case_name }}</td>
+              <td>{{ statusLabel(cr.status) }}</td>
+              <td>{{ cr.elapsed_ms ?? '-' }}</td>
+              <td class="failure-msg">{{ cr.failure_message || '-' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
       <div class="rf-report-tab">
         <template v-if="execution && (execution.status === 'completed' || execution.status === 'failed')">
           <!-- checklist 多案例時顯示案例選擇器 -->
           <div v-if="!execution.source_case_id && caseResults.length > 1" class="case-selector">
             <label>選擇案例：</label>
-            <select v-model="selectedReportCase">
+            <select v-model="selectedReportCase" @change="checkReportAvailable">
               <option v-for="cr in caseResults" :key="cr.case_number" :value="cr.case_number">
                 {{ cr.case_number }} — {{ cr.case_name }}
               </option>
             </select>
           </div>
           <iframe
+            v-if="reportAvailable"
             :key="`report-${rfReportPrefix}`"
             :src="`/api/v1/executions/${executionId}/rf-report/${rfReportPrefix}report.html`"
             class="rf-iframe"
             title="RF 測試報告"
           />
+          <div v-else class="rf-report-placeholder" data-testid="rf-report-missing">
+            尚無 RF 測試報告{{ missingReason ? `：${missingReason}` : '' }}
+          </div>
         </template>
         <div v-else class="rf-report-placeholder">
           執行進行中，報告生成後可查閱
@@ -52,7 +72,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getExecution, getExecutionResults, exportReport, streamExecution, type ExecutionRecord, type CaseResultItem } from '../services/executionApi'
+import { getExecution, getExecutionResults, exportReport, getRfReportStatus, streamExecution, type ExecutionRecord, type CaseResultItem } from '../services/executionApi'
 
 const route = useRoute()
 const router = useRouter()
@@ -62,6 +82,8 @@ const fetchError = ref<string | null>(null)
 const execution = ref<ExecutionRecord | null>(null)
 const caseResults = ref<CaseResultItem[]>([])
 const selectedReportCase = ref<string>('')
+const reportAvailable = ref(false)
+const missingReason = ref('')
 
 // trial run → 報告在根目錄；checklist → 報告在 {case_number}/ 子目錄
 const rfReportPrefix = computed(() => {
@@ -92,6 +114,9 @@ async function fetchResults() {
           fetchResults()
         }
       })
+    } else if (execution.value.status === 'completed' || execution.value.status === 'failed') {
+      // 終態才查報告是否存在，避免 iframe 直接渲染 404 JSON
+      await checkReportAvailable()
     }
   } catch (e: any) {
     if (e.message !== 'Unauthorized') {
@@ -100,6 +125,33 @@ async function fetchResults() {
     // 401 由 apiClient 攔截後跳轉 /login，不需額外處理
   } finally {
     loading.value = false
+  }
+}
+
+function statusLabel(status: string): string {
+  switch (status) {
+    case 'passed': return '通過'
+    case 'failed': return '失敗'
+    case 'skipped': return '略過（無 RF 程式碼）'
+    case 'error': return '錯誤'
+    case 'timeout': return '逾時'
+    default: return status
+  }
+}
+
+async function checkReportAvailable() {
+  reportAvailable.value = false
+  missingReason.value = ''
+  try {
+    const res = await getRfReportStatus(executionId.value, `${rfReportPrefix.value}report.html`)
+    reportAvailable.value = res.available
+  } catch {
+    reportAvailable.value = false
+  }
+  if (!reportAvailable.value) {
+    // 優先顯示第一個失敗案例的原因，否則給通用說明
+    const failed = caseResults.value.find((cr) => cr.failure_message)
+    missingReason.value = failed?.failure_message || '報告尚未生成'
   }
 }
 
@@ -153,6 +205,14 @@ onUnmounted(() => evtSource?.close())
   display: flex;
   flex-direction: column;
 }
+.case-results { margin-bottom: 16px; }
+.case-results h2 { font-size: 16px; margin-bottom: 8px; }
+.results-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.results-table th, .results-table td { padding: 8px; border-bottom: 1px solid #eee; text-align: left; }
+.results-table th { background: #f5f5f5; }
+.row-failed td, .row-error td { color: #b91c1c; }
+.row-passed td:first-child { color: #047857; }
+.failure-msg { max-width: 420px; word-break: break-word; white-space: pre-wrap; }
 .rf-iframe {
   width: 100%;
   height: 80vh;

@@ -249,6 +249,28 @@ class AIService:
             return None
         return code
 
+    def _build_catalog_block(self, catalog: list[dict]) -> str:
+        """Render an element-catalog context block (capped for prompt size)."""
+        lines = []
+        for entry in (catalog or [])[:30]:
+            if not isinstance(entry, dict):
+                continue
+            goal = str(entry.get("goal", "")).strip()
+            rec = str(entry.get("recommended", "")).strip()
+            xpath = str(entry.get("xpath", "")).strip()
+            css = str(entry.get("css", "")).strip()
+            if entry.get("status", "found") != "found" or not (rec or xpath):
+                lines.append(f"- {goal or '(未知目標)'}：未找到（{entry.get('note', '')}），請依測試步驟描述推導，切勿編造 XPath")
+                continue
+            unique_mark = "" if entry.get("xpath_unique") else "｜注意：此 XPath 非唯一，選用前請確認"
+            lines.append(f"- {goal}｜建議: {rec}｜XPath: {xpath}｜CSS: {css}{unique_mark}")
+        if not lines:
+            return ""
+        return ("\n\n---KNOWN PAGE ELEMENTS---\n生成 RF 腳本時優先使用以下真實定位器：\n"
+                "「建議」欄已符合 role=/text= 優先序；XPath 皆為相對路徑，`xpath_unique` 為 false 者表示該 XPath 非唯一、"
+                "僅供參考，選用前請要求使用者確認或改用建議 locator：\n"
+                + "\n".join(lines) + "\n---END PAGE ELEMENTS---")
+
     def _build_rf_context_block(self, rf_code: str, mode: str) -> str:
         """Build RF code context block for system prompt based on mode."""
         if mode == "full":
@@ -283,6 +305,7 @@ class AIService:
         llm_model: str,
         rf_code: Optional[str] = None,
         rf_context_mode: str = "full",
+        element_catalog: Optional[list[dict]] = None,
         timeout_sec: float = 35.0,
     ) -> dict:
         """Multi-turn chat that returns assistant reply and RF code.
@@ -292,12 +315,17 @@ class AIService:
         llm_model: model identifier
         rf_code: optional RF code to inject as context
         rf_context_mode: "full" | "summary" | "none"
+        element_catalog: optional page-exploration results
+            [{goal, recommended, xpath, css, ...}] — injected so generated
+            selectors match the real page instead of guesses.
         Returns { assistant_message: str, rf_code: str }
         """
         # Build system prompt with optional RF code context
         system_prompt = _CHAT_SYSTEM_PROMPT
         if rf_code and rf_code.strip() and rf_context_mode != "none":
             system_prompt += self._build_rf_context_block(rf_code, rf_context_mode)
+        if element_catalog:
+            system_prompt += self._build_catalog_block(element_catalog)
 
         conversation = [*messages, {"role": "user", "content": user_message}]
         try:

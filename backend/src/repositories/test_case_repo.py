@@ -125,6 +125,10 @@ class TestCaseRepository(BaseRepository[TestCase]):
     async def get_next_case_number(self, prefix: str) -> str:
         """Atomically generate the next case number for a prefix using DB-level locking.
         Uses a separate sequence table to avoid race conditions.
+
+        On first use for a prefix, the sequence is seeded from the maximum
+        existing suffix in test_cases so pre-existing rows (created before
+        the sequence mechanism, or after a sequence reset) can never collide.
         """
         # Create sequence table if not exists (SQLite compatible)
         await self.session.execute(text("""
@@ -133,7 +137,34 @@ class TestCaseRepository(BaseRepository[TestCase]):
                 last_number INTEGER NOT NULL DEFAULT 0
             )
         """))
-        
+
+        # Seed from existing data when this prefix has no sequence row yet.
+        # Escape LIKE wildcards so prefixes containing %/_ only match literally.
+        # Race-safe: concurrent first-use inserts are absorbed by ON CONFLICT DO NOTHING.
+        existing = await self.session.execute(
+            text("SELECT last_number FROM case_number_sequences WHERE prefix = :prefix"),
+            {"prefix": prefix},
+        )
+        if existing.scalar_one_or_none() is None:
+            escaped = prefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            rows = await self.session.execute(
+                select(TestCase.case_number).where(
+                    TestCase.case_number.like(f"{escaped}-%", escape="\\")
+                )
+            )
+            max_n = 0
+            for (case_number,) in rows.all():
+                suffix = case_number[len(prefix) + 1:]
+                if suffix.isdigit():
+                    max_n = max(max_n, int(suffix))
+            await self.session.execute(
+                text(
+                    "INSERT INTO case_number_sequences (prefix, last_number)"
+                    " VALUES (:prefix, :n) ON CONFLICT(prefix) DO NOTHING"
+                ),
+                {"prefix": prefix, "n": max_n},
+            )
+
         # Atomically increment and get the next number
         result = await self.session.execute(
             text("""

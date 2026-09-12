@@ -31,6 +31,13 @@
         >
           測試步驟
         </button>
+        <button
+          class="tab-btn"
+          :class="{ active: editTab === 'explore' }"
+          @click="editTab = 'explore'"
+        >
+          頁面探索
+        </button>
       </div>
 
       <!-- Tab 1：基本資訊 -->
@@ -108,6 +115,7 @@
             :case-id="caseData.id"
             :selected-model="selectedModel"
             :watch-execution-id="trialExecutionId"
+            :element-catalog="exploreCatalog"
             @rf-updated="rfCode = $event"
           />
         </section>
@@ -121,6 +129,12 @@
             @trial-started="trialExecutionId = $event"
           />
         </section>
+      </div>
+
+      <!-- Tab 3：頁面探索（AI 駕駛無頭瀏覽器找元素定位器） -->
+      <div v-show="editTab === 'explore'" class="tab-content">
+        <p v-if="exploreApplied" class="explore-hint">✓ 元素目錄已帶入 AI 對話，切到「測試步驟」頁籤提問即可使用真實定位器。</p>
+        <PageExplorer :case-id="caseData.id" @catalog-ready="onCatalogReady" />
       </div>
     </template>
 
@@ -283,6 +297,8 @@ import TestCaseForm from '../components/TestCaseForm/index.vue'
 import AIChatPanel from '../components/AIChatPanel/index.vue'
 import RFCodePreview from '../components/RFCodePreview/index.vue'
 import RFCodeEditor from '../components/RFCodeEditor/index.vue'
+import PageExplorer from '../components/PageExplorer/index.vue'
+import type { ExploreElement } from '../services/caseApi'
 import { useAuthStore } from '../stores/authStore'
 
 const authStore = useAuthStore()
@@ -297,11 +313,13 @@ const historyLoaded = ref(false)
 const trialRunning = ref(false)
 const trialExecutionId = ref<string | undefined>(undefined)
 const editing = ref(false)
-const editTab = ref<'basic' | 'steps'>('basic')
+const editTab = ref<'basic' | 'steps' | 'explore'>('basic')
 const viewTab = ref<'basic' | 'steps'>('basic')
 const mainSteps = ref('')
 const selectedModel = ref('claude-sonnet-4-6')
 const rfCode = ref('')
+const exploreCatalog = ref<ExploreElement[]>([])
+const exploreApplied = ref(false)
 const chatMessages = ref<Array<{ role: string; content: string; created_at: string }>>([])
 const attachments = ref<AttachmentRecord[]>([])
 
@@ -487,6 +505,11 @@ async function onTrialRun() {
 
 function onTrialRunFromForm(executionId: string) {
   router.push(`/executions/${executionId}`)
+}
+
+function onCatalogReady(catalog: ExploreElement[]) {
+  exploreCatalog.value = catalog
+  exploreApplied.value = catalog.length > 0
 }
 
 function chatDisplayText(msg: { role: string; content: string }) {
@@ -696,4 +719,6 @@ pre { white-space: pre-wrap; background: #f9f9f9; padding: 12px; border-radius: 
 .btn-add-row:hover { border-color: #4f46e5; color: #4f46e5; }
 
 .td-empty { font-size: 13px; margin-bottom: 8px; }
+
+.explore-hint { font-size: 13px; color: #047857; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 4px; padding: 8px 12px; margin: 0 0 12px; }
 </style>
