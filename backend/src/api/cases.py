@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Body
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -68,6 +69,17 @@ class ChatRequest(BaseModel):
     message: str
     llm_model: Optional[str] = None
     rf_context_mode: Optional[str] = "full"
+    catalog: Optional[list[dict]] = None
+
+
+class ChatPreviewRequest(BaseModel):
+    """Stateless chat (case-creation page): no case_id, nothing persisted."""
+    message: str
+    llm_model: Optional[str] = None
+    rf_context_mode: Optional[str] = "full"
+    history: Optional[list[dict]] = None
+    rf_code: Optional[str] = None
+    catalog: Optional[list[dict]] = None
 
 
 class RobotScriptRequest(BaseModel):
@@ -158,6 +170,8 @@ async def create_case(
             system_category=body.system_category,
             tags=body.tags,
         )
+    except IntegrityError:
+        raise HTTPException(409, detail={"error": "case_number_conflict", "message": "案例編號重複，請重試"})
     except ValueError as e:
         raise HTTPException(400, detail={"error": "validation_error", "message": str(e)})
 
@@ -388,6 +402,132 @@ async def ai_complete_steps(
     return {"completed_steps": completed, "model_used": model}
 
 
+@router.post("/chat-preview")
+async def chat_preview(
+    body: ChatPreviewRequest,
+    session: AsyncSession = Depends(get_db),
+):
+    """Stateless AI chat for the case-creation page — no case required, nothing persisted."""
+    settings = get_settings()
+    model = body.llm_model or await AppSettingService(session).get_active_model()
+    provider = get_provider(model, settings)
+    ai_service = AIService(provider=provider)
+
+    history = [
+        {"role": m.get("role", "user"), "content": m.get("content", "")}
+        for m in (body.history or [])
+        if m.get("role") in ("user", "assistant") and m.get("content")
+    ]
+    response = await ai_service.chat_and_generate_rf(
+        messages=history,
+        user_message=body.message,
+        llm_model=model,
+        rf_code=body.rf_code,
+        rf_context_mode=body.rf_context_mode or "full",
+        element_catalog=body.catalog,
+    )
+    return {"assistant_message": response["assistant_message"], "rf_code": response["rf_code"]}
+
+
+class ExplorePageRequest(BaseModel):
+    url: str
+    goals: list[str]
+    variables: Optional[list[str]] = None
+    llm_model: Optional[str] = None
+    max_steps: Optional[int] = 12
+
+
+def _resolve_credential_vars(test_data_items, requested: Optional[list[str]]) -> dict[str, str]:
+    """Match requested var names against the case's test-data (rf_variable or field_name).
+
+    Returns {VARNAME: value}. Values never leave the server except masked.
+    """
+    creds: dict[str, str] = {}
+    if not requested:
+        return creds
+    wanted = {v.strip().removeprefix("${").removesuffix("}").upper() for v in requested if v and v.strip()}
+    for td in test_data_items or []:
+        rf_var = (td.rf_variable or "").strip().removeprefix("${").removesuffix("}").upper()
+        field = (td.field_name or "").strip().upper()
+        key = rf_var or field
+        if key and key in wanted and td.field_value:
+            creds[rf_var or field] = td.field_value
+    return creds
+
+
+@router.post("/{case_id}/explore-page", status_code=202, dependencies=[Depends(require_editor_or_above)])
+async def explore_page(
+    case_id: str,
+    body: ExplorePageRequest,
+    session: AsyncSession = Depends(get_db),
+):
+    """Launch an autonomous page-exploration session (AI drives headless Chromium).
+
+    Returns 202 immediately; poll GET explore-sessions/{session_id} for progress.
+    """
+    import asyncio as _asyncio
+
+    from src.services.explore_session_store import launch_explore_session
+
+    if not body.url or not body.url.strip():
+        raise HTTPException(422, detail={"error": "empty_url", "message": "url 不可為空"})
+    goals = [g.strip() for g in (body.goals or []) if g and g.strip()]
+    if not goals:
+        raise HTTPException(422, detail={"error": "empty_goals", "message": "goals 不可為空"})
+    if len(goals) > 20:
+        raise HTTPException(422, detail={"error": "too_many_goals", "message": "goals 最多 20 個"})
+    max_steps = body.max_steps if body.max_steps is not None else 12
+    if max_steps < 1 or max_steps > 30:
+        raise HTTPException(422, detail={"error": "bad_max_steps", "message": "max_steps 需介於 1 到 30"})
+
+    result = await session.execute(
+        select(TestCase)
+        .options(selectinload(TestCase.test_data))
+        .where(TestCase.id == case_id, TestCase.is_deleted.is_(False))
+    )
+    case = result.scalar_one_or_none()
+    if not case:
+        raise HTTPException(404, detail={"error": "not_found", "message": "案例不存在"})
+
+    from src.services.page_explorer_service import validate_explore_url
+    try:
+        # DNS resolution blocks — keep it off the event loop. NOTE: this check
+        # is best-effort (TOCTOU vs Playwright's own resolution at goto time);
+        # it stops accidents, not a determined attacker. Internal deployments
+        # should additionally restrict egress at the network layer.
+        await _asyncio.to_thread(validate_explore_url, body.url.strip())
+    except ValueError as e:
+        raise HTTPException(422, detail={"error": "bad_url", "message": str(e)})
+
+    credentials = _resolve_credential_vars(case.test_data, body.variables)
+
+    settings = get_settings()
+    model = body.llm_model or await AppSettingService(session).get_active_model()
+    provider = get_provider(model, settings)
+
+    embarked = launch_explore_session(
+        case_id=case_id,
+        url=body.url.strip(),
+        goals=goals,
+        credentials=credentials,
+        provider=provider,
+        max_steps=max_steps,
+    )
+    return {"session_id": embarked["session_id"],
+            "status_url": f"/api/v1/cases/{case_id}/explore-sessions/{embarked['session_id']}"}
+
+
+@router.get("/{case_id}/explore-sessions/{session_id}")
+async def get_explore_session(case_id: str, session_id: str):
+    """Poll an exploration session's progress/result."""
+    from src.services.explore_session_store import get_session, public_view
+
+    snippet = get_session(session_id)
+    if not snippet or snippet.get("case_id") != case_id:
+        raise HTTPException(404, detail={"error": "not_found", "message": "探索工作階段不存在"})
+    return public_view(snippet)
+
+
 @router.post("/{case_id}/chat")
 async def chat_with_ai(
     case_id: str,
@@ -430,6 +570,7 @@ async def chat_with_ai(
         llm_model=model,
         rf_code=rf_code,
         rf_context_mode=body.rf_context_mode or "full",
+        element_catalog=body.catalog,
     )
 
     # Persist user message and assistant response
@@ -744,6 +885,17 @@ async def trial_run(case_id: str, request: TrialRunRequest = TrialRunRequest(), 
     case = await repo.get(case_id)
     if not case:
         raise HTTPException(404, detail={"error": "not_found", "message": "案例不存在"})
+
+    # Fail fast with a clear message when there is no RF code to run —
+    # otherwise the trial would instantly record a confusing failure.
+    # Read path mirrors get_robot_script: DB first, then disk fallback.
+    if not (request.rf_code and request.rf_code.strip()):
+        from src.repositories.robot_script_repo import RobotScriptRepository
+        record = await RobotScriptRepository(session).get_by_case_id(case_id)
+        has_db_code = bool(record and record.rf_code and record.rf_code.strip())
+        script_path = os.path.join(get_settings().robot_scripts_dir, f"{case.case_number}.robot")
+        if not has_db_code and not os.path.exists(script_path):
+            raise HTTPException(422, detail={"error": "no_robot_code", "message": "尚未產生 RF 程式碼，請先透過 AI 對話生成或上傳後再試跑"})
 
     exec_service = ExecutionService(session)
     record = await exec_service.run_trial(

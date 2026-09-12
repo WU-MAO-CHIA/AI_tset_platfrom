@@ -43,6 +43,16 @@ export async function getExecutionResults(
   return res.data
 }
 
+export async function getRfReportStatus(
+  executionId: string,
+  filename: string
+): Promise<{ available: boolean }> {
+  const res = await apiClient.get(`/executions/${executionId}/rf-report-status`, {
+    params: { filename },
+  })
+  return res.data
+}
+
 export function streamExecution(executionId: string, onEvent: (data: unknown) => void): EventSource {
   // Token is now sent via HttpOnly cookie, no need to pass in URL
   const evtSource = new EventSource(`/api/v1/executions/${executionId}/stream`, {

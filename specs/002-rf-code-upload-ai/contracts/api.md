@@ -147,7 +147,6 @@ GET /cases/{case_id}/robot-script
 ## 4. AI Chat with RF Context (Extended)
 
 Chat with AI assistant, optionally including RF code as context.
-
 ### Endpoint
 ```
 POST /cases/{case_id}/chat
@@ -185,6 +184,54 @@ POST /cases/{case_id}/chat
 - If `rf_context_mode` = "none": No RF context (standard chat)
 - If case has no RF code: Works normally regardless of mode
 - Response `rf_code` field echoes the context used (for UI confirmation)
+
+---
+
+## 4b. AI Chat Preview (Stateless, NEW)
+
+Stateless chat for the case-creation page — no `case_id` required, nothing persisted to DB. Fixes the create-page chat failure where `AIChatPanel` has no case yet.
+
+### Endpoint
+```
+POST /cases/chat-preview
+```
+
+### Request
+**Content-Type**: `application/json`
+
+```json
+{
+  "message": "測試登入功能",
+  "llm_model": "claude-3-5-sonnet-20241022",
+  "rf_context_mode": "full",
+  "history": [
+    { "role": "user", "content": "測試登入" },
+    { "role": "assistant", "content": "好的，請描述步驟" }
+  ],
+  "rf_code": null
+}
+```
+
+### Parameters
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| message | string | Yes | - | Current user message |
+| llm_model | string | No | Active model | LLM model to use |
+| rf_context_mode | string | No | "full" | Context scope: "full", "summary", "none" |
+| history | array | No | [] | Prior turns `[{role, content}]`; only `user`/`assistant` roles kept |
+| rf_code | string \| null | No | null | Optional RF code to inject as context |
+
+### Response (200 OK)
+```json
+{
+  "assistant_message": "建議的測試步驟…",
+  "rf_code": "*** Settings ***\n…"
+}
+```
+
+### Behavior
+- No case lookup, no `CaseChatMessage` writes — conversation history lives in the frontend
+- `rf_code` request field allows future use (e.g., buffered upload on the creation page)
 
 ---
 
@@ -230,3 +277,68 @@ The existing `PUT /cases/{case_id}` endpoint supports optional `rf_code` field.
 - If `rf_code` provided: Updates RobotScript (overwrites per Q3=A)
 - If `rf_code` = null/omitted: No change to existing RF code
 - If `rf_code` = "" (empty string): Clears RF code (deletes RobotScript record)
+
+---
+
+## 7. Autonomous Page Exploration (NEW)
+
+AI drives headless Chromium to find real element locators (recommended locator + relative XPath + CSS). Launch returns 202 immediately; poll the session until terminal.
+
+### Endpoint: Launch
+```
+POST /cases/{case_id}/explore-page   (editor role or above)
+```
+
+### Request
+```json
+{
+  "url": "https://example.com/login",
+  "goals": ["帳號輸入框", "登入按鈕"],
+  "variables": ["${USERNAME}", "${PASSWORD}"],
+  "max_steps": 12
+}
+```
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| url | string | Yes | - | http/https only; intranet/loopback rejected |
+| goals | string[] | Yes | - | 1–20 target element descriptions |
+| variables | string[] | No | [] | Test-data variable names for login; values resolved server-side, always masked in logs |
+| llm_model | string | No | Active model | LLM model to use |
+| max_steps | int | No | 12 | Agent loop cap, 1–30 |
+
+### Response (202 Accepted)
+```json
+{
+  "session_id": "…",
+  "status_url": "/api/v1/cases/{case_id}/explore-sessions/{session_id}"
+}
+```
+
+### Endpoint: Poll
+```
+GET /cases/{case_id}/explore-sessions/{session_id}
+```
+
+### Response (200 OK)
+```json
+{
+  "session_id": "…",
+  "status": "done",
+  "steps": 3,
+  "log": [{ "step": 1, "action": "snapshot", "narrative": "…" }],
+  "catalog": [
+    { "goal": "登入按鈕", "status": "found", "note": "", "ref": "e2",
+      "role": "button", "name": "登入",
+      "recommended": "role=button[name=\"登入\"]",
+      "xpath": "//button[@data-testid=\"login-btn\"]",
+      "css": "[data-testid=\"login-btn\"]", "xpath_unique": true }
+  ],
+  "note": "找到 1/1 個目標"
+}
+```
+
+### Behavior
+- `status`: `running` → `done` / `partial` (step cap) / `empty` (nothing found) / `error`
+- Sessions are in-memory with 30-min TTL (no DB migration); case mismatch → 404
+- Feed `catalog` back into `POST .../chat` or `/chat-preview` via the `catalog` field to generate RF with real selectors

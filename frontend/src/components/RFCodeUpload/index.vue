@@ -37,9 +37,9 @@
 
 <script setup lang="ts">
 import { ref, defineEmits } from 'vue'
-import { validateFileExtension, validateFileSize, decodeFileContent, getFileValidationError } from '../../utils/rfUpload'
+import { decodeFileContent, getFileValidationError } from '../../utils/rfUpload'
 
-const props = defineProps<{
+defineProps<{
   caseId?: string
 }>()
 

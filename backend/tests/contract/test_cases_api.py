@@ -180,6 +180,36 @@ class TestChatEndpoints:
             assert data["messages"][0]["type"] in ["chat", "trial_run_result"]
 
 
+class TestChatPreviewEndpoints:
+    """Stateless chat for the case-creation page — no case_id, nothing persisted."""
+
+    async def test_chat_preview_returns_message_and_rf_code(self, client):
+        response = await client.post(
+            "/api/v1/cases/chat-preview",
+            json={"message": "測試登入功能", "llm_model": "claude-sonnet-4-6"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert "assistant_message" in data
+        assert "rf_code" in data
+
+    async def test_chat_preview_accepts_history(self, client):
+        response = await client.post(
+            "/api/v1/cases/chat-preview",
+            json={
+                "message": "繼續",
+                "llm_model": "claude-sonnet-4-6",
+                "history": [
+                    {"role": "user", "content": "測試登入"},
+                    {"role": "assistant", "content": "好的，請描述步驟"},
+                ],
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert "assistant_message" in data
+
+
 class TestTrialRunEndpoints:
     """Phase 27: Trial run endpoints - immediate execution with RF code preview."""
 

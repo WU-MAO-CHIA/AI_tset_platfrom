@@ -41,18 +41,17 @@
       />
     </div>
 
-    <!-- RF 程式碼上傳與預覽區塊 -->
+    <!-- RF 程式碼上傳與預覽區塊：上傳控制永遠顯示（支援覆寫既有程式碼），有內容即顯示預覽 -->
     <div class="field">
       <label>RF 程式碼</label>
       <RFCodeUpload
-        v-if="!rfCode || !savedRfCode"
         :case-id="caseId"
         @file-loaded="onRfFileLoaded"
         @file-cleared="onRfFileCleared"
         data-testid="rf-upload"
       />
       <RFCodePreview
-        v-else
+        v-if="rfCode"
         :main-steps="effectiveMainSteps"
         :selected-model="selectedModel"
         :rf-code-override="rfCode"
@@ -95,6 +94,7 @@ const emit = defineEmits<{
   (e: 'saved', id: string): void
   (e: 'trial-run', executionId: string): void
   (e: 'update:main-steps', value: string): void
+  (e: 'rf-buffered', content: string | null): void
 }>()
 
 /** True when CaseCreatePage provides mainSteps via prop (two-column layout). */
@@ -170,10 +170,9 @@ async function onSubmit() {
       const res = await caseApi.createCase(payload)
       // 建立案例前暫存的媒體附件／網址，於此一併上傳到新案例
       await mediaUploaderRef.value?.flushPending(res.data.id)
-      // Upload pending RF code after case creation
-      if (pendingRfContent.value) {
-        await uploadPendingRfCode(res.data.id)
-      }
+      // RF 程式碼由父層（CaseCreatePage.onSaved）統一持久化：
+      // Tab1 上傳檔優先，其次 Tab2 AI 生成碼。不可在此直接上傳，
+      // 否則 AI 生成碼會被無聲丟棄。
       emit('saved', res.data.id)
     }
   } catch (e: any) {
@@ -224,13 +223,25 @@ function onRfFileLoaded(content: string) {
   pendingRfContent.value = content
   rfCode.value = content
   savedRfCode.value = false
+  // Let the creation page forward the buffered code to AI chat as context
+  emit('rf-buffered', content)
 }
 
 function onRfFileCleared() {
   pendingRfContent.value = null
   rfCode.value = null
   savedRfCode.value = false
+  emit('rf-buffered', null)
 }
+
+/** 取出暫存的上傳內容並清空（供建立頁在案例建立後統一儲存）。 */
+function takePendingRfCode(): string | null {
+  const content = pendingRfContent.value
+  pendingRfContent.value = null
+  return content
+}
+
+defineExpose({ takePendingRfCode })
 </script>
 
 <style scoped>

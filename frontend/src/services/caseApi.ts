@@ -101,6 +101,47 @@ export interface ChatResponse {
   rf_code: string
 }
 
+export interface ChatPreviewRequest {
+  message: string
+  llm_model?: string
+  rf_context_mode?: 'full' | 'summary' | 'none'
+  history?: Array<{ role: string; content: string }>
+  rf_code?: string | null
+  catalog?: Array<Record<string, any>> | null
+}
+
+export interface ExploreElement {
+  goal: string
+  status: string
+  note: string
+  ref: string
+  role: string
+  name: string
+  recommended: string
+  xpath: string
+  css: string
+  xpath_unique: boolean
+}
+
+export interface ExploreSession {
+  session_id: string
+  case_id: string
+  url: string
+  status: string
+  steps: number
+  log: Array<{ step: number; action: string; narrative?: string }>
+  catalog: ExploreElement[]
+  note: string
+}
+
+export interface ExplorePageRequest {
+  url: string
+  goals: string[]
+  variables?: string[]
+  llm_model?: string
+  max_steps?: number
+}
+
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system'
   type?: 'chat' | 'trial_run_result'  // Phase 27: Message type
@@ -193,8 +234,13 @@ export const caseApi = {
     return apiClient.post(`/cases/${id}/import-test-data/confirm`, { import_token: importToken })
   },
 
-  chatWithAI(caseId: string, message: string, model: string, rfContextMode: 'full' | 'summary' | 'none' = 'full') {
-    return apiClient.post<ChatResponse>(`/cases/${caseId}/chat`, { message, llm_model: model, rf_context_mode: rfContextMode })
+  chatWithAI(caseId: string, message: string, model: string, rfContextMode: 'full' | 'summary' | 'none' = 'full', catalog?: Array<Record<string, any>>) {
+    return apiClient.post<ChatResponse>(`/cases/${caseId}/chat`, { message, llm_model: model, rf_context_mode: rfContextMode, catalog: catalog ?? null })
+  },
+
+  // Stateless chat for the case-creation page (no caseId, nothing persisted)
+  chatPreview(data: ChatPreviewRequest) {
+    return apiClient.post<ChatResponse>('/cases/chat-preview', data)
   },
 
   getChatHistory(caseId: string) {
@@ -215,6 +261,15 @@ export const caseApi = {
 
   getRobotScript(caseId: string) {
     return apiClient.get<{ rf_code: string; case_number: string }>(`/cases/${caseId}/robot-script`)
+  },
+
+  // Autonomous page exploration (AI drives headless Chromium)
+  explorePage(caseId: string, data: ExplorePageRequest) {
+    return apiClient.post<{ session_id: string; status_url: string }>(`/cases/${caseId}/explore-page`, data)
+  },
+
+  getExploreSession(caseId: string, sessionId: string) {
+    return apiClient.get<ExploreSession>(`/cases/${caseId}/explore-sessions/${sessionId}`)
   },
 
   listCategories() {

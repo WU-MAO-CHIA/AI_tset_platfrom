@@ -3,7 +3,7 @@ import json
 import os
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Cookie, Depends, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -84,14 +84,16 @@ async def get_execution_results(execution_id: str, db: AsyncSession = Depends(ge
 
 @router.get("/{execution_id}/stream")
 async def stream_execution(
-    execution_id: str, 
-    token: str | None = None, 
-    access_token_cookie: str | None = None,
+    execution_id: str,
+    token: str | None = None,
+    access_token: str | None = Cookie(default=None),
     db: AsyncSession = Depends(get_db)
 ):
-    # SSE cannot send Authorization header; accept token as query param or cookie
-    # Cookie is preferred (HttpOnly, not exposed in URLs/logs)
-    token = token or access_token_cookie
+    # SSE cannot send Authorization header; accept token as query param or cookie.
+    # Cookie name must match login (auth_service sets key="access_token").
+    # NOTE: plain `str | None = None` would bind a *query* param, not a cookie —
+    # FastAPI only reads cookies for parameters annotated with Cookie().
+    token = token or access_token
     
     if token:
         from src.core.security import decode_token
@@ -133,7 +135,7 @@ async def stream_execution(
 
         timeout_ticks = 0
         max_ticks = 600  # 10 minutes
-
+        timed_out = False
         try:
             while timeout_ticks < max_ticks:
                 try:
@@ -157,8 +159,13 @@ async def stream_execution(
 
                 if event.get("__done__"):
                     return
+            # Loop exhausted without a done event: genuine timeout.
+            # NOTE: must NOT yield inside `finally` below — that would emit a
+            # spurious execution_error after every cleanly finished stream.
+            timed_out = True
         finally:
             clear_execution_queue(execution_id)
+        if timed_out:
             yield f"data: {json.dumps({'event': 'execution_error', 'execution_id': execution_id, 'message': '執行逾時'})}\n\n"
 
     return StreamingResponse(
@@ -223,3 +230,18 @@ async def get_rf_report(execution_id: str, filename: str, db: AsyncSession = Dep
     if not os.path.isfile(file_path):
         raise HTTPException(status_code=404, detail="報告尚未生成或不存在")
     return FileResponse(file_path)
+
+
+@router.get("/{execution_id}/rf-report-status")
+async def get_rf_report_status(
+    execution_id: str, filename: str = "report.html", db: AsyncSession = Depends(get_db)
+):
+    """Check whether an RF report file exists (lets the UI avoid iframing a 404 JSON)."""
+    from src.core.config import get_settings
+    settings = get_settings()
+    repo = ExecutionRepository(db)
+    record = await repo.get(execution_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail={"error": "not_found"})
+    file_path = os.path.join(settings.execution_reports_dir, execution_id, filename)
+    return {"available": os.path.isfile(file_path)}

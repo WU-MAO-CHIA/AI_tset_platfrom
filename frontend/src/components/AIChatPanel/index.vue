@@ -75,6 +75,8 @@ const props = defineProps<{
   caseId?: string
   selectedModel: string
   watchExecutionId?: string
+  elementCatalog?: Array<Record<string, any>>
+  rfCodeContext?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -149,20 +151,41 @@ async function sendMessage() {
   const text = inputText.value.trim()
   if (!text || loading.value) return
 
+  // Build stateless history BEFORE pushing: backend already appends the
+  // current message, so including it here would duplicate the turn.
+  const history = messages.value
+    .filter((m) => (m.role === 'user' || m.role === 'assistant') && m.type !== 'trial_run_result')
+    .map((m) => ({ role: m.role as string, content: m.content }))
   messages.value.push({ role: 'user', content: text, created_at: new Date().toISOString() })
   inputText.value = ''
   loading.value = true
   scrollToBottom()
 
   try {
-    const res = await caseApi.chatWithAI(props.caseId ?? '', text, props.selectedModel, contextMode.value)
-    const { assistant_message, rf_code } = res.data
+    let assistant_message: string
+    let rf_code: string
+    if (props.caseId) {
+      const res = await caseApi.chatWithAI(props.caseId, text, props.selectedModel, contextMode.value, props.elementCatalog)
+      ;({ assistant_message, rf_code } = res.data)
+    } else {
+      // Case-creation page: stateless chat, history kept locally, nothing persisted
+      const res = await caseApi.chatPreview({
+        message: text,
+        llm_model: props.selectedModel,
+        rf_context_mode: contextMode.value,
+        history,
+        catalog: props.elementCatalog ?? null,
+        rf_code: props.rfCodeContext ?? null,
+      })
+      ;({ assistant_message, rf_code } = res.data)
+    }
     messages.value.push({ role: 'assistant', content: assistant_message, created_at: new Date().toISOString() })
     if (rf_code) {
       emit('rf-updated', rf_code)
     }
-  } catch {
-    messages.value.push({ role: 'assistant', content: '發生錯誤，請稍後再試。', created_at: new Date().toISOString() })
+  } catch (e: any) {
+    const detail = e?.message ? `：${e.message}` : ''
+    messages.value.push({ role: 'assistant', content: `發生錯誤${detail}，請稍後再試。`, created_at: new Date().toISOString() })
   } finally {
     loading.value = false
     scrollToBottom()

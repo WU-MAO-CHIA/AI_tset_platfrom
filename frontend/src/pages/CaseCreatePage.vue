@@ -27,6 +27,7 @@
         :main-steps="mainSteps"
         :selected-model="selectedModel"
         @update:main-steps="mainSteps = $event"
+        @rf-buffered="uploadedRfCode = $event"
         @saved="onSaved"
         @trial-run="onTrialRun"
       />
@@ -38,6 +39,7 @@
         <section class="left-col">
           <AIChatPanel
             :selected-model="selectedModel"
+            :rf-code-context="uploadedRfCode"
             @rf-updated="rfCode = $event"
           />
         </section>
@@ -51,7 +53,10 @@
         </section>
       </div>
       <div class="tab2-save-bar">
-        <button class="btn-save-tab2" @click="saveFromTab2">儲存案例</button>
+        <span v-if="saveRfError" class="error">{{ saveRfError }}</span>
+        <button class="btn-save-tab2" :disabled="savingRf" @click="saveFromTab2">
+          {{ savingRf ? '儲存中...' : '儲存案例' }}
+        </button>
       </div>
     </div>
   </div>
@@ -61,6 +66,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import apiClient from '../services/apiClient'
+import { caseApi } from '../services/caseApi'
 import TestCaseForm from '../components/TestCaseForm/index.vue'
 import AIChatPanel from '../components/AIChatPanel/index.vue'
 import RFCodePreview from '../components/RFCodePreview/index.vue'
@@ -71,7 +77,10 @@ const mainSteps = ref('')
 // 模型集中於 /admin 管理：建立案例頁採用全域預設模型（FR-012 / FR-027），不提供選擇器
 const selectedModel = ref('')
 const rfCode = ref('')
+const uploadedRfCode = ref<string | null>(null)
 const savedCaseId = ref('')
+const savingRf = ref(false)
+const saveRfError = ref('')
 const formRef = ref<InstanceType<typeof TestCaseForm> | null>(null)
 
 onMounted(async () => {
@@ -88,9 +97,27 @@ function saveFromTab2() {
   submitBtn?.click()
 }
 
-function onSaved(id: string) {
+async function onSaved(id: string) {
   savedCaseId.value = id
-  router.push(`/cases/${id}`)
+  // 案例已建立：把 RF 程式碼持久化後再導頁，否則 AI 生成碼會被無聲丟棄。
+  // 優先順序：Tab1 明確上傳的檔案 > Tab2 AI 生成的碼。
+  const pendingUpload = formRef.value?.takePendingRfCode?.() ?? null
+  const codeToSave = pendingUpload || rfCode.value || ''
+  if (!codeToSave.trim()) {
+    router.push(`/cases/${id}`)
+    return
+  }
+  savingRf.value = true
+  saveRfError.value = ''
+  try {
+    await caseApi.saveRobotScript(id, codeToSave)
+    router.push(`/cases/${id}`)
+  } catch (e: any) {
+    // 留在原頁讓使用者重試（程式碼仍保留在畫面上，不會遺失）
+    saveRfError.value = `RF 程式碼儲存失敗：${e?.message || '未知錯誤'}，請重試`
+  } finally {
+    savingRf.value = false
+  }
 }
 
 function onTrialRun(executionId: string) {
@@ -154,8 +181,12 @@ h1 { margin-bottom: 16px; font-size: 22px; }
 .tab2-save-bar {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
   padding: 12px 0 0;
 }
+
+.tab2-save-bar .error { color: red; font-size: 13px; }
 
 .btn-save-tab2 {
   padding: 8px 20px;

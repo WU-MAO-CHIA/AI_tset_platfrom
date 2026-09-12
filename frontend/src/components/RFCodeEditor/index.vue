@@ -5,7 +5,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import * as monaco from 'monaco-editor'
-import { loader } from '@monaco-editor/loader'
+import loader from '@monaco-editor/loader'
 
 const props = defineProps<{
   modelValue: string

@@ -102,6 +102,13 @@ class ExecutionService:
         async with AsyncSessionLocal() as session:
             case_repo = TestCaseRepository(session)
             case = await case_repo.get(source_case_id)
+            # DB-first read path (mirrors get_robot_script + trial-run guard)
+            db_rf_code: Optional[str] = None
+            if case and not rf_code:
+                from src.repositories.robot_script_repo import RobotScriptRepository
+                _rec = await RobotScriptRepository(session).get_by_case_id(source_case_id)
+                if _rec and _rec.rf_code and _rec.rf_code.strip():
+                    db_rf_code = _rec.rf_code
 
         if not case:
             queue.put_nowait({"event": "execution_error", "execution_id": execution_id, "message": "案例不存在", "__done__": True})
@@ -111,8 +118,8 @@ class ExecutionService:
             return
 
         case_number = case.case_number
-        # Phase 27: Use provided rf_code if available, otherwise read from file
-        robot_code: Optional[str] = rf_code
+        # Phase 27: Use provided rf_code if available, otherwise DB, otherwise file
+        robot_code: Optional[str] = rf_code or db_rf_code
         if not robot_code:
             script_path = os.path.join(settings.robot_scripts_dir, f"{case_number}.robot")
             if os.path.exists(script_path):
@@ -539,7 +546,7 @@ class ExecutionService:
         report_dest: Optional[str] = None,
     ) -> dict:
         if robot_code is None:
-            return {"status": "skipped", "elapsed_ms": 0, "failure_message": "No robot code available"}
+            return {"status": "skipped", "elapsed_ms": 0, "failure_message": "尚無 RF 程式碼（請先透過 AI 對話生成或上傳）"}
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             # Mirror the real robot_scripts/../libs layout so that scripts using

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import TestCaseForm from '@/components/TestCaseForm/index.vue'
+import RFCodeUpload from '@/components/RFCodeUpload/index.vue'
 
 vi.mock('@/services/caseApi', () => ({
   caseApi: {
@@ -20,7 +21,12 @@ import { caseApi } from '@/services/caseApi'
 
 const globalStubs = {
   stubs: {
-    MediaUploader: { template: '<div class="media-uploader" />', props: ['caseId'], emits: ['uploaded'] },
+    MediaUploader: {
+      template: '<div class="media-uploader" />',
+      props: ['caseId'],
+      emits: ['uploaded'],
+      methods: { flushPending: vi.fn().mockResolvedValue(undefined) },
+    },
     LLMModelSelector: { template: '<div class="llm-selector" />', props: ['modelValue'], emits: ['update:modelValue'] },
     RFCodePreview: { template: '<div class="rf-preview" data-testid="rf-preview"><slot/></div>', props: ['mainSteps', 'selectedModel', 'rfCodeOverride', 'caseId', 'chatMode'], emits: ['trial-started'] },
   },
@@ -32,11 +38,18 @@ describe('TestCaseForm', () => {
     vi.clearAllMocks()
   })
 
-  it('should require case_number field', () => {
-    const wrapper = mount(TestCaseForm, { global: globalStubs })
-    const input = wrapper.find('input[placeholder="TC-001"]')
-    expect(input.exists()).toBe(true)
-    expect(input.attributes('required')).toBeDefined()
+  it('should auto-generate case_number (no input in create mode, readonly in edit mode)', () => {
+    // 建立時由後端自動生成，無需輸入
+    const createWrapper = mount(TestCaseForm, { global: globalStubs })
+    expect(createWrapper.find('input[placeholder="TC-001"]').exists()).toBe(false)
+
+    const editWrapper = mount(TestCaseForm, {
+      props: { caseId: 'case-abc', initialData: { case_number: 'TC-001' } },
+      global: globalStubs,
+    })
+    const numInput = editWrapper.find('input[disabled]')
+    expect(numInput.exists()).toBe(true)
+    expect(numInput.element.value).toBe('TC-001')
   })
 
   it('should require main_steps field', () => {
@@ -87,8 +100,8 @@ describe('TestCaseForm validation', () => {
 
   it('should validate required fields before submit', () => {
     const wrapper = mount(TestCaseForm, { global: globalStubs })
-    // Both required fields must carry the required attribute for HTML5 validation
-    expect(wrapper.find('input[placeholder="TC-001"]').attributes('required')).toBeDefined()
+    // Required: 名稱 input + 主要步驟 textarea (case_number 由後端自動生成)
+    expect(wrapper.find('input[placeholder="測試案例名稱"]').attributes('required')).toBeDefined()
     expect(wrapper.find('textarea[required]').exists()).toBe(true)
     // Submit button present and not disabled by default
     const submitBtn = wrapper.find('button[type="submit"]')
@@ -126,21 +139,22 @@ describe('TestCaseForm RF code upload integration', () => {
     expect(caseApi.getRobotScript).toHaveBeenCalledWith('case-1')
   })
 
-  it('should upload pending RF code after case creation', async () => {
+  it('should NOT upload RF on creation (parent persists it) but emit saved', async () => {
     const wrapper = mount(TestCaseForm, {
       props: { selectedModel: 'claude-sonnet-4-6' },
       global: globalStubs,
     })
 
-    // Simulate file loaded event
-    const rfUpload = wrapper.findComponent({ name: 'RFCodeUpload' })
-    rfUpload.vm.$emit('file-loaded', '*** Test ***\nLog    Uploaded')
+    // Simulate file loaded event (real child lookup, not by name)
+    wrapper.findComponent(RFCodeUpload).vm.$emit('file-loaded', '*** Test ***\nLog    Uploaded')
 
-    await wrapper.find('button[type="submit"]').trigger('click')
+    await wrapper.find('form.case-form').trigger('submit')
     await flushPromises()
 
     expect(caseApi.createCase).toHaveBeenCalled()
-    expect(caseApi.uploadRobotScript).toHaveBeenCalled()
+    // Creation page owns post-create RF persistence (upload file wins over AI code there)
+    expect(caseApi.uploadRobotScript).not.toHaveBeenCalled()
+    expect(wrapper.emitted('saved')?.[0]).toEqual(['case-1'])
   })
 
   it('should upload pending RF code after case update', async () => {
@@ -150,11 +164,10 @@ describe('TestCaseForm RF code upload integration', () => {
     })
     await flushPromises()
 
-    // Simulate file loaded event
-    const rfUpload = wrapper.findComponent({ name: 'RFCodeUpload' })
-    rfUpload.vm.$emit('file-loaded', '*** Test ***\nLog    Uploaded')
+    // Simulate file loaded event (real child lookup, not by name)
+    wrapper.findComponent(RFCodeUpload).vm.$emit('file-loaded', '*** Test ***\nLog    Uploaded')
 
-    await wrapper.find('button[type="submit"]').trigger('click')
+    await wrapper.find('form.case-form').trigger('submit')
     await flushPromises()
 
     expect(caseApi.updateCase).toHaveBeenCalled()
@@ -167,12 +180,45 @@ describe('TestCaseForm RF code upload integration', () => {
       global: globalStubs,
     })
 
-    const rfUpload = wrapper.findComponent({ name: 'RFCodeUpload' })
+    const rfUpload = wrapper.findComponent(RFCodeUpload)
     rfUpload.vm.$emit('file-loaded', '*** Test ***\nLog    Hello')
     rfUpload.vm.$emit('file-cleared')
 
     await flushPromises()
-    // RFCodePreview should not be shown when cleared
+    // RFCodePreview should not be shown when cleared, upload stays visible for re-upload
     expect(wrapper.find('[data-testid="rf-preview"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="rf-upload"]').exists()).toBe(true)
+  })
+
+  it('should emit rf-buffered when RF file is loaded or cleared', async () => {
+    const wrapper = mount(TestCaseForm, {
+      props: { selectedModel: 'claude-sonnet-4-6' },
+      global: globalStubs,
+    })
+
+    const rfUpload = wrapper.findComponent(RFCodeUpload)
+    expect(rfUpload.exists()).toBe(true)
+    rfUpload.vm.$emit('file-loaded', '*** Test ***\nLog    Hello')
+    await flushPromises()
+    expect(wrapper.emitted('rf-buffered')?.[0]).toEqual(['*** Test ***\nLog    Hello'])
+
+    rfUpload.vm.$emit('file-cleared')
+    await flushPromises()
+    expect(wrapper.emitted('rf-buffered')?.[1]).toEqual([null])
+  })
+
+  it('takePendingRfCode returns buffered content once, then null', async () => {
+    const wrapper = mount(TestCaseForm, {
+      props: { selectedModel: 'claude-sonnet-4-6' },
+      global: globalStubs,
+    })
+
+    const vm = wrapper.vm as unknown as { takePendingRfCode: () => string | null }
+    expect(vm.takePendingRfCode()).toBeNull()
+
+    wrapper.findComponent(RFCodeUpload).vm.$emit('file-loaded', '*** Pending ***')
+    await flushPromises()
+    expect(vm.takePendingRfCode()).toBe('*** Pending ***')
+    expect(vm.takePendingRfCode()).toBeNull()
   })
 })
