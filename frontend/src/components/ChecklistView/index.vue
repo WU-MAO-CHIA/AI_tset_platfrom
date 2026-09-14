@@ -31,7 +31,7 @@
 
     <section class="history-section">
       <h3>執行歷史</h3>
-      <table v-if="executions.length > 0" class="history-table">
+      <table v-if="(executions ?? []).length > 0" class="history-table">
         <thead>
           <tr>
             <th>執行 ID</th>
@@ -43,7 +43,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="exec in executions" :key="exec.id">
+          <tr v-for="exec in executions ?? []" :key="exec.id">
             <td>{{ exec.id.slice(0, 8) }}</td>
             <td>{{ exec.status }}</td>
             <td>{{ exec.passed_count }}</td>

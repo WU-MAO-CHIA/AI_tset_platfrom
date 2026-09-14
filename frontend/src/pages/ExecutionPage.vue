@@ -22,12 +22,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useExecutionStore } from '../stores/executionStore'
 import ExecutionProgress from '../components/ExecutionProgress/index.vue'
 
 const route = useRoute()
 const router = useRouter()
-const store = useExecutionStore()
 
 const executionId = computed(() => (route.params.id as string) || (route.query.execution_id as string) || null)
 

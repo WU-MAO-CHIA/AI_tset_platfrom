@@ -1,18 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { CaseResultItem, ExecutionRecord } from '../services/executionApi'
+import type { CaseResultItem } from '../services/executionApi'
 
 type ExecutionStatus = 'idle' | 'running' | 'completed' | 'failed' | 'error'
-
-interface SSECaseProgress {
-  case_result_id: string
-  case_number: string
-  case_name: string
-  status?: string
-  elapsed_ms?: number
-  failure_message?: string | null
-  position?: number
-}
 
 export const useExecutionStore = defineStore('execution', () => {
   const executionId = ref<string | null>(null)

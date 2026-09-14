@@ -1,5 +1,4 @@
 import apiClient from './apiClient'
-import type { AxiosResponse } from 'axios'
 
 export interface TestCaseSummary {
   id: string
@@ -32,7 +31,7 @@ export interface TestCaseDetail extends TestCaseSummary {
 }
 
 export interface CreateCaseRequest {
-  case_number: string
+  case_number?: string
   name: string
   main_steps: string
   description?: string
