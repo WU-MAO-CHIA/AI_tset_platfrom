@@ -87,13 +87,10 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { listChecklists, createChecklist, type Checklist } from '../services/checklistApi'
 import { useAuthStore } from '../stores/authStore'
 
 const authStore = useAuthStore()
-
-const router = useRouter()
 
 const checklists = ref<Checklist[]>([])
 const total = ref(0)
