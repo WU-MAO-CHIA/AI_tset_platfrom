@@ -181,10 +181,15 @@ async def export_report(execution_id: str, db: AsyncSession = Depends(get_db)):
     if record is None:
         raise HTTPException(status_code=404, detail={"error": "not_found"})
 
+    from sqlalchemy.orm import joinedload
+
     result = await db.execute(
-        select(CaseResult).where(CaseResult.execution_id == execution_id).order_by(CaseResult.position)
+        select(CaseResult)
+        .options(joinedload(CaseResult.test_case))
+        .where(CaseResult.execution_id == execution_id)
+        .order_by(CaseResult.position)
     )
-    case_results = result.scalars().all()
+    case_results = result.unique().scalars().all()
 
     case_result_dicts = []
     for cr in case_results:
@@ -196,7 +201,7 @@ async def export_report(execution_id: str, db: AsyncSession = Depends(get_db)):
             for m in media_result.scalars().all()
         ]
         case_result_dicts.append({
-            "case_name": cr.test_case_id,
+            "case_name": cr.test_case.name if cr.test_case else cr.test_case_id,
             "status": cr.status,
             "elapsed_ms": cr.elapsed_ms or 0,
             "failure_message": cr.failure_message,
@@ -209,7 +214,11 @@ async def export_report(execution_id: str, db: AsyncSession = Depends(get_db)):
         "passed_count": record.passed_count,
         "failed_count": record.failed_count,
         "total_count": record.total_count,
-        "elapsed_ms": 0,
+        "elapsed_ms": (
+            int((record.finished_at - record.started_at).total_seconds() * 1000)
+            if record.started_at and record.finished_at
+            else 0
+        ),
     }
 
     report_service = ReportService()

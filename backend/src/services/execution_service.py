@@ -95,6 +95,9 @@ class ExecutionService:
         parallel_mode: bool,
         max_workers: int,
     ) -> ExecutionRecord:
+        from src.core.config import get_settings
+        # 以 PARALLEL_MAX_WORKERS 為上限，避免請求直接決定 pabot --processes 數量
+        max_workers = max(1, min(max_workers, get_settings().parallel_max_workers))
         checklist = await self._cl_repo.get_with_items(checklist_id)
         record = await self._exec_repo.create_for_checklist(
             checklist_id=checklist_id,
@@ -250,7 +253,7 @@ class ExecutionService:
                     case_id=source_case_id,
                     case_name=case_name or f"Trial Run {execution_id}",
                     error_message=result.get("failure_message") or "Unknown error",
-                    rf_code=rf_code or ""
+                    rf_code=robot_code or ""
                 )
 
         await asyncio.sleep(5)
@@ -516,21 +519,34 @@ class ExecutionService:
                 report = ReportService()
                 per_test = report.parse_per_test_results(xml_content)
 
+                # 一個 .robot 檔可含多個 test：先依案例（檔名）彙整，全部通過才算通過。
+                # 若逐 test 計數，passed/failed 會與 total（案例數）不一致，甚至讓 failed 變負數。
+                per_case: dict[str, dict] = {}
+                for test_result in per_test:
+                    agg = per_case.setdefault(
+                        test_result["case_number"],
+                        {"status": "passed", "elapsed_ms": 0, "failure_message": None},
+                    )
+                    agg["elapsed_ms"] += test_result.get("elapsed_ms", 0)
+                    if test_result["status"] != "passed":
+                        agg["status"] = "failed"
+                        if agg["failure_message"] is None:
+                            agg["failure_message"] = test_result.get("failure_message")
+
                 cr_rows: list[dict] = []
-                for idx, test_result in enumerate(per_test):
-                    cn = test_result["case_number"]
+                for idx, (cn, agg) in enumerate(per_case.items()):
                     cid = case_number_to_id.get(cn, "")
-                    status = test_result["status"]
-                    if status == "passed":
-                        passed += 1
-                    else:
-                        failed += 1
+                    status = agg["status"]
                     if cid:
+                        if status == "passed":
+                            passed += 1
+                        else:
+                            failed += 1
                         cr_rows.append({
                             "test_case_id": cid,
                             "status": status,
-                            "elapsed_ms": test_result.get("elapsed_ms", 0),
-                            "failure_message": test_result.get("failure_message"),
+                            "elapsed_ms": agg["elapsed_ms"],
+                            "failure_message": agg["failure_message"],
                             "position": idx,
                         })
                     queue.put_nowait({
@@ -539,8 +555,8 @@ class ExecutionService:
                         "case_id": cid,
                         "case_number": cn,
                         "status": status,
-                        "elapsed_ms": test_result.get("elapsed_ms", 0),
-                        "message": test_result.get("failure_message") or "",
+                        "elapsed_ms": agg["elapsed_ms"],
+                        "message": agg["failure_message"] or "",
                     })
 
                 if cr_rows:
@@ -556,8 +572,8 @@ class ExecutionService:
                             ))
                         await session.commit()
 
-                skipped = len(case_ids) - len(per_test)
-                failed += skipped
+                # 沒有 .robot 檔或未出現在 output.xml 的案例一律計為失敗
+                failed += len(case_ids) - len(cr_rows)
             else:
                 stderr_text = stderr_bytes.decode("utf-8", errors="replace") if stderr_bytes else ""
                 failed = len(robot_files)

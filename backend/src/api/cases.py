@@ -144,6 +144,20 @@ def serialize_case_detail(case) -> dict:
     }
 
 
+def serialize_execution_history_item(record) -> dict:
+    # 前端（CaseDetailPage）以 execution_id 取值並導向 /results/:id
+    return {
+        "execution_id": record.id,
+        "execution_type": record.execution_type,
+        "status": record.status,
+        "passed_count": record.passed_count,
+        "failed_count": record.failed_count,
+        "total_count": record.total_count,
+        "started_at": record.started_at.isoformat() if record.started_at else None,
+        "finished_at": record.finished_at.isoformat() if record.finished_at else None,
+    }
+
+
 # ─── Endpoints ───────────────────────────────────────────────────────────────
 
 @router.get("/categories")
@@ -259,7 +273,12 @@ async def get_case_execution_history(
     except Exception:
         items, total = [], 0
 
-    return {"items": items, "total": total, "page": page, "page_size": page_size}
+    return {
+        "items": [serialize_execution_history_item(r) for r in items],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
 
 
 @router.put("/{case_id}", dependencies=[Depends(require_editor_or_above)])

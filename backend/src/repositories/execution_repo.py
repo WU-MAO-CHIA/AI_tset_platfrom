@@ -92,15 +92,18 @@ class ExecutionRepository(BaseRepository[ExecutionRecord]):
         from src.models.checklist_item import ChecklistItem
 
         offset = (page - 1) * page_size
+        # 排除已被每日清理軟刪除（status='deleted'）的 trial run
+        conditions = (
+            or_(
+                ExecutionRecord.source_case_id == case_id,
+                ChecklistItem.test_case_id == case_id,
+            ),
+            ExecutionRecord.status != "deleted",
+        )
         result = await self.session.execute(
             select(ExecutionRecord)
             .outerjoin(ChecklistItem, ChecklistItem.checklist_id == ExecutionRecord.checklist_id)
-            .where(
-                or_(
-                    ExecutionRecord.source_case_id == case_id,
-                    ChecklistItem.test_case_id == case_id,
-                )
-            )
+            .where(*conditions)
             .distinct()
             .order_by(ExecutionRecord.created_at.desc())
             .offset(offset)
@@ -108,17 +111,12 @@ class ExecutionRepository(BaseRepository[ExecutionRecord]):
         )
         records = list(result.scalars().all())
 
+        # DISTINCT 要套在 id 上；`SELECT DISTINCT count(*)` 會把 join 出的重複列也算進去
         count_result = await self.session.execute(
-            select(func.count())
+            select(func.count(func.distinct(ExecutionRecord.id)))
             .select_from(ExecutionRecord)
             .outerjoin(ChecklistItem, ChecklistItem.checklist_id == ExecutionRecord.checklist_id)
-            .where(
-                or_(
-                    ExecutionRecord.source_case_id == case_id,
-                    ChecklistItem.test_case_id == case_id,
-                )
-            )
-            .distinct()
+            .where(*conditions)
         )
         total = count_result.scalar_one()
         return records, total

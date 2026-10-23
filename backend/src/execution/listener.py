@@ -30,8 +30,12 @@ async def _cleanup_queues() -> None:
 
 def _ensure_cleanup_task() -> None:
     global _cleanup_task
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return  # 同步情境（如 RF listener）沒有 event loop，略過背景清理
     if _cleanup_task is None or _cleanup_task.done():
-        _cleanup_task = asyncio.create_task(_cleanup_queues())
+        _cleanup_task = loop.create_task(_cleanup_queues())
 
 
 def get_execution_queue(execution_id: str) -> asyncio.Queue:
