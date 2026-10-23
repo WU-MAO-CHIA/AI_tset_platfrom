@@ -37,10 +37,10 @@ async def seeded_session(session):
     repo = TestCaseRepository(session)
     svc = CaseService(repo)
 
-    await svc.create("TC-F01", "Auth Login", "steps", created_by="t", system_category="auth")
-    await svc.create("TC-F02", "Auth Logout", "steps", created_by="t", system_category="auth")
-    await svc.create("TC-F03", "Order Create", "steps", created_by="t", system_category="order")
-    await svc.create("TC-F04", "Order Delete", "steps", created_by="t", system_category="order")
+    await svc.create("Auth Login", "steps", created_by="t", system_category="auth")
+    await svc.create("Auth Logout", "steps", created_by="t", system_category="auth")
+    await svc.create("Order Create", "steps", created_by="t", system_category="order")
+    await svc.create("Order Delete", "steps", created_by="t", system_category="order")
     yield session
 
 

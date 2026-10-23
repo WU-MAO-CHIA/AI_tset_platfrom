@@ -26,13 +26,17 @@ setup; this file covers what agents get wrong.
 - Layering: `api/` → `services/` → `repositories/` → `models/`. Reuse
   `RobotScriptRepository`, `TestCase.robot_script`, existing endpoints before
   adding new ones.
-- **Tests hit the REAL file DB** (`data/autotest.db`) unless overridden —
-  contract tests pollute production data. For new tests use the in-memory
-  pattern: `create_async_engine("sqlite+aiosqlite://")` + `StaticPool` +
-  override `get_db` (see `tests/integration/test_sse_stream.py`). Never leave
-  junk rows/files from manual curl verification — clean up afterwards.
-- Run focused suites, not the whole tree:
-  `python -m pytest tests/unit/test_x.py tests/integration/test_y.py`.
+- **Tests must never touch the REAL file DB** (`data/autotest.db`). Contract
+  tests are isolated automatically (`tests/contract/conftest.py`). Anywhere
+  else, a test that goes through the app must request the `isolated_app`
+  fixture from `tests/conftest.py` (in-memory DB seeded with `admin/admin`,
+  file writes under `tmp_path`, background robot runs and LLM calls stubbed;
+  use `admin_headers` for auth) or override `get_db` itself (see
+  `tests/integration/test_sse_stream.py`) — otherwise it hits the real DB.
+  Never leave junk rows/files from manual curl verification — clean up
+  afterwards.
+- `python -m pytest tests/unit tests/contract tests/integration` is safe and
+  takes ~15 s; don't run `tests/load`.
 - Auth: `Authorization: Bearer` header on all API routes **except** the SSE
   stream, which reads the HttpOnly `access_token` cookie — FastAPI only binds
   cookies via `Cookie()` annotation (a bare `str | None = None` param binds a

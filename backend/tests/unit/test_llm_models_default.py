@@ -2,15 +2,23 @@
 
 `default` 直接來自 .env 的 settings.default_llm_model。
 """
+from types import SimpleNamespace
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from src.core.config import get_settings
 from src.main import app
 
 
 @pytest.fixture
-async def client():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+async def client(admin_headers, monkeypatch):
+    # 清空供應商金鑰與 Ollama 位址，避免單元測試真的連到外部模型 API
+    monkeypatch.setattr("src.api.llm_models.get_settings", lambda: SimpleNamespace(
+        anthropic_api_key="", openai_api_key="", ollama_base_url="",
+        default_llm_model=get_settings().default_llm_model,
+    ))
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test", headers=admin_headers) as c:
         yield c
 
 

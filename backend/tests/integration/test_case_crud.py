@@ -40,7 +40,6 @@ class TestCaseCRUDIntegration:
         service = CaseService(repo)
 
         result = await service.create(
-            case_number="TC-001",
             name="Login Test",
             main_steps="1. Open page\n2. Login",
             system_category="auth",
@@ -48,10 +47,11 @@ class TestCaseCRUDIntegration:
         )
         assert result.id is not None
         assert result.version == 1
+        assert result.case_number.startswith("auth-")  # 依 system_category 自動編號
 
         retrieved = await repo.get(result.id)
         assert retrieved is not None
-        assert retrieved.case_number == "TC-001"
+        assert retrieved.case_number == result.case_number
 
     async def test_update_increments_version(self, session: AsyncSession):
         from src.repositories.test_case_repo import TestCaseRepository
@@ -61,7 +61,6 @@ class TestCaseCRUDIntegration:
         service = CaseService(repo)
 
         created = await service.create(
-            case_number="TC-002",
             name="Original",
             main_steps="steps",
             created_by="tester",
@@ -77,7 +76,6 @@ class TestCaseCRUDIntegration:
         service = CaseService(repo)
 
         created = await service.create(
-            case_number="TC-003",
             name="To Delete",
             main_steps="steps",
             created_by="tester",

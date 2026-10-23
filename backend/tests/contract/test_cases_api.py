@@ -2,7 +2,6 @@
 RED: All tests should fail until the API is implemented.
 """
 
-import uuid
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -10,27 +9,15 @@ from src.main import app
 
 
 @pytest.fixture
-async def client():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+async def client(admin_headers):
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test", headers=admin_headers) as c:
         yield c
-
-
-async def _get_auth_token(client) -> str:
-    """Get auth token for testing."""
-    r = await client.post("/api/v1/auth/login", json={"username": "admin", "password": "admin"})
-    if r.status_code == 200:
-        return r.json()["access_token"]
-    # Fallback: create a test user
-    r = await client.post("/api/v1/admin/accounts", json={"username": "test_user", "password": "test_pass", "role": "viewer"})
-    r = await client.post("/api/v1/auth/login", json={"username": "test_user", "password": "test_pass"})
-    return r.json()["access_token"]
 
 
 @pytest.fixture
 def valid_case_payload():
-    unique = uuid.uuid4().hex[:6].upper()
+    # case_number 由系統依 system_category 自動產生（如 auth-001），不由 client 指定
     return {
-        "case_number": f"TC-CT-{unique}",
         "name": "登入功能測試",
         "main_steps": "1. 開啟登入頁面\n2. 輸入帳號密碼\n3. 點擊登入\n4. 確認進入首頁",
         "system_category": "auth",
@@ -39,10 +26,8 @@ def valid_case_payload():
 
 
 @pytest.fixture
-async def auth_headers(client):
-    """Fixture for authorization headers."""
-    token = await _get_auth_token(client)
-    return {"Authorization": f"Bearer {token}"}
+def auth_headers(admin_headers):
+    return admin_headers
 
 
 class TestCreateCase:
@@ -50,19 +35,16 @@ class TestCreateCase:
         response = await client.post("/api/v1/cases", json=valid_case_payload, headers=auth_headers)
         assert response.status_code == 201
         data = response.json()
-        assert data["case_number"] == valid_case_payload["case_number"]
+        assert data["case_number"].startswith(f"{valid_case_payload['system_category']}-")
         assert data["version"] == 1
         assert "id" in data
         assert "created_at" in data
 
-    async def test_create_case_duplicate_case_number_returns_409(self, client, valid_case_payload):
-        await client.post("/api/v1/cases", json=valid_case_payload)
-        response = await client.post("/api/v1/cases", json=valid_case_payload)
-        assert response.status_code == 409
-        body = response.json()
-        # FastAPI wraps HTTPException detail under "detail" key
-        error_data = body.get("detail") or body
-        assert error_data["error"] == "case_number_conflict"
+    async def test_create_case_generates_unique_case_numbers(self, client, valid_case_payload):
+        first = await client.post("/api/v1/cases", json=valid_case_payload)
+        second = await client.post("/api/v1/cases", json=valid_case_payload)
+        assert first.status_code == second.status_code == 201
+        assert first.json()["case_number"] != second.json()["case_number"]
 
     async def test_create_case_missing_required_field_returns_422(self, client):
         response = await client.post("/api/v1/cases", json={"case_number": "TC-002"})
@@ -294,7 +276,7 @@ class TestRobotScriptUpload:
         assert response.status_code == 200
         data = response.json()
         assert data["rf_code"] == rf_content
-        assert data["case_number"] == valid_case_payload["case_number"]
+        assert data["case_number"] == create_resp.json()["case_number"]
         assert "file_path" in data
         assert data["size_bytes"] == len(rf_content.encode("utf-8"))
         assert data["encoding"] == "utf-8"

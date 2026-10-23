@@ -40,7 +40,7 @@ class TestActiveModelReadWrite:
             assert got.json()["model"] == "gpt-4o"
 
             # /llm-models 的 default 反映目前啟用模型
-            models = await client.get("/api/v1/llm-models")
+            models = await client.get("/api/v1/llm-models", headers=h)
             assert models.json()["default"] == "gpt-4o"
         finally:
             await client.put("/api/v1/admin/active-model", headers=h, json={"model": original})

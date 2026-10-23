@@ -2,7 +2,6 @@
 RED: Tests should fail until the service is implemented.
 """
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -16,14 +15,22 @@ def mock_db():
     return session
 
 
-class TestSemaphoreParallelControl:
-    async def test_semaphore_limits_concurrent_workers(self, mock_db):
+class TestParallelControl:
+    async def test_max_workers_clamped_to_configured_limit(self, mock_db):
+        from src.core.config import get_settings
+
         service = ExecutionService(mock_db)
-        # Semaphore should limit concurrent coroutines to max_workers
-        assert service._semaphore is None  # Not set until run_checklist_parallel called
-        concurrency = 3
-        semaphore = asyncio.Semaphore(concurrency)
-        assert semaphore._value == concurrency
+        mock_cl_repo = AsyncMock()
+        mock_cl_repo.get_with_items = AsyncMock(return_value=MagicMock(items=[]))
+        mock_exec_repo = AsyncMock()
+        mock_exec_repo.create_for_checklist = AsyncMock(return_value=MagicMock(id="exec-1"))
+        limit = get_settings().parallel_max_workers
+
+        with patch.object(service, "_exec_repo", mock_exec_repo), \
+             patch.object(service, "_cl_repo", mock_cl_repo):
+            for requested, expected in ((999, limit), (limit, limit), (1, 1), (0, 1), (-3, 1)):
+                await service.run_checklist_parallel("cl-001", parallel_mode=True, max_workers=requested)
+                assert mock_exec_repo.create_for_checklist.call_args.kwargs["max_workers"] == expected
 
     async def test_run_checklist_parallel_creates_execution_record(self, mock_db):
         service = ExecutionService(mock_db)

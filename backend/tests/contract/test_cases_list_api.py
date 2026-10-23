@@ -10,8 +10,8 @@ from src.main import app
 
 
 @pytest.fixture
-async def client():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+async def client(admin_headers):
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test", headers=admin_headers) as c:
         yield c
 
 
