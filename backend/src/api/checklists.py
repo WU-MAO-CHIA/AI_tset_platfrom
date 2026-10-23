@@ -1,9 +1,10 @@
-from typing import Optional
+from typing import Any, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
-from pydantic import BaseModel
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.api.schemas import ExecutionStartResponse, SuccessResponse
 from src.core.database import get_db
 from src.core.dependencies import get_current_user, require_editor_or_above
 from src.services.checklist_service import ChecklistService
@@ -57,13 +58,63 @@ class ChecklistDetailResponse(BaseModel):
     items: list[ChecklistItemResponse]
 
 
+class ChecklistListItem(BaseModel):
+    id: str
+    name: str
+    created_by: str
+    description: Optional[str] = None
+    case_count: int
+    status: Optional[str] = None  # 最新一次執行狀態；未執行為 None
+    created_at: Optional[str] = None
+
+
+class ChecklistListResponse(BaseModel):
+    items: list[ChecklistListItem]
+    total: int
+    page: int
+    page_size: int
+
+
+class ChecklistExecutionItem(BaseModel):
+    id: str
+    status: str
+    passed_count: int
+    failed_count: int
+    total_count: int
+    started_at: Optional[str] = None
+    finished_at: Optional[str] = None
+
+
+class ChecklistExecutionsResponse(BaseModel):
+    items: list[ChecklistExecutionItem]
+    total: int
+
+
+class ChecklistTestDataItem(BaseModel):
+    model_config = ConfigDict(coerce_numbers_to_str=True)
+
+    id: str
+    field_name: str
+    rf_variable: Optional[str] = None
+    field_value: Optional[str] = None
+    description: Optional[str] = None
+    row_index: Optional[int] = None
+
+
 class ChecklistCaseItemResponse(BaseModel):
     item_id: str
     test_case_id: str
     position: int
     notes: Optional[str] = None
+    actual_values: dict[str, Any]
+    test_data: list[ChecklistTestDataItem]
     case_number: Optional[str] = None
     name: Optional[str] = None
+
+
+class ChecklistCasesResponse(BaseModel):
+    items: list[ChecklistCaseItemResponse]
+    total: int
 
 
 class AddCaseRequest(BaseModel):
@@ -71,10 +122,23 @@ class AddCaseRequest(BaseModel):
     position: Optional[int] = None
 
 
+class AddCaseResponse(BaseModel):
+    item_id: str
+    position: int
+
+
 class PatchCaseItemRequest(BaseModel):
     notes: Optional[str] = None
     position: Optional[int] = None
-    actual_values: Optional[dict] = None
+    actual_values: Optional[dict[str, Any]] = None
+
+
+class PatchCaseItemResponse(BaseModel):
+    item_id: str
+    test_case_id: str
+    position: Optional[int] = None
+    notes: Optional[str] = None
+    actual_values: dict[str, Any]
 
 
 class ReorderCasesRequest(BaseModel):
@@ -107,10 +171,10 @@ async def create_checklist(
     )
 
 
-@router.get("", response_model=dict)
+@router.get("", response_model=ChecklistListResponse)
 async def list_checklists(
-    page: int = 1,
-    page_size: int = 20,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1),
     keyword: str | None = None,
     sort_by: str = "created_at",
     order: str = "desc",
@@ -195,7 +259,7 @@ async def get_checklist(
     )
 
 
-@router.get("/{checklist_id}/executions")
+@router.get("/{checklist_id}/executions", response_model=ChecklistExecutionsResponse)
 async def get_checklist_executions(
     checklist_id: str,
     db: AsyncSession = Depends(get_db),
@@ -245,7 +309,7 @@ async def update_checklist(
     )
 
 
-@router.delete("/{checklist_id}", dependencies=[Depends(require_editor_or_above)])
+@router.delete("/{checklist_id}", response_model=SuccessResponse, dependencies=[Depends(require_editor_or_above)])
 async def delete_checklist(
     checklist_id: str,
     db: AsyncSession = Depends(get_db),
@@ -267,7 +331,7 @@ async def delete_checklist(
     return {"success": True}
 
 
-@router.get("/{checklist_id}/cases", response_model=dict)
+@router.get("/{checklist_id}/cases", response_model=ChecklistCasesResponse)
 async def get_checklist_cases(
     checklist_id: str,
     db: AsyncSession = Depends(get_db),
@@ -279,7 +343,7 @@ async def get_checklist_cases(
     return {"items": items, "total": len(items)}
 
 
-@router.post("/{checklist_id}/cases", status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_editor_or_above)])
+@router.post("/{checklist_id}/cases", status_code=status.HTTP_201_CREATED, response_model=AddCaseResponse, dependencies=[Depends(require_editor_or_above)])
 async def add_case_to_checklist(
     checklist_id: str,
     body: AddCaseRequest,
@@ -300,7 +364,7 @@ async def add_case_to_checklist(
     return result
 
 
-@router.delete("/{checklist_id}/cases/{case_id}", dependencies=[Depends(require_editor_or_above)])
+@router.delete("/{checklist_id}/cases/{case_id}", response_model=SuccessResponse, dependencies=[Depends(require_editor_or_above)])
 async def remove_case_from_checklist(
     checklist_id: str,
     case_id: str,
@@ -317,7 +381,7 @@ async def remove_case_from_checklist(
     return {"success": True}
 
 
-@router.patch("/{checklist_id}/cases/{case_id}", dependencies=[Depends(require_editor_or_above)])
+@router.patch("/{checklist_id}/cases/{case_id}", response_model=PatchCaseItemResponse, dependencies=[Depends(require_editor_or_above)])
 async def patch_checklist_case_item(
     checklist_id: str,
     case_id: str,
@@ -344,7 +408,7 @@ async def patch_checklist_case_item(
     return result
 
 
-@router.put("/{checklist_id}/cases/reorder", dependencies=[Depends(require_editor_or_above)])
+@router.put("/{checklist_id}/cases/reorder", response_model=SuccessResponse, dependencies=[Depends(require_editor_or_above)])
 async def reorder_checklist_cases(
     checklist_id: str,
     body: ReorderCasesRequest,
@@ -366,7 +430,7 @@ class ExecuteRequest(BaseModel):
     max_workers: int = 1
 
 
-@router.post("/{checklist_id}/execute", status_code=status.HTTP_202_ACCEPTED, dependencies=[Depends(require_editor_or_above)])
+@router.post("/{checklist_id}/execute", status_code=status.HTTP_202_ACCEPTED, response_model=ExecutionStartResponse, dependencies=[Depends(require_editor_or_above)])
 async def execute_checklist(
     checklist_id: str,
     body: ExecuteRequest,

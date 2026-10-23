@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.api.schemas import DeletedResponse
 from src.core.database import get_db
 from src.core.dependencies import require_admin
 from src.services.user_service import UserService
@@ -46,7 +47,25 @@ class UpdateUserRequest(BaseModel):
     new_password: str | None = None
 
 
-@router.get("/users", dependencies=[Depends(require_admin)])
+class UserResponse(BaseModel):
+    id: str
+    username: str
+    role: str
+    is_active: bool
+    created_at: str
+
+
+class CreateUserResponse(BaseModel):
+    id: str
+    username: str
+    role: str
+
+
+class UpdatedResponse(BaseModel):
+    updated: bool
+
+
+@router.get("/users", response_model=list[UserResponse], dependencies=[Depends(require_admin)])
 async def list_users(db: AsyncSession = Depends(get_db)):
     svc = UserService(db)
     users = await svc.list_all()
@@ -62,7 +81,7 @@ async def list_users(db: AsyncSession = Depends(get_db)):
     ]
 
 
-@router.post("/users", status_code=201, dependencies=[Depends(require_admin)])
+@router.post("/users", status_code=201, response_model=CreateUserResponse, dependencies=[Depends(require_admin)])
 async def create_user(body: CreateUserRequest, db: AsyncSession = Depends(get_db)):
     svc = UserService(db)
     user = await svc.create(body.username, body.password, body.role)
@@ -70,7 +89,7 @@ async def create_user(body: CreateUserRequest, db: AsyncSession = Depends(get_db
     return {"id": user.id, "username": user.username, "role": user.role}
 
 
-@router.put("/users/{user_id}", dependencies=[Depends(require_admin)])
+@router.put("/users/{user_id}", response_model=UpdatedResponse, dependencies=[Depends(require_admin)])
 async def update_user(
     user_id: str,
     body: UpdateUserRequest,
@@ -88,7 +107,7 @@ async def update_user(
     return {"updated": True}
 
 
-@router.delete("/users/{user_id}", dependencies=[Depends(require_admin)])
+@router.delete("/users/{user_id}", response_model=DeletedResponse, dependencies=[Depends(require_admin)])
 async def delete_user(
     user_id: str,
     current_user=Depends(require_admin),
@@ -110,7 +129,21 @@ class RenameCategoryRequest(BaseModel):
     name: str
 
 
-@router.get("/system-categories", dependencies=[Depends(require_admin)])
+class SystemCategoryResponse(BaseModel):
+    id: str
+    name: str
+
+
+class SystemCategoryListItem(SystemCategoryResponse):
+    created_at: str
+
+
+class DeleteCategoryResponse(BaseModel):
+    deleted: bool
+    affected_case_count: int
+
+
+@router.get("/system-categories", response_model=list[SystemCategoryListItem], dependencies=[Depends(require_admin)])
 async def list_system_categories(db: AsyncSession = Depends(get_db)):
     svc = SystemCategoryService(db)
     categories = await svc.list()
@@ -120,7 +153,7 @@ async def list_system_categories(db: AsyncSession = Depends(get_db)):
     ]
 
 
-@router.post("/system-categories", status_code=201, dependencies=[Depends(require_admin)])
+@router.post("/system-categories", status_code=201, response_model=SystemCategoryResponse, dependencies=[Depends(require_admin)])
 async def create_system_category(body: CreateCategoryRequest, db: AsyncSession = Depends(get_db)):
     svc = SystemCategoryService(db)
     category = await svc.create(body.name)
@@ -128,7 +161,7 @@ async def create_system_category(body: CreateCategoryRequest, db: AsyncSession =
     return {"id": category.id, "name": category.name}
 
 
-@router.put("/system-categories/{category_id}", dependencies=[Depends(require_admin)])
+@router.put("/system-categories/{category_id}", response_model=SystemCategoryResponse, dependencies=[Depends(require_admin)])
 async def rename_system_category(
     category_id: str, body: RenameCategoryRequest, db: AsyncSession = Depends(get_db)
 ):
@@ -138,7 +171,7 @@ async def rename_system_category(
     return {"id": category.id, "name": category.name}
 
 
-@router.delete("/system-categories/{category_id}", dependencies=[Depends(require_admin)])
+@router.delete("/system-categories/{category_id}", response_model=DeleteCategoryResponse, dependencies=[Depends(require_admin)])
 async def delete_system_category(category_id: str, db: AsyncSession = Depends(get_db)):
     svc = SystemCategoryService(db)
     result = await svc.delete(category_id)
@@ -150,12 +183,25 @@ async def delete_system_category(category_id: str, db: AsyncSession = Depends(ge
 
 # LLM 金鑰與預設模型一律由 .env 配置，後台僅唯讀遮罩顯示（FR-027）。
 
-@router.get("/llm-keys", dependencies=[Depends(require_admin)])
+class LlmKeyStatusResponse(BaseModel):
+    anthropic_key_set: bool
+    anthropic_key_masked: str
+    openai_key_set: bool
+    openai_key_masked: str
+    ollama_base_url: str
+    ollama_configured: bool
+
+
+class ModelResponse(BaseModel):
+    model: str
+
+
+@router.get("/llm-keys", response_model=LlmKeyStatusResponse, dependencies=[Depends(require_admin)])
 async def get_llm_key_status():
     return AppSettingService().get_llm_keys()
 
 
-@router.get("/llm-default-model", dependencies=[Depends(require_admin)])
+@router.get("/llm-default-model", response_model=ModelResponse, dependencies=[Depends(require_admin)])
 async def get_default_model():
     return {"model": AppSettingService().get_default_model()}
 
@@ -166,12 +212,12 @@ class SetActiveModelRequest(BaseModel):
     model: str
 
 
-@router.get("/active-model", dependencies=[Depends(require_admin)])
+@router.get("/active-model", response_model=ModelResponse, dependencies=[Depends(require_admin)])
 async def get_active_model(db: AsyncSession = Depends(get_db)):
     return {"model": await AppSettingService(db).get_active_model()}
 
 
-@router.put("/active-model", dependencies=[Depends(require_admin)])
+@router.put("/active-model", response_model=ModelResponse, dependencies=[Depends(require_admin)])
 async def set_active_model(body: SetActiveModelRequest, db: AsyncSession = Depends(get_db)):
     await AppSettingService(db).set_active_model(body.model)
     await db.commit()

@@ -5,6 +5,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,7 +24,46 @@ router = APIRouter(prefix="/executions", tags=["executions"])
 _auth = [Depends(get_current_user)]
 
 
-@router.get("/{execution_id}", dependencies=_auth)
+class ExecutionResponse(BaseModel):
+    id: str
+    status: str
+    checklist_id: Optional[str] = None
+    source_case_id: Optional[str] = None
+    parallel_mode: bool
+    max_workers: int
+    passed_count: int
+    failed_count: int
+    total_count: int
+
+
+class ExecutionMediaItem(BaseModel):
+    id: str
+    media_type: str
+    file_path: Optional[str] = None
+    step_index: Optional[int] = None
+
+
+class CaseResultItem(BaseModel):
+    id: str
+    test_case_id: str
+    case_number: str
+    case_name: str
+    status: str
+    elapsed_ms: Optional[int] = None
+    failure_message: Optional[str] = None
+    media: list[ExecutionMediaItem]
+
+
+class ExecutionResultsResponse(BaseModel):
+    items: list[CaseResultItem]
+    total: int
+
+
+class RfReportStatusResponse(BaseModel):
+    available: bool
+
+
+@router.get("/{execution_id}", response_model=ExecutionResponse, dependencies=_auth)
 async def get_execution(execution_id: str, db: AsyncSession = Depends(get_db)):
     repo = ExecutionRepository(db)
     record = await repo.get(execution_id)
@@ -42,7 +82,7 @@ async def get_execution(execution_id: str, db: AsyncSession = Depends(get_db)):
     }
 
 
-@router.get("/{execution_id}/results", dependencies=_auth)
+@router.get("/{execution_id}/results", response_model=ExecutionResultsResponse, dependencies=_auth)
 async def get_execution_results(execution_id: str, db: AsyncSession = Depends(get_db)):
     repo = ExecutionRepository(db)
     record = await repo.get(execution_id)
@@ -84,7 +124,7 @@ async def get_execution_results(execution_id: str, db: AsyncSession = Depends(ge
     return {"items": items, "total": len(items)}
 
 
-@router.get("/{execution_id}/stream")
+@router.get("/{execution_id}/stream", response_class=StreamingResponse)
 async def stream_execution(
     execution_id: str,
     access_token: str | None = Cookie(default=None),
@@ -174,7 +214,7 @@ async def stream_execution(
     )
 
 
-@router.get("/{execution_id}/export", dependencies=_auth)
+@router.get("/{execution_id}/export", response_class=HTMLResponse, dependencies=_auth)
 async def export_report(execution_id: str, db: AsyncSession = Depends(get_db)):
     repo = ExecutionRepository(db)
     record = await repo.get(execution_id)
@@ -230,7 +270,7 @@ async def export_report(execution_id: str, db: AsyncSession = Depends(get_db)):
     )
 
 
-@router.get("/{execution_id}/rf-report/{filename:path}", dependencies=_auth)
+@router.get("/{execution_id}/rf-report/{filename:path}", response_class=FileResponse, dependencies=_auth)
 async def get_rf_report(execution_id: str, filename: str, db: AsyncSession = Depends(get_db)):
     settings = get_settings()
     # 先確認 execution 存在，避免任意檔案存在性 oracle。
@@ -247,7 +287,7 @@ async def get_rf_report(execution_id: str, filename: str, db: AsyncSession = Dep
     return FileResponse(str(file_path))
 
 
-@router.get("/{execution_id}/rf-report-status", dependencies=_auth)
+@router.get("/{execution_id}/rf-report-status", response_model=RfReportStatusResponse, dependencies=_auth)
 async def get_rf_report_status(
     execution_id: str, filename: str = "report.html", db: AsyncSession = Depends(get_db)
 ):

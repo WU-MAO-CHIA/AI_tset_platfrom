@@ -16,6 +16,22 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str
+    role: str
+    username: str
+
+
+class LogoutResponse(BaseModel):
+    logged_out: bool
+
+
+class CurrentUserResponse(BaseModel):
+    username: str
+    role: str
+
+
 # 簡易 in-memory 登入限流：同 IP 5 分鐘內最多 60 次，避免無限爆破（多 worker 下為 best-effort）。
 # 測試套件會頻繁登入，故閾值留寬；prod 如需更嚴請接 slowapi / WAF。
 _LOGIN_ATTEMPTS: dict[str, list[float]] = {}
@@ -36,18 +52,18 @@ def _check_login_rate_limit(request: Request) -> None:
     _LOGIN_ATTEMPTS[client_ip] = attempts
 
 
-@router.post("/login")
+@router.post("/login", response_model=LoginResponse)
 async def login(body: LoginRequest, request: Request, response: Response, db: AsyncSession = Depends(get_db)):
     _check_login_rate_limit(request)
     service = AuthService(db)
     return await service.login(body.username, body.password, response=response)
 
 
-@router.post("/logout")
+@router.post("/logout", response_model=LogoutResponse)
 async def logout(response: Response):
     return AuthService.build_logout_response(response)
 
 
-@router.get("/me")
+@router.get("/me", response_model=CurrentUserResponse)
 async def get_me(current_user=Depends(get_current_user)):
     return {"username": current_user.username, "role": current_user.role}

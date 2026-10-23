@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -32,6 +32,27 @@ class DBConnectionResponse(BaseModel):
     last_test_success: Optional[bool] = None
 
 
+class DBConnectionListItem(BaseModel):
+    id: str
+    name: str
+    created_by: str
+    last_test_success: Optional[bool] = None
+
+
+class DBConnectionListResponse(BaseModel):
+    items: list[DBConnectionListItem]
+
+
+class ConnectionTestResponse(BaseModel):
+    success: bool
+    error: Optional[str] = None
+
+
+class QueryResultResponse(BaseModel):
+    columns: list[str]
+    rows: list[dict[str, Any]]  # 欄位依 SQL 而定，不可收斂成固定 schema
+
+
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=DBConnectionResponse, dependencies=[Depends(require_editor_or_above)])
 async def create_connection(body: DBConnectionCreateRequest, db: AsyncSession = Depends(get_db)):
     from src.services.db_connect_service import _validate_sqlite_only
@@ -58,7 +79,7 @@ async def create_connection(body: DBConnectionCreateRequest, db: AsyncSession = 
     )
 
 
-@router.get("", response_model=dict)
+@router.get("", response_model=DBConnectionListResponse)
 async def list_connections(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(DBConnection))
     items = result.scalars().all()
@@ -70,7 +91,7 @@ async def list_connections(db: AsyncSession = Depends(get_db)):
     }
 
 
-@router.post("/{conn_id}/test", dependencies=[Depends(require_editor_or_above)])
+@router.post("/{conn_id}/test", response_model=ConnectionTestResponse, dependencies=[Depends(require_editor_or_above)])
 async def test_connection(conn_id: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(DBConnection).where(DBConnection.id == conn_id))
     conn = result.scalar_one_or_none()
@@ -88,7 +109,7 @@ async def test_connection(conn_id: str, db: AsyncSession = Depends(get_db)):
     return test_result
 
 
-@router.post("/{conn_id}/query", dependencies=[Depends(require_editor_or_above)])
+@router.post("/{conn_id}/query", response_model=QueryResultResponse, dependencies=[Depends(require_editor_or_above)])
 async def execute_query(conn_id: str, body: QueryRequest, db: AsyncSession = Depends(get_db)):
     if len(body.sql) > 20000:
         raise HTTPException(status_code=422, detail="sql too long")

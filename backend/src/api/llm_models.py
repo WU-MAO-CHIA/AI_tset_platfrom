@@ -4,6 +4,7 @@ import time
 
 import httpx
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import get_settings
@@ -152,7 +153,19 @@ async def _fetch_ollama_models(base_url: str) -> list[dict]:
     return models
 
 
-@router.get("")
+class LlmModelItem(BaseModel):
+    id: str
+    name: str
+    provider: str
+    requires_setup: bool
+
+
+class LlmModelListResponse(BaseModel):
+    models: list[LlmModelItem]
+    default: str
+
+
+@router.get("", response_model=LlmModelListResponse)
 async def list_llm_models(db: AsyncSession = Depends(get_db)):
     settings = get_settings()
 

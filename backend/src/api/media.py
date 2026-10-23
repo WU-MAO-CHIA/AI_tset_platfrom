@@ -18,13 +18,13 @@ def _serve(base: str, *parts: str, not_found_detail: str = "File not found"):
     return FileResponse(str(file_path))
 
 
-@router.get("/attachments/{case_id}/{filename}")
+@router.get("/attachments/{case_id}/{filename}", response_class=FileResponse)
 async def serve_attachment(case_id: str, filename: str):
     settings = get_settings()
     return _serve(settings.media_root, case_id, filename)
 
 
-@router.get("/results/{execution_id}/screenshots/{filename}")
+@router.get("/results/{execution_id}/screenshots/{filename}", response_class=FileResponse)
 async def serve_screenshot(execution_id: str, filename: str):
     settings = get_settings()
     return _serve(
@@ -33,7 +33,7 @@ async def serve_screenshot(execution_id: str, filename: str):
     )
 
 
-@router.get("/results/{execution_id}/videos/{filename}")
+@router.get("/results/{execution_id}/videos/{filename}", response_class=FileResponse)
 async def serve_video(execution_id: str, filename: str):
     settings = get_settings()
     resp = _serve(

@@ -1,14 +1,15 @@
 import os
-from typing import Annotated, Optional
+from typing import Annotated, Any, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Body
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.api.schemas import DeletedResponse, ExecutionStartResponse, SuccessResponse
 from src.core.database import get_db
 from src.core.config import get_settings
 from src.core.llm_provider import get_provider
@@ -28,6 +29,26 @@ router = APIRouter(prefix="/cases", tags=["cases"], dependencies=[Depends(get_cu
 
 # ─── Schemas ────────────────────────────────────────────────────────────────
 
+RfContextMode = Literal["full", "summary", "none"]
+
+
+class CaseTestDataInput(BaseModel):
+    """test_data 單筆；預設值沿用先前 dict.get() 的 fallback。匯入的數值一律轉成字串存。"""
+    model_config = ConfigDict(coerce_numbers_to_str=True)
+
+    field_name: str = ""
+    rf_variable: Optional[str] = None
+    field_value: Optional[str] = None
+    description: Optional[str] = None
+    source: str = "manual"
+    row_index: Optional[int] = None  # 未提供時以陣列順序補上
+
+
+class ChatTurnInput(BaseModel):
+    role: Optional[str] = None
+    content: Optional[str] = None
+
+
 class CaseCreateRequest(BaseModel):
     name: str
     main_steps: str
@@ -36,7 +57,7 @@ class CaseCreateRequest(BaseModel):
     system_category: Optional[str] = None
     tags: Optional[list[str]] = None
     created_by: str
-    test_data: Optional[list[dict]] = None
+    test_data: Optional[list[CaseTestDataInput]] = None
 
 
 class CaseUpdateRequest(BaseModel):
@@ -47,7 +68,7 @@ class CaseUpdateRequest(BaseModel):
     system_category: Optional[str] = None
     tags: Optional[list[str]] = None
     created_by: str  # used as modified_by
-    test_data: Optional[list[dict]] = None  # full-replace; None = no change
+    test_data: Optional[list[CaseTestDataInput]] = None  # full-replace; None = no change
 
 
 class CaseDeleteRequest(BaseModel):
@@ -68,22 +89,197 @@ class PreviewRFRequest(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     llm_model: Optional[str] = None
-    rf_context_mode: Optional[str] = "full"
-    catalog: Optional[list[dict]] = None
+    rf_context_mode: Optional[RfContextMode] = "full"
+    catalog: Optional[list[dict[str, Any]]] = None  # 頁面探索結果，欄位由 agent 決定
 
 
 class ChatPreviewRequest(BaseModel):
     """Stateless chat (case-creation page): no case_id, nothing persisted."""
     message: str
     llm_model: Optional[str] = None
-    rf_context_mode: Optional[str] = "full"
-    history: Optional[list[dict]] = None
+    rf_context_mode: Optional[RfContextMode] = "full"
+    history: Optional[list[ChatTurnInput]] = None
     rf_code: Optional[str] = None
-    catalog: Optional[list[dict]] = None
+    catalog: Optional[list[dict[str, Any]]] = None
 
 
 class RobotScriptRequest(BaseModel):
     rf_code: str
+
+
+class ConfirmImportRequest(BaseModel):
+    import_token: str
+
+
+# 回應 schema 的欄位順序與 serializer 輸出一致，避免改變 JSON key 順序。
+
+class CategoryListResponse(BaseModel):
+    items: list[str]
+
+
+class CaseCreateResponse(BaseModel):
+    id: str
+    case_number: str
+    version: int
+    created_at: Optional[str] = None
+
+
+class CaseSummaryResponse(BaseModel):
+    id: str
+    case_number: str
+    name: str
+    system_category: Optional[str] = None
+    tags: list[str]
+    version: int
+    created_by: str
+    updated_at: Optional[str] = None
+
+
+class CaseListResponse(BaseModel):
+    items: list[CaseSummaryResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+class CaseTestDataResponse(BaseModel):
+    model_config = ConfigDict(coerce_numbers_to_str=True)
+
+    id: str
+    field_name: str
+    rf_variable: Optional[str] = None
+    field_value: Optional[str] = None
+    description: Optional[str] = None
+    row_index: Optional[int] = None
+    source: str
+
+
+class CaseDetailResponse(BaseModel):
+    id: str
+    case_number: str
+    name: str
+    description: Optional[str] = None
+    precondition_steps: Optional[str] = None
+    main_steps: str
+    system_category: Optional[str] = None
+    tags: list[str]
+    version: int
+    created_by: str
+    modified_by: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    test_data: list[CaseTestDataResponse]
+
+
+class ExecutionHistoryItem(BaseModel):
+    execution_id: str
+    execution_type: str
+    status: str
+    passed_count: int
+    failed_count: int
+    total_count: int
+    started_at: Optional[str] = None
+    finished_at: Optional[str] = None
+
+
+class ExecutionHistoryResponse(BaseModel):
+    items: list[ExecutionHistoryItem]
+    total: int
+    page: int
+    page_size: int
+
+
+class PreviewRFResponse(BaseModel):
+    rf_code: str
+
+
+class AICompleteResponse(BaseModel):
+    completed_steps: str
+    model_used: str
+
+
+class ChatResponse(BaseModel):
+    assistant_message: str
+    rf_code: str
+
+
+class ExploreLaunchResponse(BaseModel):
+    session_id: str
+    status_url: str
+
+
+class ExploreSessionResponse(BaseModel):
+    session_id: str
+    case_id: str
+    url: str
+    status: str
+    steps: int
+    log: list[dict[str, Any]]  # agent 每一步的紀錄，欄位由 agent 決定
+    catalog: list[dict[str, Any]]
+    note: str
+
+
+class ChatHistoryMessage(BaseModel):
+    role: str
+    type: str
+    content: str
+    created_at: str
+
+
+class ChatHistoryResponse(BaseModel):
+    messages: list[ChatHistoryMessage]
+
+
+class AttachmentResponse(BaseModel):
+    id: str
+    attachment_type: str
+    filename: Optional[str] = None
+    url: Optional[str] = None
+    file_size_bytes: Optional[int] = None
+
+
+class AttachmentListItem(AttachmentResponse):
+    mime_type: Optional[str] = None
+
+
+class AttachmentListResponse(BaseModel):
+    items: list[AttachmentListItem]
+
+
+class ImportPreviewResponse(BaseModel):
+    preview: list[dict[str, Any]]  # 欄位依匯入檔的表頭而定
+    total_rows: int
+    columns: list[str]
+    warnings: list[str]
+    import_token: str
+    # 底線開頭的名稱在 pydantic 屬於私有屬性，以 alias 維持既有的 JSON key
+    parsed_rows: list[dict[str, Any]] = Field(alias="_parsed_rows")
+
+
+class ConfirmImportResponse(BaseModel):
+    imported_count: int
+    message: str
+
+
+class RobotScriptSaveResponse(BaseModel):
+    """儲存回 file_path；空白內容視為刪除則回 deleted（搭配 exclude_unset 只輸出實際設定的欄位）。"""
+    case_number: str
+    file_path: Optional[str] = None
+    deleted: Optional[bool] = None
+
+
+class RobotScriptUploadResponse(BaseModel):
+    rf_code: str
+    case_number: str
+    file_path: str
+    size_bytes: int
+    encoding: str
+
+
+class RobotScriptResponse(BaseModel):
+    rf_code: str
+    case_number: str
+    source: str  # "db" | "file"
 
 
 # ─── Dependencies ────────────────────────────────────────────────────────────
@@ -158,9 +354,25 @@ def serialize_execution_history_item(record) -> dict:
     }
 
 
+def _build_test_data_rows(case_id: str, items: list[CaseTestDataInput]) -> list[TestData]:
+    return [
+        TestData(
+            id=generate_uuid(),
+            test_case_id=case_id,
+            field_name=item.field_name,
+            rf_variable=item.rf_variable,
+            field_value=item.field_value,
+            description=item.description,
+            source=item.source,
+            row_index=item.row_index if "row_index" in item.model_fields_set else idx,
+        )
+        for idx, item in enumerate(items)
+    ]
+
+
 # ─── Endpoints ───────────────────────────────────────────────────────────────
 
-@router.get("/categories")
+@router.get("/categories", response_model=CategoryListResponse)
 async def list_categories(session: AsyncSession = Depends(get_db)):
     from src.repositories.system_category_repo import SystemCategoryRepository
     repo = SystemCategoryRepository(session)
@@ -168,7 +380,7 @@ async def list_categories(session: AsyncSession = Depends(get_db)):
     return {"items": [c.name for c in cats]}
 
 
-@router.post("", status_code=201, dependencies=[Depends(require_editor_or_above)])
+@router.post("", status_code=201, response_model=CaseCreateResponse, dependencies=[Depends(require_editor_or_above)])
 async def create_case(
     body: CaseCreateRequest,
     service: CaseService = Depends(get_case_service),
@@ -190,18 +402,7 @@ async def create_case(
         raise HTTPException(400, detail={"error": "validation_error", "message": str(e)})
 
     if body.test_data:
-        for idx, td_item in enumerate(body.test_data):
-            td = TestData(
-                id=generate_uuid(),
-                test_case_id=case.id,
-                field_name=td_item.get("field_name", ""),
-                rf_variable=td_item.get("rf_variable"),
-                field_value=td_item.get("field_value"),
-                description=td_item.get("description"),
-                source=td_item.get("source", "manual"),
-                row_index=td_item.get("row_index", idx),
-            )
-            session.add(td)
+        session.add_all(_build_test_data_rows(case.id, body.test_data))
         await session.flush()
 
     return {
@@ -212,12 +413,12 @@ async def create_case(
     }
 
 
-@router.get("")
+@router.get("", response_model=CaseListResponse)
 async def list_cases(
     system_category: Optional[str] = None,
     keyword: Optional[str] = None,
-    page: int = 1,
-    page_size: int = 20,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1),
     sort_by: str = "created_at",
     order: str = "desc",
     service: CaseService = Depends(get_case_service),
@@ -240,7 +441,7 @@ async def list_cases(
     }
 
 
-@router.get("/{case_id}")
+@router.get("/{case_id}", response_model=CaseDetailResponse)
 async def get_case(case_id: str, session: AsyncSession = Depends(get_db)):
     result = await session.execute(
         select(TestCase)
@@ -253,11 +454,11 @@ async def get_case(case_id: str, session: AsyncSession = Depends(get_db)):
     return serialize_case_detail(case)
 
 
-@router.get("/{case_id}/execution-history")
+@router.get("/{case_id}/execution-history", response_model=ExecutionHistoryResponse)
 async def get_case_execution_history(
     case_id: str,
-    page: int = 1,
-    page_size: int = 20,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1),
     session: AsyncSession = Depends(get_db),
     service: CaseService = Depends(get_case_service),
 ):
@@ -281,7 +482,7 @@ async def get_case_execution_history(
     }
 
 
-@router.put("/{case_id}", dependencies=[Depends(require_editor_or_above)])
+@router.put("/{case_id}", response_model=CaseDetailResponse, dependencies=[Depends(require_editor_or_above)])
 async def update_case(
     case_id: str,
     body: CaseUpdateRequest,
@@ -307,18 +508,7 @@ async def update_case(
     if body.test_data is not None:
         from sqlalchemy import delete as _delete
         await session.execute(_delete(TestData).where(TestData.test_case_id == case_id))
-        for idx, td_item in enumerate(body.test_data):
-            td = TestData(
-                id=generate_uuid(),
-                test_case_id=case_id,
-                field_name=td_item.get("field_name", ""),
-                rf_variable=td_item.get("rf_variable"),
-                field_value=td_item.get("field_value"),
-                description=td_item.get("description"),
-                source=td_item.get("source", "manual"),
-                row_index=td_item.get("row_index", idx),
-            )
-            session.add(td)
+        session.add_all(_build_test_data_rows(case_id, body.test_data))
         await session.flush()
 
     result = await session.execute(
@@ -332,7 +522,7 @@ async def update_case(
     return serialize_case_detail(case)
 
 
-@router.delete("/{case_id}", dependencies=[Depends(require_editor_or_above)])
+@router.delete("/{case_id}", response_model=SuccessResponse, dependencies=[Depends(require_editor_or_above)])
 async def delete_case(
     case_id: str,
     body: CaseDeleteRequest,
@@ -357,7 +547,7 @@ async def delete_case(
         raise HTTPException(400, detail={"error": "error", "message": msg})
 
 
-@router.post("/preview-rf")
+@router.post("/preview-rf", response_model=PreviewRFResponse)
 async def preview_rf_code(body: PreviewRFRequest, session: AsyncSession = Depends(get_db)):
     """Generate Robot Framework code preview from steps without creating execution records."""
     if not body.main_steps or not body.main_steps.strip():
@@ -379,7 +569,7 @@ async def preview_rf_code(body: PreviewRFRequest, session: AsyncSession = Depend
     return {"rf_code": rf_code}
 
 
-@router.post("/ai-complete")
+@router.post("/ai-complete", response_model=AICompleteResponse)
 async def ai_complete_steps_preview(
     body: AICompleteRequest,
     session: AsyncSession = Depends(get_db),
@@ -397,7 +587,7 @@ async def ai_complete_steps_preview(
     return {"completed_steps": completed, "model_used": model}
 
 
-@router.post("/{case_id}/ai-complete")
+@router.post("/{case_id}/ai-complete", response_model=AICompleteResponse)
 async def ai_complete_steps(
     case_id: str,
     body: AICompleteRequest,
@@ -421,7 +611,7 @@ async def ai_complete_steps(
     return {"completed_steps": completed, "model_used": model}
 
 
-@router.post("/chat-preview")
+@router.post("/chat-preview", response_model=ChatResponse)
 async def chat_preview(
     body: ChatPreviewRequest,
     session: AsyncSession = Depends(get_db),
@@ -433,9 +623,9 @@ async def chat_preview(
     ai_service = AIService(provider=provider)
 
     history = [
-        {"role": m.get("role", "user"), "content": m.get("content", "")}
+        {"role": m.role, "content": m.content}
         for m in (body.history or [])
-        if m.get("role") in ("user", "assistant") and m.get("content")
+        if m.role in ("user", "assistant") and m.content
     ]
     response = await ai_service.chat_and_generate_rf(
         messages=history,
@@ -474,7 +664,7 @@ def _resolve_credential_vars(test_data_items, requested: Optional[list[str]]) ->
     return creds
 
 
-@router.post("/{case_id}/explore-page", status_code=202, dependencies=[Depends(require_editor_or_above)])
+@router.post("/{case_id}/explore-page", status_code=202, response_model=ExploreLaunchResponse, dependencies=[Depends(require_editor_or_above)])
 async def explore_page(
     case_id: str,
     body: ExplorePageRequest,
@@ -536,7 +726,7 @@ async def explore_page(
             "status_url": f"/api/v1/cases/{case_id}/explore-sessions/{embarked['session_id']}"}
 
 
-@router.get("/{case_id}/explore-sessions/{session_id}")
+@router.get("/{case_id}/explore-sessions/{session_id}", response_model=ExploreSessionResponse)
 async def get_explore_session(case_id: str, session_id: str):
     """Poll an exploration session's progress/result."""
     from src.services.explore_session_store import get_session, public_view
@@ -547,7 +737,7 @@ async def get_explore_session(case_id: str, session_id: str):
     return public_view(snippet)
 
 
-@router.post("/{case_id}/chat")
+@router.post("/{case_id}/chat", response_model=ChatResponse)
 async def chat_with_ai(
     case_id: str,
     body: ChatRequest,
@@ -602,7 +792,7 @@ async def chat_with_ai(
     return {"assistant_message": response["assistant_message"], "rf_code": response["rf_code"]}
 
 
-@router.get("/{case_id}/chat-history")
+@router.get("/{case_id}/chat-history", response_model=ChatHistoryResponse)
 async def get_chat_history(
     case_id: str,
     session: AsyncSession = Depends(get_db),
@@ -627,7 +817,7 @@ async def get_chat_history(
     }
 
 
-@router.post("/{case_id}/attachments", status_code=201, dependencies=[Depends(require_editor_or_above)])
+@router.post("/{case_id}/attachments", status_code=201, response_model=AttachmentResponse, dependencies=[Depends(require_editor_or_above)])
 async def upload_attachment(
     case_id: str,
     file: Optional[UploadFile] = File(None),
@@ -677,7 +867,7 @@ def _serialize_attachment(a) -> dict:
     }
 
 
-@router.get("/{case_id}/attachments")
+@router.get("/{case_id}/attachments", response_model=AttachmentListResponse)
 async def list_attachments(case_id: str, session: AsyncSession = Depends(get_db)):
     from sqlalchemy import select
     from src.models.media_attachment import MediaAttachment
@@ -691,7 +881,7 @@ async def list_attachments(case_id: str, session: AsyncSession = Depends(get_db)
     return {"items": [_serialize_attachment(a) for a in items]}
 
 
-@router.delete("/{case_id}/attachments/{attachment_id}", dependencies=[Depends(require_editor_or_above)])
+@router.delete("/{case_id}/attachments/{attachment_id}", response_model=DeletedResponse, dependencies=[Depends(require_editor_or_above)])
 async def delete_attachment(
     case_id: str,
     attachment_id: str,
@@ -715,7 +905,7 @@ async def delete_attachment(
     return {"deleted": True}
 
 
-@router.post("/{case_id}/import-test-data")
+@router.post("/{case_id}/import-test-data", response_model=ImportPreviewResponse)
 async def import_test_data_preview(
     case_id: str,
     file: UploadFile = File(...),
@@ -742,17 +932,22 @@ async def import_test_data_preview(
     }
 
 
-@router.post("/{case_id}/import-test-data/confirm", status_code=201)
+@router.post("/{case_id}/import-test-data/confirm", status_code=201, response_model=ConfirmImportResponse)
 async def confirm_import_test_data(
     case_id: str,
-    body: dict = Body(...),
+    body: ConfirmImportRequest,
     session: AsyncSession = Depends(get_db),
 ):
     # In production, use a cache/token store; here we accept import via re-parse
     return {"imported_count": 0, "message": "Import confirmed (token-based storage not yet implemented)"}
 
 
-@router.put("/{case_id}/robot-script", dependencies=[Depends(require_editor_or_above)])
+@router.put(
+    "/{case_id}/robot-script",
+    response_model=RobotScriptSaveResponse,
+    response_model_exclude_unset=True,
+    dependencies=[Depends(require_editor_or_above)],
+)
 async def save_robot_script(
     case_id: str,
     body: RobotScriptRequest,
@@ -792,7 +987,7 @@ async def save_robot_script(
     return {"case_number": case.case_number, "file_path": file_path}
 
 
-@router.post("/{case_id}/robot-script/upload", dependencies=[Depends(require_editor_or_above)])
+@router.post("/{case_id}/robot-script/upload", response_model=RobotScriptUploadResponse, dependencies=[Depends(require_editor_or_above)])
 async def upload_robot_script(
     case_id: str,
     file: UploadFile = File(..., description="Robot Framework .robot file"),
@@ -859,7 +1054,7 @@ async def upload_robot_script(
     }
 
 
-@router.get("/{case_id}/robot-script")
+@router.get("/{case_id}/robot-script", response_model=RobotScriptResponse)
 async def get_robot_script(
     case_id: str,
     service: CaseService = Depends(get_case_service),
@@ -895,7 +1090,7 @@ class TrialRunRequest(BaseModel):
     case_name: Optional[str] = None
 
 
-@router.post("/{case_id}/trial-run", status_code=202, dependencies=[Depends(require_editor_or_above)])
+@router.post("/{case_id}/trial-run", status_code=202, response_model=ExecutionStartResponse, dependencies=[Depends(require_editor_or_above)])
 async def trial_run(case_id: str, request: TrialRunRequest = TrialRunRequest(), session: AsyncSession = Depends(get_db)):
     """Phase 27: Execute trial run using RF code from preview area."""
     import logging
