@@ -3,7 +3,7 @@ import json
 import os
 from typing import Optional
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException
+from fastapi import APIRouter, Cookie, Depends, Header, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -13,6 +13,7 @@ from src.core.config import get_settings
 from src.core.database import AsyncSessionLocal, get_db
 from src.core.dependencies import get_current_user, get_current_user_header_or_cookie
 from src.core.path_utils import safe_join
+from src.execution.events import fetch_events_after
 from src.execution.recovery import TERMINAL_STATUSES
 from src.models.case_result import CaseResult
 from src.models.execution_media import ExecutionMedia
@@ -127,10 +128,23 @@ async def get_execution_results(execution_id: str, db: AsyncSession = Depends(ge
     return {"items": items, "total": len(items)}
 
 
+_SSE_POLL_INTERVAL_SEC = 1.0
+# 連續無新事件的上限（約 15 分鐘）；pabot 只在整批結束後才送案例事件，最長 600 秒
+_SSE_MAX_IDLE_TICKS = 900
+
+
+def _parse_last_event_id(value: str | None) -> int:
+    try:
+        return max(0, int(value)) if value else 0
+    except ValueError:
+        return 0
+
+
 @router.get("/{execution_id}/stream", response_class=StreamingResponse)
 async def stream_execution(
     execution_id: str,
     access_token: str | None = Cookie(default=None),
+    last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
     db: AsyncSession = Depends(get_db)
 ):
     # SSE 無法自訂 Authorization header，一律走 HttpOnly cookie（登入時寫入）。
@@ -161,54 +175,54 @@ async def stream_execution(
     if record is None:
         raise HTTPException(status_code=404, detail={"error": "not_found"})
 
+    after_id = _parse_last_event_id(last_event_id)
+
+    def _completion_from_record(rec) -> str:
+        return f"data: {json.dumps({'event': 'execution_completed', 'execution_id': execution_id, 'status': rec.status, 'passed': rec.passed_count, 'failed': rec.failed_count, 'total': rec.total_count, 'report_url': f'/api/v1/executions/{execution_id}/results', '__done__': True})}\n\n"
+
     async def event_generator():
-        from src.execution.listener import get_execution_queue, mark_queue_accessed, clear_execution_queue
+        # 事件存在 execution_events（spec 003），每次連線從 Last-Event-ID 之後補送；
+        # 新連線（重新整理頁面）會從頭重播，前端狀態因此能補齊。
+        last_id = after_id
+        if last_id == 0:
+            yield f"data: {json.dumps({'event': 'execution_started', 'execution_id': execution_id, 'status': record.status, 'total_cases': record.total_count})}\n\n"
 
-        mark_queue_accessed(execution_id)
-        queue = get_execution_queue(execution_id)
+        idle_ticks = 0
+        saw_terminal = False
+        while idle_ticks < _SSE_MAX_IDLE_TICKS:
+            async with AsyncSessionLocal() as poll_session:
+                events = await fetch_events_after(poll_session, execution_id, last_id)
+                current = None if events else await ExecutionRepository(poll_session).get(execution_id)
 
-        yield f"data: {json.dumps({'event': 'execution_started', 'execution_id': execution_id, 'status': record.status, 'total_cases': record.total_count})}\n\n"
+            if events:
+                idle_ticks = 0
+                for ev in events:
+                    last_id = ev.id
+                    # Strip internal sentinel before sending to client
+                    send_event = {k: v for k, v in ev.payload.items() if k != "__done__"}
+                    yield f"id: {ev.id}\ndata: {json.dumps(send_event)}\n\n"
+                    if ev.payload.get("__done__"):
+                        return
+                continue
 
-        # If already completed (e.g., no cases), emit completion immediately
-        if record.status in TERMINAL_STATUSES:
-            yield f"data: {json.dumps({'event': 'execution_completed', 'execution_id': execution_id, 'status': record.status, 'passed': record.passed_count, 'failed': record.failed_count, 'total': record.total_count, 'report_url': f'/api/v1/executions/{execution_id}/results', '__done__': True})}\n\n"
-            clear_execution_queue(execution_id)
-            return
-
-        timeout_ticks = 0
-        max_ticks = 600  # 10 minutes
-        timed_out = False
-        try:
-            while timeout_ticks < max_ticks:
-                try:
-                    event = await asyncio.wait_for(queue.get(), timeout=1.0)
-                except asyncio.TimeoutError:
-                    timeout_ticks += 1
-                    mark_queue_accessed(execution_id)
-                    # Fallback DB check every 5 seconds to catch missed done events
-                    if timeout_ticks % 5 == 0:
-                        async with AsyncSessionLocal() as poll_session:
-                            poll_repo = ExecutionRepository(poll_session)
-                            updated = await poll_repo.get(execution_id)
-                        if updated and updated.status in TERMINAL_STATUSES:
-                            yield f"data: {json.dumps({'event': 'execution_completed', 'execution_id': execution_id, 'status': updated.status, 'passed': updated.passed_count, 'failed': updated.failed_count, 'total': updated.total_count, 'report_url': f'/api/v1/executions/{execution_id}/results', '__done__': True})}\n\n"
-                            return
+            if current is None:
+                return
+            if current.status in TERMINAL_STATUSES:
+                if not saw_terminal:
+                    # 狀態與最後幾筆事件可能在上一次查詢之後才寫入，再讀一次事件
+                    saw_terminal = True
                     continue
+                # 已結束卻沒有結束事件（例如空清單、spec 003 之前的舊記錄）
+                yield _completion_from_record(current)
+                return
 
-                # Strip internal sentinel before sending to client
-                send_event = {k: v for k, v in event.items() if k != "__done__"}
-                yield f"data: {json.dumps(send_event)}\n\n"
+            idle_ticks += 1
+            if idle_ticks % 15 == 0:
+                yield ": keep-alive\n\n"
+            await asyncio.sleep(_SSE_POLL_INTERVAL_SEC)
 
-                if event.get("__done__"):
-                    return
-            # Loop exhausted without a done event: genuine timeout.
-            # NOTE: must NOT yield inside `finally` below — that would emit a
-            # spurious execution_error after every cleanly finished stream.
-            timed_out = True
-        finally:
-            clear_execution_queue(execution_id)
-        if timed_out:
-            yield f"data: {json.dumps({'event': 'execution_error', 'execution_id': execution_id, 'message': '執行逾時'})}\n\n"
+        # NOTE: only reached on a genuine timeout, never after a clean finish.
+        yield f"data: {json.dumps({'event': 'execution_error', 'execution_id': execution_id, 'message': '執行逾時'})}\n\n"
 
     return StreamingResponse(
         event_generator(),

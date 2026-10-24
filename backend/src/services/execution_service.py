@@ -77,6 +77,7 @@ MAX_RF_CODE_BYTES = 200 * 1024  # trial-run / 上傳單檔上限外再加一道�
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import AsyncSessionLocal
+from src.execution.events import EventSink
 from src.models.execution_record import ExecutionRecord
 from src.repositories.checklist_repo import ChecklistRepository
 from src.repositories.execution_repo import ExecutionRepository
@@ -136,10 +137,9 @@ class ExecutionService:
     async def _execute_trial_bg(execution_id: str, source_case_id: str, rf_code: Optional[str] = None, case_name: Optional[str] = None) -> None:
         from src.core.config import get_settings
         from src.repositories.test_case_repo import TestCaseRepository
-        from src.execution.listener import get_execution_queue, clear_execution_queue
 
         settings = get_settings()
-        queue = get_execution_queue(execution_id)
+        sink = EventSink(execution_id)
 
         async with AsyncSessionLocal() as session:
             case_repo = TestCaseRepository(session)
@@ -153,10 +153,10 @@ class ExecutionService:
                     db_rf_code = _rec.rf_code
 
         if not case:
-            queue.put_nowait({"event": "execution_error", "execution_id": execution_id, "message": "案例不存在", "__done__": True})
             async with AsyncSessionLocal() as session:
                 await ExecutionRepository(session).update_status(execution_id, status="error")
                 await session.commit()
+            await sink.emit({"event": "execution_error", "execution_id": execution_id, "message": "案例不存在", "__done__": True})
             return
 
         case_number = case.case_number
@@ -168,7 +168,7 @@ class ExecutionService:
                 with open(script_path, "r", encoding="utf-8") as f:
                     robot_code = f.read()
 
-        queue.put_nowait({"event": "case_started", "execution_id": execution_id, "case_id": source_case_id, "case_number": case_number})
+        await sink.emit({"event": "case_started", "execution_id": execution_id, "case_id": source_case_id, "case_number": case_number})
 
         _report_dest = os.path.join(settings.execution_reports_dir, execution_id)
         result = await ExecutionService._run_single_case_with_timeout(
@@ -179,7 +179,7 @@ class ExecutionService:
         passed = 1 if case_status == "passed" else 0
         failed = 0 if case_status == "passed" else 1
 
-        queue.put_nowait({
+        await sink.emit({
             "event": "case_completed",
             "execution_id": execution_id,
             "case_id": source_case_id,
@@ -190,16 +190,6 @@ class ExecutionService:
         })
 
         final_status = "completed" if case_status == "passed" else "failed"
-        queue.put_nowait({
-            "event": "execution_completed",
-            "execution_id": execution_id,
-            "status": final_status,
-            "passed": passed,
-            "failed": failed,
-            "total": 1,
-            "report_url": f"/api/v1/executions/{execution_id}/results",
-            "__done__": True,
-        })
 
         async with AsyncSessionLocal() as session:
             from src.models.case_result import CaseResult
@@ -245,6 +235,17 @@ class ExecutionService:
                 finished_at=datetime.now(),
             )
             await session.commit()
+            # 先寫入最終狀態再送結束事件，前端收到後重新查詢才會拿到最終狀態
+            await sink.emit({
+                "event": "execution_completed",
+                "execution_id": execution_id,
+                "status": final_status,
+                "passed": passed,
+                "failed": failed,
+                "total": 1,
+                "report_url": f"/api/v1/executions/{execution_id}/results",
+                "__done__": True,
+            })
 
             # Phase 27: If trial failed, trigger AI analysis
             if case_status == "failed":
@@ -255,9 +256,6 @@ class ExecutionService:
                     error_message=result.get("failure_message") or "Unknown error",
                     rf_code=robot_code or ""
                 )
-
-        await asyncio.sleep(5)
-        clear_execution_queue(execution_id)
 
     @staticmethod
     async def _trigger_ai_analysis(session, case_id: str, case_name: str, error_message: str, rf_code: str) -> None:
@@ -315,10 +313,9 @@ class ExecutionService:
     async def _execute_all_cases_bg(execution_id: str, case_ids: list[str], max_workers: int) -> None:
         from src.core.config import get_settings
         from src.repositories.test_case_repo import TestCaseRepository
-        from src.execution.listener import get_execution_queue, clear_execution_queue
 
         settings = get_settings()
-        queue = get_execution_queue(execution_id)
+        sink = EventSink(execution_id)
 
         async with AsyncSessionLocal() as session:
             case_repo = TestCaseRepository(session)
@@ -333,32 +330,22 @@ class ExecutionService:
         try:
             if use_pabot:
                 passed, failed, total = await ExecutionService._run_pabot(
-                    execution_id, case_ids, case_number_map, max_workers, settings, queue
+                    execution_id, case_ids, case_number_map, max_workers, settings, sink
                 )
             else:
                 passed, failed, total = await ExecutionService._run_sequential(
-                    execution_id, case_ids, case_number_map, settings, queue
+                    execution_id, case_ids, case_number_map, settings, sink
                 )
         except Exception as exc:
-            queue.put_nowait({"event": "execution_error", "execution_id": execution_id, "message": str(exc), "__done__": True})
             async with AsyncSessionLocal() as session:
                 from datetime import datetime, timezone
                 exec_repo = ExecutionRepository(session)
                 await exec_repo.update(execution_id, status="error", finished_at=datetime.now())
                 await session.commit()
+            await sink.emit({"event": "execution_error", "execution_id": execution_id, "message": str(exc), "__done__": True})
             return
 
         final_status = "completed" if failed == 0 else "failed"
-        queue.put_nowait({
-            "event": "execution_completed",
-            "execution_id": execution_id,
-            "status": final_status,
-            "passed": passed,
-            "failed": failed,
-            "total": total,
-            "report_url": f"/api/v1/executions/{execution_id}/results",
-            "__done__": True,
-        })
 
         async with AsyncSessionLocal() as session:
             from datetime import datetime, timezone
@@ -373,9 +360,17 @@ class ExecutionService:
             )
             await session.commit()
 
-        # Clean up queue after a short delay to allow SSE to drain it
-        await asyncio.sleep(5)
-        clear_execution_queue(execution_id)
+        # 先寫入最終狀態再送結束事件，前端收到後重新查詢才會拿到最終狀態
+        await sink.emit({
+            "event": "execution_completed",
+            "execution_id": execution_id,
+            "status": final_status,
+            "passed": passed,
+            "failed": failed,
+            "total": total,
+            "report_url": f"/api/v1/executions/{execution_id}/results",
+            "__done__": True,
+        })
 
     @staticmethod
     async def _run_sequential(
@@ -383,14 +378,14 @@ class ExecutionService:
         case_ids: list[str],
         case_number_map: dict[str, str],
         settings,
-        queue: asyncio.Queue,
+        sink: EventSink,
     ) -> tuple[int, int, int]:
         passed = 0
         failed = 0
 
         for idx, case_id in enumerate(case_ids):
             case_number = case_number_map.get(case_id)
-            queue.put_nowait({
+            await sink.emit({
                 "event": "case_started",
                 "execution_id": execution_id,
                 "case_id": case_id,
@@ -436,7 +431,7 @@ class ExecutionService:
                 session.add(cr)
                 await session.commit()
 
-            queue.put_nowait({
+            await sink.emit({
                 "event": "case_completed",
                 "execution_id": execution_id,
                 "case_id": case_id,
@@ -455,7 +450,7 @@ class ExecutionService:
         case_number_map: dict[str, str],
         max_workers: int,
         settings,
-        queue: asyncio.Queue,
+        sink: EventSink,
     ) -> tuple[int, int, int]:
         robot_files: list[str] = []
         case_number_to_id: dict[str, str] = {v: k for k, v in case_number_map.items()}
@@ -470,7 +465,7 @@ class ExecutionService:
         if not robot_files:
             return 0, len(case_ids), len(case_ids)
 
-        queue.put_nowait({
+        await sink.emit({
             "event": "pabot_started",
             "execution_id": execution_id,
             "total": len(robot_files),
@@ -549,7 +544,7 @@ class ExecutionService:
                             "failure_message": agg["failure_message"],
                             "position": idx,
                         })
-                    queue.put_nowait({
+                    await sink.emit({
                         "event": "case_completed",
                         "execution_id": execution_id,
                         "case_id": cid,
@@ -577,7 +572,7 @@ class ExecutionService:
             else:
                 stderr_text = stderr_bytes.decode("utf-8", errors="replace") if stderr_bytes else ""
                 failed = len(robot_files)
-                queue.put_nowait({
+                await sink.emit({
                     "event": "pabot_error",
                     "execution_id": execution_id,
                     "message": f"pabot 執行失敗：{stderr_text[:200]}",

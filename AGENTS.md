@@ -45,8 +45,13 @@ setup; this file covers what agents get wrong.
   `access_token` cookie — FastAPI only binds
   cookies via `Cookie()` annotation (a bare `str | None = None` param binds a
   query param, not the cookie). EventSource cannot send headers.
-- Single-worker uvicorn only: execution queues and explore sessions live in
-  process memory.
+- Single-worker uvicorn only: executions run as in-process asyncio tasks and
+  explore sessions live in process memory. Execution progress events are in
+  the `execution_events` table (`src/execution/events.py`, `EventSink`); the
+  SSE route polls it, so tests that stream must point
+  `src.api.executions.AsyncSessionLocal` and `src.core.database.AsyncSessionLocal`
+  at their test DB (see `tests/integration/test_sse_stream.py`). On startup,
+  executions left `running` become `interrupted` (`src/execution/recovery.py`).
 
 ## Frontend (`frontend/`, workdir `frontend/`)
 

@@ -9,6 +9,8 @@ vi.mock('../../src/services/executionApi', () => ({
   exportReport: vi.fn(),
   getRfReportStatus: vi.fn(),
   streamExecution: vi.fn(),
+  isTerminalEvent: (data: any) =>
+    ['execution_completed', 'execution_error', 'execution_interrupted'].includes(data?.event),
 }))
 
 vi.mock('vue-router', () => ({
@@ -99,5 +101,28 @@ describe('ResultPage', () => {
     await flushPromises()
 
     expect(executionApiModule.streamExecution).not.toHaveBeenCalled()
+  })
+
+  it('refetches when a running execution is interrupted', async () => {
+    vi.mocked(executionApiModule.getExecution)
+      .mockResolvedValueOnce({ ...EXECUTION, status: 'running' } as any)
+      .mockResolvedValueOnce({ ...EXECUTION, status: 'interrupted' } as any)
+    vi.mocked(executionApiModule.getExecutionResults).mockResolvedValue({ items: ITEMS, total: 1 } as any)
+    vi.mocked(executionApiModule.getRfReportStatus).mockResolvedValue({ available: false } as any)
+    let onEvent: ((data: unknown) => void) | undefined
+    vi.mocked(executionApiModule.streamExecution).mockImplementation((_id, cb) => {
+      onEvent = cb
+      return { close: vi.fn() } as any
+    })
+
+    const wrapper = mount(ResultPage)
+    await flushPromises()
+    expect(executionApiModule.streamExecution).toHaveBeenCalledTimes(1)
+
+    onEvent?.({ event: 'execution_interrupted', status: 'interrupted' })
+    await flushPromises()
+
+    expect(executionApiModule.getExecution).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[data-testid="interrupted-notice"]').exists()).toBe(true)
   })
 })

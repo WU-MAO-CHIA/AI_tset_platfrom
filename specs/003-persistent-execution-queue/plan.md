@@ -78,8 +78,8 @@ POST /cases/{id}/trial-run ────┴─> execution_records ─┤
 
 - 新增 `EventSink` 介面：`async emit(payload: dict)`，實作寫入 `execution_events` 並 commit。
 - 現有程式中所有 `queue.put_nowait({...})` 改為 `await sink.emit({...})`，payload 內容不變。
-- `listener.py` 的 `ExecutionListener` 目前沒有任何地方使用（pabot 進度是解析 `output.xml` 後送出），
-  記憶體佇列相關函式隨第 2 階段移除。
+- `listener.py` 的 `ExecutionListener` 與記憶體佇列在第 2 階段後已沒有任何程式使用
+  （pabot 進度是解析 `output.xml` 後送出）；連同它的單元測試保留，之後另案移除。
 
 ### 4. SSE（`GET /executions/{id}/stream`）
 

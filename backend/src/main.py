@@ -6,10 +6,11 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from sqlalchemy import update
+from sqlalchemy import delete, update
 
 # Import all models to register them with SQLAlchemy mapper before any query
 from src.models import test_case, test_data, media_attachment, test_checklist, checklist_item, execution_record, execution_event, db_connection, automation_code, case_result, execution_media, case_chat_message, robot_script, user, system_category, app_setting  # noqa: F401
+from src.models.execution_event import ExecutionEvent
 from src.models.execution_record import ExecutionRecord
 
 logger = logging.getLogger(__name__)
@@ -67,8 +68,13 @@ async def _cleanup_trial_runs() -> None:
                     )
                     .values(status="deleted")
                 )
+                # 執行進度事件只用於即時顯示與重新整理補齊，同樣保留 30 天
+                events_result = await session.execute(
+                    delete(ExecutionEvent).where(ExecutionEvent.created_at < cutoff)
+                )
                 await session.commit()
                 logger.info("Trial run cleanup: %d records marked deleted", result.rowcount)
+                logger.info("Execution event cleanup: %d events deleted", events_result.rowcount)
         except Exception:
             logger.exception("Trial run cleanup failed")
 
