@@ -1,7 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import AIChatPanel from '../../src/components/AIChatPanel/index.vue'
 import * as caseApiModule from '../../src/services/caseApi'
+import * as executionApiModule from '../../src/services/executionApi'
+
+vi.mock('../../src/services/executionApi', () => ({
+  streamExecution: vi.fn(),
+  isTerminalEvent: (data: any) =>
+    ['execution_completed', 'execution_error', 'execution_interrupted', 'execution_cancelled'].includes(data?.event),
+}))
 
 vi.mock('../../src/services/caseApi', () => ({
   caseApi: {
@@ -185,5 +192,29 @@ describe('AIChatPanel', () => {
       'full',
       catalog,
     )
+  })
+
+  it('shows the trial run queue position until the case starts', async () => {
+    vi.mocked(caseApiModule.caseApi.getChatHistory).mockResolvedValue({ data: { messages: [] } } as any)
+    vi.mocked(caseApiModule.caseApi.getRobotScript).mockResolvedValue({ data: { rf_code: null } } as any)
+    let push: (data: unknown) => void = () => {}
+    vi.mocked(executionApiModule.streamExecution).mockImplementation((_id, onEvent) => {
+      push = onEvent
+      return { close: vi.fn() } as any
+    })
+
+    const wrapper = mount(AIChatPanel, {
+      props: { caseId: 'case-1', selectedModel: 'claude-3-5-sonnet-20241022' },
+    })
+    await flushPromises()
+    await wrapper.setProps({ watchExecutionId: 'exec-1' })
+
+    push({ event: 'execution_queued', ahead: 3 })
+    await flushPromises()
+    expect(wrapper.text()).toContain('試跑排隊中（前面還有 3 筆）')
+
+    push({ event: 'case_started', case_number: 'TC-1' })
+    await flushPromises()
+    expect(wrapper.text()).toContain('試跑執行中')
   })
 })

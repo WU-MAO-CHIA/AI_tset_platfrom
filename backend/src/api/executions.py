@@ -6,15 +6,21 @@ from typing import Optional
 from fastapi import APIRouter, Cookie, Depends, Header, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import get_settings
 from src.core.database import AsyncSessionLocal, get_db
-from src.core.dependencies import get_current_user, get_current_user_header_or_cookie
+from src.core.dependencies import (
+    get_current_user,
+    get_current_user_header_or_cookie,
+    require_editor_or_above,
+)
 from src.core.path_utils import safe_join
 from src.execution.events import fetch_events_after
 from src.execution.recovery import TERMINAL_STATUSES
+from src.execution.worker import emit_queue_positions
+from src.models.execution_event import ExecutionEvent
 from src.models.case_result import CaseResult
 from src.models.execution_media import ExecutionMedia
 from src.models.execution_record import ExecutionRecord
@@ -84,6 +90,45 @@ async def get_execution(execution_id: str, db: AsyncSession = Depends(get_db)):
         "failed_count": record.failed_count,
         "total_count": record.total_count,
     }
+
+
+@router.post(
+    "/{execution_id}/cancel",
+    response_model=ExecutionResponse,
+    dependencies=[Depends(require_editor_or_above)],
+)
+async def cancel_execution(execution_id: str, db: AsyncSession = Depends(get_db)):
+    # 只取消排隊中的執行；條件式 UPDATE 與 worker 領取互斥，不會取消到剛被領走的記錄。
+    # 執行中的 robot 子程序不在此處理，回 409。
+    result = await db.execute(
+        update(ExecutionRecord)
+        .where(ExecutionRecord.id == execution_id, ExecutionRecord.status == "pending")
+        .values(status="cancelled")
+    )
+    if result.rowcount == 0:
+        record = await ExecutionRepository(db).get(execution_id)
+        if record is None:
+            raise HTTPException(status_code=404, detail={"error": "not_found"})
+        raise HTTPException(
+            status_code=409,
+            detail={"error": "not_pending", "status": record.status},
+        )
+
+    db.add(ExecutionEvent(
+        execution_id=execution_id,
+        event="execution_cancelled",
+        payload={
+            "event": "execution_cancelled",
+            "execution_id": execution_id,
+            "status": "cancelled",
+            "message": "已取消排隊",
+            "__done__": True,
+        },
+    ))
+    # 後面排隊的執行往前移一位
+    await emit_queue_positions(db)
+    await db.commit()
+    return await get_execution(execution_id, db)
 
 
 @router.get("/{execution_id}/results", response_model=ExecutionResultsResponse, dependencies=_auth)

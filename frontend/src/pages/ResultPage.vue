@@ -27,6 +27,10 @@
         執行因服務重啟而中斷，以下為中斷前已完成的案例結果。
       </div>
 
+      <div v-if="execution?.status === 'cancelled'" class="interrupted-notice" data-testid="cancelled-notice">
+        此執行在排隊中被取消，沒有執行任何案例。
+      </div>
+
       <div v-if="caseResults.length" class="case-results" data-testid="case-results">
         <h2>案例結果</h2>
         <table class="results-table">

@@ -100,3 +100,92 @@ class TestExportReport:
         assert r.status_code == 200
         assert "text/html" in r.headers.get("content-type", "")
         assert "content-disposition" in r.headers
+
+
+class TestCancelExecution:
+    async def _execute(self, client, checklist_id) -> str:
+        r = await client.post(f"/api/v1/checklists/{checklist_id}/execute", json={
+            "parallel_mode": False,
+            "max_workers": 1,
+        })
+        assert r.status_code == 202
+        return r.json()["execution_id"]
+
+    async def test_cancel_pending_execution(self, client, created_checklist, isolated_app):
+        from sqlalchemy import select
+        from src.models.execution_event import ExecutionEvent
+
+        execution_id = await self._execute(client, created_checklist)
+
+        r = await client.post(f"/api/v1/executions/{execution_id}/cancel")
+        assert r.status_code == 200
+        assert r.json()["status"] == "cancelled"
+
+        async with isolated_app() as session:
+            events = (await session.execute(
+                select(ExecutionEvent)
+                .where(ExecutionEvent.execution_id == execution_id)
+                .order_by(ExecutionEvent.id)
+            )).scalars().all()
+        assert events[-1].event == "execution_cancelled"
+        assert events[-1].payload["__done__"] is True
+
+    async def test_cancel_updates_queue_positions(self, client, created_checklist, isolated_app):
+        from sqlalchemy import select
+        from src.models.execution_event import ExecutionEvent
+
+        first = await self._execute(client, created_checklist)
+        second = await self._execute(client, created_checklist)
+
+        r = await client.post(f"/api/v1/executions/{first}/cancel")
+        assert r.status_code == 200
+
+        async with isolated_app() as session:
+            last = (await session.execute(
+                select(ExecutionEvent)
+                .where(ExecutionEvent.execution_id == second, ExecutionEvent.event == "execution_queued")
+                .order_by(ExecutionEvent.id.desc())
+            )).scalars().first()
+        assert last.payload["ahead"] == 0
+
+    async def test_cancel_twice_returns_409(self, client, created_checklist):
+        execution_id = await self._execute(client, created_checklist)
+        assert (await client.post(f"/api/v1/executions/{execution_id}/cancel")).status_code == 200
+
+        r = await client.post(f"/api/v1/executions/{execution_id}/cancel")
+        assert r.status_code == 409
+
+    async def test_cancel_running_returns_409(self, client, created_checklist, isolated_app):
+        from sqlalchemy import update
+        from src.models.execution_record import ExecutionRecord
+
+        execution_id = await self._execute(client, created_checklist)
+        async with isolated_app() as session:
+            await session.execute(
+                update(ExecutionRecord).where(ExecutionRecord.id == execution_id).values(status="running")
+            )
+            await session.commit()
+
+        r = await client.post(f"/api/v1/executions/{execution_id}/cancel")
+        assert r.status_code == 409
+        assert r.json()["detail"]["status"] == "running"
+
+    async def test_cancel_nonexistent_returns_404(self, client):
+        r = await client.post("/api/v1/executions/nonexistent/cancel")
+        assert r.status_code == 404
+
+    async def test_viewer_cannot_cancel(self, client, created_checklist, isolated_app):
+        from src.core.security import create_access_token, hash_password
+        from src.models.user import User
+
+        execution_id = await self._execute(client, created_checklist)
+        async with isolated_app() as session:
+            session.add(User(username="cancel_viewer", hashed_password=hash_password("x"), role="viewer"))
+            await session.commit()
+        token = create_access_token(sub="cancel_viewer", role="viewer")
+
+        r = await client.post(
+            f"/api/v1/executions/{execution_id}/cancel",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert r.status_code == 403

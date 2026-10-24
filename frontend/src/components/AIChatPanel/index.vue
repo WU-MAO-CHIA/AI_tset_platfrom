@@ -42,7 +42,11 @@
         <div class="bubble-content">AI 思考中...</div>
       </div>
       <div v-if="trialInProgress" class="chat-bubble bubble-assistant loading-bubble">
-        <div class="bubble-content">試跑執行中，完成後將自動顯示結果...</div>
+        <div class="bubble-content">
+          <template v-if="trialQueueAhead === null">試跑執行中，完成後將自動顯示結果...</template>
+          <template v-else-if="trialQueueAhead === 0">試跑排隊中（下一個就輪到），完成後將自動顯示結果...</template>
+          <template v-else>試跑排隊中（前面還有 {{ trialQueueAhead }} 筆），完成後將自動顯示結果...</template>
+        </div>
       </div>
     </div>
 
@@ -87,6 +91,8 @@ const messages = ref<ChatMessage[]>([])
 const inputText = ref('')
 const loading = ref(false)
 const trialInProgress = ref(false)
+// 試跑排隊時前面還有幾筆；開始執行後為 null
+const trialQueueAhead = ref<number | null>(null)
 const messagesContainer = ref<HTMLElement | null>(null)
 
 /** RF context mode: full, summary, none */
@@ -135,10 +141,18 @@ watch(() => props.watchExecutionId, (executionId) => {
   if (!executionId) return
   evtSource?.close()
   trialInProgress.value = true
+  trialQueueAhead.value = null
   evtSource = streamExecution(executionId, (data) => {
+    const event = data as { event?: string; ahead?: number }
+    if (event.event === 'execution_queued') {
+      trialQueueAhead.value = event.ahead ?? 0
+    } else if (event.event === 'case_started') {
+      trialQueueAhead.value = null
+    }
     if (isTerminalEvent(data)) {
       evtSource = null
       trialInProgress.value = false
+      trialQueueAhead.value = null
       loadHistory()
     }
   })
