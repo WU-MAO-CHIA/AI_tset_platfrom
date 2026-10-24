@@ -67,7 +67,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch, nextTick, computed } from 'vue'
 import { caseApi } from '../../services/caseApi'
-import { streamExecution } from '../../services/executionApi'
+import { isTerminalEvent, streamExecution } from '../../services/executionApi'
 import type { ChatMessage } from '../../services/caseApi'
 import TrialRunResult from './TrialRunResult.vue'
 
@@ -136,8 +136,7 @@ watch(() => props.watchExecutionId, (executionId) => {
   evtSource?.close()
   trialInProgress.value = true
   evtSource = streamExecution(executionId, (data) => {
-    const event = data as { event?: string }
-    if (event.event === 'execution_completed' || event.event === 'execution_error') {
+    if (isTerminalEvent(data)) {
       evtSource = null
       trialInProgress.value = false
       loadHistory()

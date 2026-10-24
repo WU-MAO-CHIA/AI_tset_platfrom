@@ -53,6 +53,14 @@ export async function getRfReportStatus(
   return res.data
 }
 
+// 收到這些事件代表執行已結束，串流不會再有新事件
+const TERMINAL_EVENTS = ['execution_completed', 'execution_error', 'execution_interrupted']
+
+export function isTerminalEvent(data: unknown): boolean {
+  const event = (data as { event?: string } | null)?.event
+  return !!event && TERMINAL_EVENTS.includes(event)
+}
+
 export function streamExecution(executionId: string, onEvent: (data: unknown) => void): EventSource {
   // Token is now sent via HttpOnly cookie, no need to pass in URL
   const evtSource = new EventSource(`/api/v1/executions/${executionId}/stream`, {
@@ -62,7 +70,7 @@ export function streamExecution(executionId: string, onEvent: (data: unknown) =>
     try {
       const data = JSON.parse(e.data)
       onEvent(data)
-      if (data.event === 'execution_completed' || data.event === 'execution_error') {
+      if (isTerminalEvent(data)) {
         evtSource.close()
       }
     } catch {

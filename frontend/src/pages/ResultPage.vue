@@ -77,7 +77,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getExecution, getExecutionResults, exportReport, getRfReportStatus, streamExecution, type ExecutionRecord, type CaseResultItem } from '../services/executionApi'
+import { getExecution, getExecutionResults, exportReport, getRfReportStatus, isTerminalEvent, streamExecution, type ExecutionRecord, type CaseResultItem } from '../services/executionApi'
 
 const route = useRoute()
 const router = useRouter()
@@ -113,8 +113,7 @@ async function fetchResults() {
     // 訂閱 SSE 等待完成後再重新抓一次以取得最終狀態與報告
     if (!isFinished(execution.value.status) && !evtSource) {
       evtSource = streamExecution(executionId.value, (data) => {
-        const event = data as { event?: string }
-        if (event.event === 'execution_completed' || event.event === 'execution_error') {
+        if (isTerminalEvent(data)) {
           evtSource = null
           fetchResults()
         }
