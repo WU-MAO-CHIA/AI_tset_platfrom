@@ -2,7 +2,7 @@
 
 **Feature Branch**: `003-persistent-execution-queue`
 **Created**: 2026-10-24
-**Status**: Draft
+**Status**: Approved
 **Input**: 使用者選擇方案一：「執行佇列改為持久化（DB 佇列），重啟後可恢復或標記中斷」
 
 ## 背景
@@ -108,7 +108,8 @@
 - 從 SQLite 換成 PostgreSQL（另案）
 - 排程 / webhook 觸發（另案，會建立在這個佇列之上）
 
-## Open Questions
+## Decisions
 
-1. 同時執行上限預設值：建議 1（最保守，避免多組瀏覽器搶資源）；機器資源足夠可在 `.env` 調高。
-2. 試跑優先於清單執行：建議是，因為試跑是互動操作；若希望完全依時間排序請告知。
+1. 同時執行上限預設值為 1（2026-10-24 確認）；機器資源足夠可在 `.env` 調高 `EXECUTION_MAX_CONCURRENT`。
+   這是「同時跑幾筆執行（robot / pabot 子程序）」，仍只有一個 uvicorn 行程；單一清單內的 pabot 平行度另由 `max_workers` 控制。
+2. 試跑優先於清單執行（2026-10-24 確認）。
