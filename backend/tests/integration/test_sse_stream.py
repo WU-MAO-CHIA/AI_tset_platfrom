@@ -29,7 +29,7 @@ from src.main import app
 from src.models.base import Base
 from src.models import (  # noqa: F401  (register all tables)
     test_case, test_data, media_attachment, test_checklist, checklist_item,
-    execution_record, db_connection, automation_code, case_result,
+    execution_record, execution_event, db_connection, automation_code, case_result,
     execution_media, case_chat_message, robot_script, user, system_category,
     app_setting,
 )
@@ -113,6 +113,22 @@ class TestStreamAuth:
         resp = await client.get("/api/v1/executions/exec-1/stream")
         assert resp.status_code == 200
         assert "執行逾時" not in resp.text
+
+    async def test_interrupted_execution_stream_ends_immediately(self, client, token, test_db):
+        """spec 003: a record marked interrupted on restart is terminal; the
+        stream must close right away instead of waiting for events that never come."""
+        async with test_db() as session:
+            await session.execute(text(
+                "INSERT INTO execution_records (id, source_case_id, execution_type, status,"
+                " parallel_mode, max_workers, passed_count, failed_count, total_count)"
+                " VALUES ('exec-int', 'case-1', 'trial', 'interrupted', 0, 1, 0, 0, 1)"
+            ))
+            await session.commit()
+        client.cookies.set("access_token", token)
+        resp = await client.get("/api/v1/executions/exec-int/stream")
+        assert resp.status_code == 200
+        assert "execution_completed" in resp.text
+        assert '"status": "interrupted"' in resp.text
         assert "execution_error" not in resp.text
 
     async def test_stream_with_query_token_rejected(self, client, token):

@@ -13,6 +13,7 @@ from src.core.config import get_settings
 from src.core.database import AsyncSessionLocal, get_db
 from src.core.dependencies import get_current_user, get_current_user_header_or_cookie
 from src.core.path_utils import safe_join
+from src.execution.recovery import TERMINAL_STATUSES
 from src.models.case_result import CaseResult
 from src.models.execution_media import ExecutionMedia
 from src.models.execution_record import ExecutionRecord
@@ -169,7 +170,7 @@ async def stream_execution(
         yield f"data: {json.dumps({'event': 'execution_started', 'execution_id': execution_id, 'status': record.status, 'total_cases': record.total_count})}\n\n"
 
         # If already completed (e.g., no cases), emit completion immediately
-        if record.status in ("completed", "failed", "error"):
+        if record.status in TERMINAL_STATUSES:
             yield f"data: {json.dumps({'event': 'execution_completed', 'execution_id': execution_id, 'status': record.status, 'passed': record.passed_count, 'failed': record.failed_count, 'total': record.total_count, 'report_url': f'/api/v1/executions/{execution_id}/results', '__done__': True})}\n\n"
             clear_execution_queue(execution_id)
             return
@@ -189,7 +190,7 @@ async def stream_execution(
                         async with AsyncSessionLocal() as poll_session:
                             poll_repo = ExecutionRepository(poll_session)
                             updated = await poll_repo.get(execution_id)
-                        if updated and updated.status in ("completed", "failed", "error"):
+                        if updated and updated.status in TERMINAL_STATUSES:
                             yield f"data: {json.dumps({'event': 'execution_completed', 'execution_id': execution_id, 'status': updated.status, 'passed': updated.passed_count, 'failed': updated.failed_count, 'total': updated.total_count, 'report_url': f'/api/v1/executions/{execution_id}/results', '__done__': True})}\n\n"
                             return
                     continue
