@@ -6,10 +6,11 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from sqlalchemy import update
+from sqlalchemy import delete, update
 
 # Import all models to register them with SQLAlchemy mapper before any query
-from src.models import test_case, test_data, media_attachment, test_checklist, checklist_item, execution_record, db_connection, automation_code, case_result, execution_media, case_chat_message, robot_script, user, system_category, app_setting  # noqa: F401
+from src.models import test_case, test_data, media_attachment, test_checklist, checklist_item, execution_record, execution_event, db_connection, automation_code, case_result, execution_media, case_chat_message, robot_script, user, system_category, app_setting  # noqa: F401
+from src.models.execution_event import ExecutionEvent
 from src.models.execution_record import ExecutionRecord
 
 logger = logging.getLogger(__name__)
@@ -67,8 +68,13 @@ async def _cleanup_trial_runs() -> None:
                     )
                     .values(status="deleted")
                 )
+                # 執行進度事件只用於即時顯示與重新整理補齊，同樣保留 30 天
+                events_result = await session.execute(
+                    delete(ExecutionEvent).where(ExecutionEvent.created_at < cutoff)
+                )
                 await session.commit()
                 logger.info("Trial run cleanup: %d records marked deleted", result.rowcount)
+                logger.info("Execution event cleanup: %d events deleted", events_result.rowcount)
         except Exception:
             logger.exception("Trial run cleanup failed")
 
@@ -90,7 +96,28 @@ async def startup_event() -> None:
             logger.warning("Using default JWT_SECRET_KEY — set a strong value via .env for any shared deployment")
         if settings.is_default_admin_password():
             logger.warning("Using default ADMIN_PASSWORD — change it via .env")
+    await _recover_executions()
+    # 恢復程序之後才開啟 worker：重啟前的 running 已標為 interrupted，pending 會依序被領取
+    from src.execution.worker import get_worker
+    get_worker().start()
     asyncio.create_task(_cleanup_trial_runs())
+
+
+@app.on_event("shutdown")
+async def shutdown_event() -> None:
+    from src.execution.worker import get_worker
+    await get_worker().stop()
+
+
+async def _recover_executions() -> None:
+    from src.core.database import AsyncSessionLocal
+    from src.execution.recovery import mark_interrupted_executions
+    try:
+        async with AsyncSessionLocal() as session:
+            await mark_interrupted_executions(session)
+    except Exception:
+        # 恢復失敗不應阻止服務啟動（例如 migration 尚未套用）
+        logger.exception("Execution recovery on startup failed")
 
 
 class HealthResponse(BaseModel):

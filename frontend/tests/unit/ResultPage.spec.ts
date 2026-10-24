@@ -9,6 +9,8 @@ vi.mock('../../src/services/executionApi', () => ({
   exportReport: vi.fn(),
   getRfReportStatus: vi.fn(),
   streamExecution: vi.fn(),
+  isTerminalEvent: (data: any) =>
+    ['execution_completed', 'execution_error', 'execution_interrupted'].includes(data?.event),
 }))
 
 vi.mock('vue-router', () => ({
@@ -76,5 +78,51 @@ describe('ResultPage', () => {
     expect(iframe.exists()).toBe(true)
     expect(iframe.attributes('src')).toBe('/api/v1/executions/exec-1/rf-report/report.html')
     expect(wrapper.find('[data-testid="rf-report-missing"]').exists()).toBe(false)
+  })
+
+  it('treats an interrupted execution as finished and explains why', async () => {
+    mockTerminal('interrupted')
+    vi.mocked(executionApiModule.getRfReportStatus).mockResolvedValue({ available: false } as any)
+
+    const wrapper = mount(ResultPage)
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="interrupted-notice"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('已中斷')
+    expect(executionApiModule.streamExecution).not.toHaveBeenCalled()
+    expect(executionApiModule.getRfReportStatus).toHaveBeenCalled()
+  })
+
+  it.each(['error', 'cancelled'])('does not subscribe to SSE for a %s execution', async (status) => {
+    mockTerminal(status)
+    vi.mocked(executionApiModule.getRfReportStatus).mockResolvedValue({ available: false } as any)
+
+    mount(ResultPage)
+    await flushPromises()
+
+    expect(executionApiModule.streamExecution).not.toHaveBeenCalled()
+  })
+
+  it('refetches when a running execution is interrupted', async () => {
+    vi.mocked(executionApiModule.getExecution)
+      .mockResolvedValueOnce({ ...EXECUTION, status: 'running' } as any)
+      .mockResolvedValueOnce({ ...EXECUTION, status: 'interrupted' } as any)
+    vi.mocked(executionApiModule.getExecutionResults).mockResolvedValue({ items: ITEMS, total: 1 } as any)
+    vi.mocked(executionApiModule.getRfReportStatus).mockResolvedValue({ available: false } as any)
+    let onEvent: ((data: unknown) => void) | undefined
+    vi.mocked(executionApiModule.streamExecution).mockImplementation((_id, cb) => {
+      onEvent = cb
+      return { close: vi.fn() } as any
+    })
+
+    const wrapper = mount(ResultPage)
+    await flushPromises()
+    expect(executionApiModule.streamExecution).toHaveBeenCalledTimes(1)
+
+    onEvent?.({ event: 'execution_interrupted', status: 'interrupted' })
+    await flushPromises()
+
+    expect(executionApiModule.getExecution).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[data-testid="interrupted-notice"]').exists()).toBe(true)
   })
 })

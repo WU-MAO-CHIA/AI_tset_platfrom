@@ -151,6 +151,8 @@ DATABASE_URL=sqlite+aiosqlite:///./data/autotest.db
 MEDIA_ROOT=./data/media
 ROBOT_SCRIPTS_DIR=./robot_scripts
 PARALLEL_MAX_WORKERS=5
+# 同時執行幾筆清單／試跑，其餘排隊（試跑優先）；單一清單內的平行度由 PARALLEL_MAX_WORKERS 限制
+EXECUTION_MAX_CONCURRENT=1
 
 # 填入至少一組
 ANTHROPIC_API_KEY=sk-ant-...

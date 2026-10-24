@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { CaseResultItem } from '../services/executionApi'
 
-type ExecutionStatus = 'idle' | 'running' | 'completed' | 'failed' | 'error'
+type ExecutionStatus = 'idle' | 'running' | 'completed' | 'failed' | 'error' | 'interrupted'
 
 export const useExecutionStore = defineStore('execution', () => {
   const executionId = ref<string | null>(null)
@@ -50,11 +50,16 @@ export const useExecutionStore = defineStore('execution', () => {
       failedCases.value = (event.failed as number) || 0
       runningCases.value = (event.running_cases as string[]) || []
     } else if (type === 'execution_completed') {
-      executionStatus.value = 'completed'
+      // 後端重啟後被標為 interrupted 的執行，SSE 也以 execution_completed 結束
+      executionStatus.value = event.status === 'interrupted' ? 'interrupted' : 'completed'
       passedCases.value = (event.passed as number) || 0
       failedCases.value = (event.failed as number) || 0
       totalCases.value = (event.total as number) || totalCases.value
       completedCases.value = totalCases.value
+      runningCases.value = []
+    } else if (type === 'execution_interrupted') {
+      executionStatus.value = 'interrupted'
+      errorMessage.value = (event.message as string) || '執行因服務重啟而中斷'
       runningCases.value = []
     } else if (type === 'execution_error') {
       executionStatus.value = 'error'

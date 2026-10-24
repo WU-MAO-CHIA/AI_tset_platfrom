@@ -48,7 +48,7 @@ onMounted(() => {
   evtSource = streamExecution(props.executionId, (data) => {
     store.handleSSEEvent(data as Record<string, unknown>)
     const event = data as { event?: string }
-    if (event.event === 'execution_completed') {
+    if (event.event === 'execution_completed' || event.event === 'execution_interrupted') {
       emit('completed')
     }
   })

@@ -29,14 +29,14 @@ from src.main import app
 from src.models.base import Base
 from src.models import (  # noqa: F401  (register all tables)
     test_case, test_data, media_attachment, test_checklist, checklist_item,
-    execution_record, db_connection, automation_code, case_result,
+    execution_record, execution_event, db_connection, automation_code, case_result,
     execution_media, case_chat_message, robot_script, user, system_category,
     app_setting,
 )
 
 
 @pytest.fixture
-async def test_db():
+async def test_db(monkeypatch):
     engine = create_async_engine(
         "sqlite+aiosqlite://",
         connect_args={"check_same_thread": False},
@@ -77,6 +77,11 @@ async def test_db():
             await session.commit()
 
     app.dependency_overrides[get_db] = override_get_db
+    # SSE 輪詢與事件寫入直接使用 session factory，也導向 in-memory DB
+    import src.api.executions as executions_api
+    import src.core.database as core_db
+    monkeypatch.setattr(executions_api, "AsyncSessionLocal", maker)
+    monkeypatch.setattr(core_db, "AsyncSessionLocal", maker)
     yield maker
     app.dependency_overrides.pop(get_db, None)
     await engine.dispose()
@@ -113,6 +118,22 @@ class TestStreamAuth:
         resp = await client.get("/api/v1/executions/exec-1/stream")
         assert resp.status_code == 200
         assert "執行逾時" not in resp.text
+
+    async def test_interrupted_execution_stream_ends_immediately(self, client, token, test_db):
+        """spec 003: a record marked interrupted on restart is terminal; the
+        stream must close right away instead of waiting for events that never come."""
+        async with test_db() as session:
+            await session.execute(text(
+                "INSERT INTO execution_records (id, source_case_id, execution_type, status,"
+                " parallel_mode, max_workers, passed_count, failed_count, total_count)"
+                " VALUES ('exec-int', 'case-1', 'trial', 'interrupted', 0, 1, 0, 0, 1)"
+            ))
+            await session.commit()
+        client.cookies.set("access_token", token)
+        resp = await client.get("/api/v1/executions/exec-int/stream")
+        assert resp.status_code == 200
+        assert "execution_completed" in resp.text
+        assert '"status": "interrupted"' in resp.text
         assert "execution_error" not in resp.text
 
     async def test_stream_with_query_token_rejected(self, client, token):
@@ -159,6 +180,112 @@ class TestTrialRunGuard:
             headers={"Authorization": f"Bearer {token}"},
         )
         assert resp.status_code == 404
+
+
+async def _seed_running_with_events(maker, events: list[dict]) -> None:
+    from src.models.execution_event import ExecutionEvent
+
+    async with maker() as session:
+        await session.execute(text(
+            "INSERT INTO execution_records (id, source_case_id, execution_type, status,"
+            " parallel_mode, max_workers, passed_count, failed_count, total_count)"
+            " VALUES ('exec-run', 'case-1', 'trial', 'running', 0, 1, 0, 0, 1)"
+        ))
+        for payload in events:
+            session.add(ExecutionEvent(execution_id="exec-run", event=payload["event"], payload=payload))
+        await session.commit()
+
+
+def _data_lines(body: str) -> list[str]:
+    import json
+
+    return [json.loads(line[len("data: "):])["event"] for line in body.splitlines() if line.startswith("data: ")]
+
+
+class TestStreamFromDb:
+    """spec 003 phase 2: progress events are stored in execution_events and
+    the SSE endpoint replays them from the DB."""
+
+    @pytest.fixture(autouse=True)
+    def fast_poll(self, monkeypatch):
+        import src.api.executions as executions_api
+
+        monkeypatch.setattr(executions_api, "_SSE_POLL_INTERVAL_SEC", 0.01)
+
+    async def test_replays_stored_events_until_done(self, client, token, test_db):
+        await _seed_running_with_events(test_db, [
+            {"event": "case_started", "execution_id": "exec-run", "case_number": "TC-1"},
+            {"event": "case_completed", "execution_id": "exec-run", "case_number": "TC-1", "status": "passed"},
+            {"event": "execution_completed", "execution_id": "exec-run", "status": "completed", "__done__": True},
+        ])
+        client.cookies.set("access_token", token)
+        resp = await client.get("/api/v1/executions/exec-run/stream")
+
+        assert resp.status_code == 200
+        assert _data_lines(resp.text) == [
+            "execution_started", "case_started", "case_completed", "execution_completed",
+        ]
+        assert "__done__" not in resp.text
+        assert len([line for line in resp.text.splitlines() if line.startswith("id: ")]) == 3
+
+    async def test_last_event_id_only_sends_newer_events(self, client, token, test_db):
+        await _seed_running_with_events(test_db, [
+            {"event": "case_started", "execution_id": "exec-run"},
+            {"event": "case_completed", "execution_id": "exec-run", "status": "passed"},
+            {"event": "execution_completed", "execution_id": "exec-run", "status": "completed", "__done__": True},
+        ])
+        from src.models.execution_event import ExecutionEvent
+        from sqlalchemy import select
+
+        async with test_db() as session:
+            first_id = (await session.execute(
+                select(ExecutionEvent.id).where(ExecutionEvent.execution_id == "exec-run").order_by(ExecutionEvent.id)
+            )).scalars().first()
+
+        client.cookies.set("access_token", token)
+        resp = await client.get(
+            "/api/v1/executions/exec-run/stream", headers={"Last-Event-ID": str(first_id)}
+        )
+        assert _data_lines(resp.text) == ["case_completed", "execution_completed"]
+
+    async def test_picks_up_events_written_while_streaming(self, client, token, test_db, monkeypatch):
+        import src.api.executions as executions_api
+        from src.execution.events import EventSink
+
+        await _seed_running_with_events(test_db, [])
+        real_fetch = executions_api.fetch_events_after
+        calls = {"n": 0}
+
+        async def fetch_then_write(session, execution_id, after_id):
+            # 第 3 次輪詢前才寫入事件，模擬串流開始後執行才有進度
+            # （in-memory SQLite 共用單一連線，不能用真的並行 task 寫入）
+            calls["n"] += 1
+            if calls["n"] == 3:
+                sink = EventSink("exec-run")
+                await sink.emit({"event": "case_started", "execution_id": "exec-run"})
+                await sink.emit({"event": "execution_completed", "execution_id": "exec-run",
+                                 "status": "completed", "__done__": True})
+            return await real_fetch(session, execution_id, after_id)
+
+        monkeypatch.setattr(executions_api, "fetch_events_after", fetch_then_write)
+        client.cookies.set("access_token", token)
+        resp = await client.get("/api/v1/executions/exec-run/stream")
+
+        assert calls["n"] >= 3
+        assert _data_lines(resp.text) == ["execution_started", "case_started", "execution_completed"]
+
+    async def test_terminal_record_without_done_event_gets_synthetic_completion(self, client, token, test_db):
+        await _seed_running_with_events(test_db, [
+            {"event": "case_started", "execution_id": "exec-run"},
+        ])
+        async with test_db() as session:
+            await session.execute(text("UPDATE execution_records SET status='failed' WHERE id='exec-run'"))
+            await session.commit()
+
+        client.cookies.set("access_token", token)
+        resp = await client.get("/api/v1/executions/exec-run/stream")
+        assert _data_lines(resp.text) == ["execution_started", "case_started", "execution_completed"]
+        assert '"status": "failed"' in resp.text
 
 
 class TestRfReportStatus:

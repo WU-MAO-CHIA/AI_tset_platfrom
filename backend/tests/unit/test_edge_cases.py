@@ -98,6 +98,8 @@ class TestAITimeoutBehavior:
 class TestTrialRunSourceCaseId:
     async def test_trial_run_sets_source_case_id_not_checklist_id(self):
         mock_session = AsyncMock()
+        # 排入佇列時會查詢排隊中的執行（spec 003）；回傳同步的 result 物件
+        mock_session.execute.return_value = MagicMock()
         service = ExecutionService(mock_session)
 
         mock_record = MagicMock()
@@ -117,6 +119,8 @@ class TestTrialRunSourceCaseId:
 
     async def test_trial_run_does_not_use_checklist_create(self):
         mock_session = AsyncMock()
+        # 排入佇列時會查詢排隊中的執行（spec 003）；回傳同步的 result 物件
+        mock_session.execute.return_value = MagicMock()
         service = ExecutionService(mock_session)
 
         mock_record = MagicMock()

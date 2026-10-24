@@ -45,8 +45,20 @@ setup; this file covers what agents get wrong.
   `access_token` cookie — FastAPI only binds
   cookies via `Cookie()` annotation (a bare `str | None = None` param binds a
   query param, not the cookie). EventSource cannot send headers.
-- Single-worker uvicorn only: execution queues and explore sessions live in
-  process memory.
+- Single-worker uvicorn only: explore sessions live in process memory, and
+  executions are run by one in-process `ExecutionWorker`
+  (`src/execution/worker.py`, started on app startup — not in tests). Trigger
+  endpoints only write a `pending` record with a `params` snapshot; the worker
+  claims by `priority DESC, queued_at` (trial runs first) up to
+  `EXECUTION_MAX_CONCURRENT`. Execution progress events are in
+  the `execution_events` table (`src/execution/events.py`, `EventSink`); the
+  SSE route polls it, so tests that stream must point
+  `src.api.executions.AsyncSessionLocal` and `src.core.database.AsyncSessionLocal`
+  at their test DB (see `tests/integration/test_sse_stream.py`). On startup,
+  executions left `running` become `interrupted` (`src/execution/recovery.py`).
+  Tests that run the worker loop need a file SQLite DB under `tmp_path`, not
+  the in-memory `StaticPool` one: concurrent sessions on one shared connection
+  roll back each other's writes (see `tests/unit/test_execution_worker.py`).
 
 ## Frontend (`frontend/`, workdir `frontend/`)
 
