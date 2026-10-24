@@ -46,6 +46,20 @@ class UpdateUserRequest(BaseModel):
     is_active: bool | None = None
     new_password: str | None = None
 
+    @field_validator("role")
+    @classmethod
+    def _validate_role(cls, v: str | None) -> str | None:
+        if v is not None and v not in ("admin", "editor", "viewer"):
+            raise ValueError("無效的角色")
+        return v
+
+    @field_validator("new_password")
+    @classmethod
+    def _validate_new_password(cls, v: str | None) -> str | None:
+        if v is not None and (len(v) < 8 or len(v) > 128):
+            raise ValueError("密碼長度需為 8-128 字元")
+        return v
+
 
 class UserResponse(BaseModel):
     id: str
@@ -124,9 +138,16 @@ async def delete_user(
 class CreateCategoryRequest(BaseModel):
     name: str
 
+    @field_validator("name")
+    @classmethod
+    def _validate_name(cls, v: str) -> str:
+        if not v.strip() or len(v.strip()) > 100:
+            raise ValueError("系統別名稱需為 1-100 字元")
+        return v.strip()
 
-class RenameCategoryRequest(BaseModel):
-    name: str
+
+class RenameCategoryRequest(CreateCategoryRequest):
+    pass
 
 
 class SystemCategoryResponse(BaseModel):
