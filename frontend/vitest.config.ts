@@ -15,5 +15,7 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./tests/__mocks__/setup.ts'],
+    // tests/e2e 是 Playwright 測試（npm run test:e2e），不能由 vitest 收集
+    include: ['tests/unit/**/*.spec.ts'],
   },
 })

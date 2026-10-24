@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import get_settings
 from src.core.database import AsyncSessionLocal, get_db
-from src.core.dependencies import get_current_user
+from src.core.dependencies import get_current_user, get_current_user_header_or_cookie
 from src.core.path_utils import safe_join
 from src.models.case_result import CaseResult
 from src.models.execution_media import ExecutionMedia
@@ -22,6 +22,8 @@ from src.services.report_service import ReportService
 router = APIRouter(prefix="/executions", tags=["executions"])
 
 _auth = [Depends(get_current_user)]
+# 報告檔由前端 <iframe> 直接載入，無法帶 Bearer header，需同時接受 cookie
+_auth_header_or_cookie = [Depends(get_current_user_header_or_cookie)]
 
 
 class ExecutionResponse(BaseModel):
@@ -270,7 +272,11 @@ async def export_report(execution_id: str, db: AsyncSession = Depends(get_db)):
     )
 
 
-@router.get("/{execution_id}/rf-report/{filename:path}", response_class=FileResponse, dependencies=_auth)
+@router.get(
+    "/{execution_id}/rf-report/{filename:path}",
+    response_class=FileResponse,
+    dependencies=_auth_header_or_cookie,
+)
 async def get_rf_report(execution_id: str, filename: str, db: AsyncSession = Depends(get_db)):
     settings = get_settings()
     # 先確認 execution 存在，避免任意檔案存在性 oracle。

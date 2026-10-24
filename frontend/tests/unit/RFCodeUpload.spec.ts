@@ -1,6 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises, type DOMWrapper } from '@vue/test-utils'
 import RFCodeUpload from '@/components/RFCodeUpload/index.vue'
+
+// jsdom 不允許以程式設定 file input 的值（setValue 會丟 InvalidStateError），
+// 改為直接覆寫 files 後觸發 change，並等待元件內的 file.arrayBuffer()（FileReader，非 microtask）完成
+async function selectFile(input: DOMWrapper<Element>, file: File) {
+  Object.defineProperty(input.element, 'files', { value: [file], configurable: true })
+  await input.trigger('change')
+  await new Promise((r) => setTimeout(r, 10))
+  await flushPromises()
+}
 
 describe('RFCodeUpload', () => {
   let wrapper: ReturnType<typeof mount>
@@ -24,7 +33,7 @@ describe('RFCodeUpload', () => {
   it('shows error for non-.robot file', async () => {
     const file = new File(['content'], 'test.txt', { type: 'text/plain' })
     const input = wrapper.find('[data-testid="rf-upload-input"]')
-    await input.setValue(file)
+    await selectFile(input, file)
 
     expect(wrapper.find('[data-testid="rf-upload-error"]').text()).toContain('只接受 .robot 檔案')
     expect(wrapper.emitted('file-loaded')).toBeUndefined()
@@ -34,7 +43,7 @@ describe('RFCodeUpload', () => {
     const largeContent = 'x'.repeat(500 * 1024 + 1)
     const file = new File([largeContent], 'test.robot', { type: 'text/plain' })
     const input = wrapper.find('[data-testid="rf-upload-input"]')
-    await input.setValue(file)
+    await selectFile(input, file)
 
     expect(wrapper.find('[data-testid="rf-upload-error"]').text()).toContain('500KB')
     expect(wrapper.emitted('file-loaded')).toBeUndefined()
@@ -44,7 +53,7 @@ describe('RFCodeUpload', () => {
     const content = '*** Settings ***\nLibrary    Browser\n\n*** Test Cases ***\nTest\n    Log    Hello'
     const file = new File([content], 'test.robot', { type: 'text/plain' })
     const input = wrapper.find('[data-testid="rf-upload-input"]')
-    await input.setValue(file)
+    await selectFile(input, file)
 
     expect(wrapper.find('[data-testid="rf-upload-error"]').exists()).toBe(false)
     expect(wrapper.emitted('file-loaded')?.[0]).toEqual([content])
@@ -55,7 +64,7 @@ describe('RFCodeUpload', () => {
     const content = '*** Test ***\nLog    Hello'
     const file = new File([content], 'test.robot', { type: 'text/plain' })
     const input = wrapper.find('[data-testid="rf-upload-input"]')
-    await input.setValue(file)
+    await selectFile(input, file)
 
     expect(wrapper.emitted('file-loaded')).toBeTruthy()
 
@@ -69,7 +78,7 @@ describe('RFCodeUpload', () => {
     const content = '*** Test Cases ***\n測試中文\n    Log    你好世界'
     const file = new File([content], 'test.robot', { type: 'text/plain' })
     const input = wrapper.find('[data-testid="rf-upload-input"]')
-    await input.setValue(file)
+    await selectFile(input, file)
 
     expect(wrapper.emitted('file-loaded')?.[0]).toEqual([content])
   })

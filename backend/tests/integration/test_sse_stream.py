@@ -199,5 +199,46 @@ class TestRfReportStatus:
         assert resp.status_code == 404
 
 
+class TestRfReportAuth:
+    """Regression: the results page loads report.html in an <iframe>, which
+    cannot send an Authorization header, so the route must accept the login
+    cookie as well (it used to return 401 for every iframe load)."""
+
+    @pytest.fixture
+    def report_file(self):
+        from src.core.config import get_settings
+
+        report_dir = os.path.join(get_settings().execution_reports_dir, "exec-1")
+        os.makedirs(report_dir, exist_ok=True)
+        marker = os.path.join(report_dir, "report.html")
+        with open(marker, "w", encoding="utf-8") as f:
+            f.write("<html>rf report</html>")
+        yield marker
+        if os.path.exists(marker):
+            os.remove(marker)
+
+    async def test_cookie_auth_serves_report(self, client, token, report_file):
+        client.cookies.set("access_token", token)
+        resp = await client.get("/api/v1/executions/exec-1/rf-report/report.html")
+        assert resp.status_code == 200
+        assert "rf report" in resp.text
+
+    async def test_bearer_auth_serves_report(self, client, token, report_file):
+        resp = await client.get(
+            "/api/v1/executions/exec-1/rf-report/report.html",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert resp.status_code == 200
+
+    async def test_no_credentials_returns_401(self, client, report_file):
+        resp = await client.get("/api/v1/executions/exec-1/rf-report/report.html")
+        assert resp.status_code == 401
+
+    async def test_invalid_cookie_returns_401(self, client, report_file):
+        client.cookies.set("access_token", "not-a-jwt")
+        resp = await client.get("/api/v1/executions/exec-1/rf-report/report.html")
+        assert resp.status_code == 401
+
+
 def _uid() -> str:
     return uuid.uuid4().hex

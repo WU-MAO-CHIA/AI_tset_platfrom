@@ -41,7 +41,6 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-package-lock.json
 yarn.lock
 pnpm-lock.yaml
 dist/
@@ -66,6 +65,10 @@ automatic_test/robot_scripts/results/
 automatic_test/frontend/.nuxt/
 # 執行時產生的 RF 腳本（DB 為主、磁碟為同步副本），可能含測試帳密，不納入版控
 backend/robot_scripts/*.robot
+# 在 backend/ 直接跑 robot 時產生的 RF 輸出
+backend/output.xml
+backend/log.html
+backend/report.html
 # 執行期資料（DB、附件、執行報告）；報告會記錄填入的測試資料
 backend/data/
 .specify/

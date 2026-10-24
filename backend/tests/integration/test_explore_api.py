@@ -75,6 +75,22 @@ async def client(test_db):
         yield c
 
 
+@pytest.fixture(autouse=True)
+def stub_dns(monkeypatch):
+    """validate_explore_url resolves the host; pin example.com to a public IP
+    so these tests don't depend on network access."""
+    import socket
+
+    real_getaddrinfo = socket.getaddrinfo
+
+    def fake_getaddrinfo(host, *args, **kwargs):
+        if host == "example.com":
+            return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.215.14", 0))]
+        return real_getaddrinfo(host, *args, **kwargs)
+
+    monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
+
+
 @pytest.fixture
 def stub_launch(monkeypatch):
     """Stub the session launcher; capture what the endpoint passes in."""

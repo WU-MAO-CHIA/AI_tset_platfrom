@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createRouter, createWebHashHistory } from 'vue-router'
+import { createPinia, setActivePinia } from 'pinia'
+import { useAuthStore } from '../../src/stores/authStore'
 import ChecklistsPage from '../../src/pages/ChecklistsPage.vue'
 import * as checklistApiModule from '../../src/services/checklistApi'
 
@@ -20,6 +22,9 @@ const router = createRouter({
 
 describe('ChecklistsPage', () => {
   beforeEach(() => {
+    setActivePinia(createPinia())
+    // 建立按鈕只對 editor 以上顯示
+    useAuthStore().role = 'editor'
     vi.mocked(checklistApiModule.listChecklists).mockResolvedValue({
       items: [
         { id: 'cl-1', name: 'Sprint 1', created_by: 'tester', case_count: 3, last_run_at: null, status: null },

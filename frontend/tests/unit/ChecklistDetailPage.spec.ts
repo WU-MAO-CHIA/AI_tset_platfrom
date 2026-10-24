@@ -1,12 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createRouter, createWebHashHistory } from 'vue-router'
+import { createPinia, setActivePinia } from 'pinia'
 import ChecklistDetailPage from '../../src/pages/ChecklistDetailPage.vue'
 import * as checklistApiModule from '../../src/services/checklistApi'
 
 vi.mock('../../src/services/checklistApi', () => ({
   getChecklist: vi.fn(),
-  updateChecklistItems: vi.fn(),
+  getChecklistCases: vi.fn(),
+  getChecklistExecutions: vi.fn(),
+  updateChecklist: vi.fn(),
+  deleteChecklist: vi.fn(),
+  patchChecklistCaseItem: vi.fn(),
 }))
 
 vi.mock('../../src/components/ChecklistView/index.vue', () => ({
@@ -24,6 +29,7 @@ const router = createRouter({
 
 describe('ChecklistDetailPage', () => {
   beforeEach(async () => {
+    setActivePinia(createPinia())
     vi.mocked(checklistApiModule.getChecklist).mockResolvedValue({
       id: 'cl-1',
       name: 'Sprint 1',
@@ -33,6 +39,8 @@ describe('ChecklistDetailPage', () => {
         { id: 'item-1', test_case_id: 'tc-1', order: 1, test_case: { case_number: 'TC-001', name: '登入測試', system_category: 'auth' } },
       ],
     } as any)
+    vi.mocked(checklistApiModule.getChecklistExecutions).mockResolvedValue({ items: [] } as any)
+    vi.mocked(checklistApiModule.getChecklistCases).mockResolvedValue({ items: [] } as any)
     await router.push('/checklists/cl-1')
     await router.isReady()
   })

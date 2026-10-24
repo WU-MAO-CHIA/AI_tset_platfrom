@@ -37,8 +37,12 @@ setup; this file covers what agents get wrong.
   afterwards.
 - `python -m pytest tests/unit tests/contract tests/integration` is safe and
   takes ~15 s; don't run `tests/load`.
+- CI (`.github/workflows/ci.yml`) runs these three dirs plus frontend
+  `npm test` and `npm run build` on every PR.
 - Auth: `Authorization: Bearer` header on all API routes **except** the SSE
-  stream, which reads the HttpOnly `access_token` cookie — FastAPI only binds
+  stream (cookie only) and `rf-report/` files (loaded by an `<iframe>`;
+  `get_current_user_header_or_cookie` accepts either). Both read the HttpOnly
+  `access_token` cookie — FastAPI only binds
   cookies via `Cookie()` annotation (a bare `str | None = None` param binds a
   query param, not the cookie). EventSource cannot send headers.
 - Single-worker uvicorn only: execution queues and explore sessions live in
@@ -47,13 +51,14 @@ setup; this file covers what agents get wrong.
 ## Frontend (`frontend/`, workdir `frontend/`)
 
 - Dev server proxies `/api` → `localhost:8000`, so SSE same-origin works.
-- `npx vue-tsc --noEmit` for typecheck (7 pre-existing errors as of 2026-09 —
-  don't chase them; just add none).
-- Vitest has no `include` filter, so **it also collects `tests/e2e/*.spec.ts`
-  (Playwright) and fails**. Always run unit paths explicitly, e.g.
-  `npx vitest run tests/unit/AIChatPanel.spec.ts`; never bare `npm test` for
-  verification. Monaco imports are aliased to `tests/__mocks__/` in
-  `vitest.config.ts`.
+- `npx vue-tsc --noEmit` for typecheck (0 errors as of 2026-10; keep it that way).
+- `package-lock.json` is committed; install with `npm ci`. Regenerate it with
+  npm 11+ (`npx npm@11 install`): npm 10's resolver crashes on this tree
+  (`Cannot read properties of null (reading 'edgesOut')`).
+- `npm test` runs only `tests/unit/**` (vitest `include`); Playwright e2e is
+  `npm run test:e2e`. Monaco imports are aliased to `tests/__mocks__/` in
+  `vitest.config.ts`; `tests/__mocks__/setup.ts` polyfills `Blob.arrayBuffer`
+  for jsdom.
 - Vue Test Utils quirks: `findComponent({ name })` misses `index.vue` SFCs
   without an explicit name — import the component and `findComponent(Comp)`.
   jsdom file inputs can't be set programmatically. Trigger form submit via
