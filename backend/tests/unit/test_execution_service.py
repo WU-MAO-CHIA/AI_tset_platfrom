@@ -12,6 +12,8 @@ from src.services.execution_service import ExecutionService
 @pytest.fixture
 def mock_db():
     session = AsyncMock()
+    # 排入佇列時會查詢排隊中的執行（spec 003）；回傳同步的 result 物件
+    session.execute.return_value = MagicMock()
     return session
 
 
