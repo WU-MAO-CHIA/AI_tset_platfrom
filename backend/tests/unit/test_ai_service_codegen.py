@@ -105,3 +105,32 @@ class TestGenerateRobotCode:
         )
         # After timeout, should return None (failed) and not raise
         assert result is None
+
+
+class TestCodeFenceStripping:
+    """LLM 用 ``` 包住腳本時，存下來的必須是純 .robot 內容（結尾 ``` 會讓 RF 解析失敗）。"""
+
+    async def test_generate_strips_markdown_fence(self, mock_provider):
+        mock_provider.complete = AsyncMock(return_value="```robot\n" + SAMPLE_BROWSER_RF + "```\n")
+        result = await AIService(provider=mock_provider).generate_robot_code(
+            case_number="TC-009", case_name="Fenced", main_steps="1. step", case_version=1,
+        )
+        assert result.startswith("*** Settings ***")
+        assert "```" not in result
+
+    async def test_preview_strips_fence_and_leading_text(self, mock_provider):
+        mock_provider.complete = AsyncMock(return_value="以下是腳本：\n```\n" + SAMPLE_BROWSER_RF + "```")
+        result = await AIService(provider=mock_provider).preview_robot_code(main_steps="1. step")
+        assert result.startswith("*** Settings ***")
+        assert "```" not in result
+
+    def test_chat_response_rf_code_is_unfenced(self):
+        raw = "---MESSAGE---\n好的\n---RF_CODE---\n```robot\n" + SAMPLE_BROWSER_RF + "```\n---END---"
+        message, rf_code = AIService(provider=MagicMock())._parse_chat_response(raw)
+        assert message == "好的"
+        assert rf_code.startswith("*** Settings ***")
+        assert "```" not in rf_code
+
+    async def test_unfenced_code_is_returned_unchanged(self, mock_provider):
+        result = await AIService(provider=mock_provider).preview_robot_code(main_steps="1. step")
+        assert result == SAMPLE_BROWSER_RF

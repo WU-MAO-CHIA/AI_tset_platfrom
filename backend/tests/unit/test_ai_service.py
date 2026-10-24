@@ -108,8 +108,11 @@ class TestAIServiceChatAndGenerateRF:
         call_args = mock_provider.complete_with_messages.call_args
         system_prompt = call_args.kwargs.get("system", "")
         assert "---UPLOADED RF CODE (SUMMARY)---" in system_prompt
-        # Summary should be shorter than full code
-        assert len(system_prompt) < 2000  # summary is truncated
+        # 只注入段落標題與案例名稱，不含步驟；長度以注入區塊計（與基本 prompt 長度無關）
+        injected = system_prompt.split("---UPLOADED RF CODE (SUMMARY)---", 1)[1]
+        assert "登入測試" in injected
+        assert "Click    button" not in injected
+        assert len(injected) < 1100  # 摘要上限 1000 字
 
     async def test_chat_none_mode_skips_rf_context(self, ai_service, mock_provider):
         """None mode: no RF code injected even when rf_code provided."""
