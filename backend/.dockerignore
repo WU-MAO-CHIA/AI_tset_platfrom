@@ -1,0 +1,26 @@
+# 本機環境與快取
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# 機密：容器改由 docker compose 的 env_file 注入
+.env
+.env.*
+!.env.example
+
+# 執行期資料：容器改用 volume；.robot 腳本可能含測試帳密，不可打包進 image
+data/
+execution_reports/
+robot_scripts/
+*.db
+log.html
+output.xml
+report.html
+playwright-log.txt
+
+# 測試不進執行用的 image
+tests/
+conftest.py
+pytest.ini
+requirements-dev.txt

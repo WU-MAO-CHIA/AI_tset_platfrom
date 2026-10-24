@@ -2,11 +2,110 @@
 
 ## 系統需求
 
+以 Docker 執行只需要 Docker Desktop；在本機直接開發才需要 Python、Node.js、npm。
+
 | 工具 | 版本 | 用途 |
 |------|------|------|
-| Python | 3.11+ | 後端運行環境 |
-| Node.js | 18+ | 前端建置工具 |
-| npm | 9+ | 前端套件管理 |
+| Docker Desktop | 含 Compose v2 | 以容器執行（見「快速開始：使用 Docker 執行」） |
+| Python | 3.11+ | 後端運行環境（本機開發） |
+| Node.js | 18+ | 前端建置工具（本機開發） |
+| npm | 9+ | 前端套件管理（本機開發） |
+
+---
+
+## 快速開始：使用 Docker 執行
+
+前後端都在容器中執行，不需要在本機安裝 Python、Node.js 或瀏覽器。
+
+### 1. 開啟 Docker Desktop
+
+確認 Docker Desktop 已在執行（`docker info` 能正常回應）。
+
+### 2. 設定 `backend/.env`
+
+容器與本機開發共用同一份設定檔：
+
+```powershell
+Copy-Item backend\.env.example backend\.env   # 已經有 .env 就略過
+```
+
+需要填寫的欄位：
+
+| 欄位 | 說明 |
+|------|------|
+| `JWT_SECRET_KEY` | 至少 32 字元的固定隨機字串；一旦更換，已登入的使用者都必須重新登入 |
+| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | 初始管理員帳號，容器第一次啟動時自動建立 |
+| `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` | 至少填一組，AI 功能才能使用 |
+| `APP_ENV` | `dev` 或 `prod`；`prod` 會拒絕以預設的 `JWT_SECRET_KEY`、`ADMIN_PASSWORD` 啟動 |
+| `OLLAMA_BASE_URL` | （選用）使用主機上的 Ollama 時填 `http://host.docker.internal:11434` |
+
+`DATABASE_URL`、`MEDIA_ROOT`、`ROBOT_SCRIPTS_DIR` 由 `docker-compose.yml` 固定為容器內的路徑，`.env` 裡的值不會影響容器。
+
+### 3. 建置並啟動
+
+```powershell
+docker compose up -d --build
+```
+
+第一次建置需要下載瀏覽器，約需數分鐘。完成後確認狀態，`backend` 應顯示 `healthy`（`frontend` 會等 `backend` 就緒才啟動）：
+
+```powershell
+docker compose ps
+```
+
+### 4. 開啟網頁
+
+瀏覽 http://localhost:8080 ，以 `.env` 中的 `ADMIN_USERNAME` / `ADMIN_PASSWORD` 登入。
+
+### 常用操作
+
+```powershell
+docker compose logs -f backend      # 查看後端 log（啟動失敗時先看這裡）
+docker compose up -d --build        # 修改程式碼後，重新建置並啟動
+docker compose up -d                # 修改 backend/.env 後重新建立容器（restart 不會重新讀取 .env）
+docker compose down                 # 停止服務（保留資料）
+docker compose down -v              # 停止並刪除所有資料（資料庫、附件、腳本）
+```
+
+改用其他 port（預設 8080）：
+
+```powershell
+$env:FRONTEND_PORT = "9090"; docker compose up -d
+```
+
+### 架構與資料
+
+| 服務 | 說明 |
+|------|------|
+| `frontend` | nginx 提供前端網頁，並把 `/api` 轉給後端；對外 port 預設 8080 |
+| `backend` | FastAPI + Robot Framework + Playwright，不對外開放 port。每次啟動會自動套用資料庫 migration，並在帳號不存在時建立初始 admin |
+
+資料存放在 Docker volume，`docker compose down` 不會刪除：
+
+- `backend-data`：資料庫、附件、執行報告
+- `robot-scripts`：產生的 .robot 腳本
+
+容器的資料與本機開發的 `backend/data/` 是分開的，第一次啟動會是全新的資料庫。
+
+### 注意事項
+
+- **使用 `APP_ENV=prod` 時**：登入 cookie 會帶 `Secure`。若用 `http://` 從 localhost 以外的位址連線，測試執行的即時進度無法顯示，需改用 HTTPS。
+- **容器內的 `localhost` 指的是容器本身**，不是你的電腦；要連主機上的服務請用 `host.docker.internal`。
+- **後端只能執行一個實例**：執行佇列存在記憶體中，請勿水平擴充 `backend` 服務。
+
+### 常見問題
+
+**Q: docker 指令出現 `failed to connect to the docker API ... dockerDesktopLinuxEngine`**
+Docker Desktop 沒有在執行。開啟後等它顯示 running 再重試。
+
+**Q: 出現 `env file ... backend/.env not found`**
+尚未建立 `backend/.env`，依上方步驟 2 建立。
+
+**Q: `docker compose ps` 中 `backend` 一直不是 `healthy`**
+執行 `docker compose logs backend` 查看原因。常見的是 `JWT_SECRET_KEY` 不足 32 字元，或 `APP_ENV=prod` 時仍使用預設的 `JWT_SECRET_KEY` / `ADMIN_PASSWORD`。
+
+**Q: 啟動時顯示 port 8080 已被占用**
+改用其他 port，見上方「改用其他 port」。
 
 ---
 

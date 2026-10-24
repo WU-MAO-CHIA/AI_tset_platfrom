@@ -1,0 +1,49 @@
+# AutoTest Platform — 以 Docker 執行前後端
+#
+#   準備：cp backend/.env.example backend/.env，填入 LLM 金鑰、JWT_SECRET_KEY、ADMIN_PASSWORD
+#   啟動：docker compose up -d --build
+#   開啟：http://localhost:8080（以環境變數 FRONTEND_PORT 變更）
+#
+# 後端不對外開放 port，只能經由 frontend 的 nginx（/api）存取。
+
+name: autotest
+
+services:
+  backend:
+    build: ./backend
+    env_file: ./backend/.env
+    environment:
+      # 固定使用容器內的資料路徑，覆寫 .env 中供本機開發用的設定。
+      # DATABASE_URL 須與 alembic.ini 的 sqlalchemy.url 一致（migration 讀的是 alembic.ini）。
+      DATABASE_URL: sqlite+aiosqlite:///./data/autotest.db
+      MEDIA_ROOT: ./data/media
+      ROBOT_SCRIPTS_DIR: ./robot_scripts
+      EXECUTION_REPORTS_DIR: ./data/execution_reports
+    volumes:
+      - backend-data:/app/data            # SQLite、附件、執行報告
+      - robot-scripts:/app/robot_scripts  # 產生的 .robot 腳本
+    extra_hosts:
+      # 容器內以 host.docker.internal 連到主機（例如本機 Ollama：OLLAMA_BASE_URL=http://host.docker.internal:11434）
+      - "host.docker.internal:host-gateway"
+    init: true      # 回收 robot / chromium 子程序
+    shm_size: 1gb   # Chromium 在預設 64MB 的 /dev/shm 下容易崩潰
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  backend-data:
+  robot-scripts:
