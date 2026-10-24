@@ -50,7 +50,9 @@ setup; this file covers what agents get wrong.
   (`src/execution/worker.py`, started on app startup — not in tests). Trigger
   endpoints only write a `pending` record with a `params` snapshot; the worker
   claims by `priority DESC, queued_at` (trial runs first) up to
-  `EXECUTION_MAX_CONCURRENT`. Execution progress events are in
+  `EXECUTION_MAX_CONCURRENT`. `POST /executions/{id}/cancel` only cancels
+  `pending` (conditional UPDATE, so it can't race the worker's claim); running
+  returns 409. Execution progress events are in
   the `execution_events` table (`src/execution/events.py`, `EventSink`); the
   SSE route polls it, so tests that stream must point
   `src.api.executions.AsyncSessionLocal` and `src.core.database.AsyncSessionLocal`

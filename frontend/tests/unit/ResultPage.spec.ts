@@ -10,7 +10,7 @@ vi.mock('../../src/services/executionApi', () => ({
   getRfReportStatus: vi.fn(),
   streamExecution: vi.fn(),
   isTerminalEvent: (data: any) =>
-    ['execution_completed', 'execution_error', 'execution_interrupted'].includes(data?.event),
+    ['execution_completed', 'execution_error', 'execution_interrupted', 'execution_cancelled'].includes(data?.event),
 }))
 
 vi.mock('vue-router', () => ({
@@ -78,6 +78,18 @@ describe('ResultPage', () => {
     expect(iframe.exists()).toBe(true)
     expect(iframe.attributes('src')).toBe('/api/v1/executions/exec-1/rf-report/report.html')
     expect(wrapper.find('[data-testid="rf-report-missing"]').exists()).toBe(false)
+  })
+
+  it('treats a cancelled execution as finished and explains why', async () => {
+    mockTerminal('cancelled')
+    vi.mocked(executionApiModule.getRfReportStatus).mockResolvedValue({ available: false } as any)
+
+    const wrapper = mount(ResultPage)
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="cancelled-notice"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('已取消')
+    expect(executionApiModule.streamExecution).not.toHaveBeenCalled()
   })
 
   it('treats an interrupted execution as finished and explains why', async () => {

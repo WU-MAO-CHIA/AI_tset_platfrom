@@ -36,6 +36,12 @@ export async function getExecution(executionId: string): Promise<ExecutionRecord
   return res.data
 }
 
+// 只能取消排隊中（pending）的執行；已開始執行會回 409
+export async function cancelExecution(executionId: string): Promise<ExecutionRecord> {
+  const res = await apiClient.post<ExecutionRecord>(`/executions/${executionId}/cancel`)
+  return res.data
+}
+
 export async function getExecutionResults(
   executionId: string
 ): Promise<{ items: CaseResultItem[]; total: number }> {
@@ -54,7 +60,7 @@ export async function getRfReportStatus(
 }
 
 // 收到這些事件代表執行已結束，串流不會再有新事件
-const TERMINAL_EVENTS = ['execution_completed', 'execution_error', 'execution_interrupted']
+const TERMINAL_EVENTS = ['execution_completed', 'execution_error', 'execution_interrupted', 'execution_cancelled']
 
 export function isTerminalEvent(data: unknown): boolean {
   const event = (data as { event?: string } | null)?.event
