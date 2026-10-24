@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import axios from 'axios'
+import { cancelSessionExpiry, scheduleSessionExpiry } from '../services/session'
 
 export const useAuthStore = defineStore('auth', () => {
   const token = ref<string | null>(null)
@@ -20,6 +21,7 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.setItem('access_token', data.access_token)
     localStorage.setItem('user_role', data.role)
     localStorage.setItem('username', data.username)
+    scheduleSessionExpiry()
   }
 
   async function logout() {
@@ -28,6 +30,7 @@ export const useAuthStore = defineStore('auth', () => {
     } catch {
       // 後端清 cookie 失敗仍繼續清前端狀態，避免卡登出
     }
+    cancelSessionExpiry()
     token.value = null
     role.value = null
     username.value = null
@@ -45,6 +48,7 @@ export const useAuthStore = defineStore('auth', () => {
       token.value = storedToken
       role.value = storedRole
       username.value = storedUsername
+      scheduleSessionExpiry()
     }
   }
 

@@ -93,6 +93,10 @@ $env:FRONTEND_PORT = "9090"; docker compose up -d
 - **容器內的 `localhost` 指的是容器本身**，不是你的電腦；要連主機上的服務請用 `host.docker.internal`。
 - **後端只能執行一個實例**：執行佇列存在記憶體中，請勿水平擴充 `backend` 服務。
 
+### 部署到雲端主機
+
+免費部署到 Oracle Cloud Always Free 的 ARM VM（含 HTTPS 與備份），見 [docs/deploy-oracle.md](docs/deploy-oracle.md)。
+
 ### 常見問題
 
 **Q: docker 指令出現 `failed to connect to the docker API ... dockerDesktopLinuxEngine`**
@@ -161,7 +165,8 @@ OLLAMA_BASE_URL=http://localhost:11434
 
 # 必須設定為固定值，否則每次重啟 API Server 都會讓既有登入 token 失效（造成 401）
 JWT_SECRET_KEY=change-me-to-a-strong-random-secret-key
-JWT_EXPIRE_HOURS=168
+# 閒置逾時（分鐘）：有操作就自動續期，閒置超過才需重新登入
+JWT_EXPIRE_MINUTES=10
 
 # 初始管理員帳號（供 scripts/seed_admin.py 使用，見下方步驟 6）
 ADMIN_USERNAME=admin

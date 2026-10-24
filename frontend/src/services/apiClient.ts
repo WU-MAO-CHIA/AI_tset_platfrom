@@ -1,4 +1,5 @@
 import axios, { type AxiosError } from 'axios'
+import { RENEWED_TOKEN_HEADER, clearSession, storeRenewedToken } from './session'
 
 const apiClient = axios.create({
   baseURL: '/api/v1',
@@ -20,14 +21,15 @@ apiClient.interceptors.request.use((config) => {
 let _redirectingToLogin = false
 
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    storeRenewedToken(response.headers[RENEWED_TOKEN_HEADER])
+    return response
+  },
   (error: AxiosError<{ error: string; message: string }>) => {
     if (error.response?.status === 401) {
       if (!_redirectingToLogin) {
         _redirectingToLogin = true
-        localStorage.removeItem('access_token')
-        localStorage.removeItem('user_role')
-        localStorage.removeItem('username')
+        clearSession()
         window.location.href = '/login'
         // reset flag after navigation (2s buffer)
         setTimeout(() => { _redirectingToLogin = false }, 2000)
