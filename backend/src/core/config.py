@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     robot_scripts_dir: str = "./robot_scripts"
     execution_reports_dir: str = "./data/execution_reports"
     parallel_max_workers: int = 5
+    # 同時執行幾筆執行（清單或試跑，各自是一個 robot / pabot 子程序）；仍只有一個 uvicorn 行程
+    execution_max_concurrent: int = 1
 
     anthropic_api_key: str = ""
     openai_api_key: str = ""

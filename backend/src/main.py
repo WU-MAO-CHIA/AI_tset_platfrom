@@ -97,7 +97,16 @@ async def startup_event() -> None:
         if settings.is_default_admin_password():
             logger.warning("Using default ADMIN_PASSWORD — change it via .env")
     await _recover_executions()
+    # 恢復程序之後才開啟 worker：重啟前的 running 已標為 interrupted，pending 會依序被領取
+    from src.execution.worker import get_worker
+    get_worker().start()
     asyncio.create_task(_cleanup_trial_runs())
+
+
+@app.on_event("shutdown")
+async def shutdown_event() -> None:
+    from src.execution.worker import get_worker
+    await get_worker().stop()
 
 
 async def _recover_executions() -> None:

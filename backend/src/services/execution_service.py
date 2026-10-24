@@ -78,6 +78,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import AsyncSessionLocal
 from src.execution.events import EventSink
+from src.execution.worker import PRIORITY_CHECKLIST, PRIORITY_TRIAL_RUN
 from src.models.execution_record import ExecutionRecord
 from src.repositories.checklist_repo import ChecklistRepository
 from src.repositories.execution_repo import ExecutionRepository
@@ -111,27 +112,46 @@ class ExecutionService:
             await self._exec_repo.update_status(record.id, status="completed", passed_count=0, failed_count=0, total_count=0)
             return record
 
-        from datetime import datetime, timezone
         case_ids = [item.test_case_id for item in checklist.items]
         concurrency = max_workers if parallel_mode else 1
-        await self._exec_repo.update(record.id, status="running", total_count=len(case_ids), started_at=datetime.now())
-        await self._session.flush()
-
-        asyncio.create_task(
-            ExecutionService._execute_all_cases_bg(record.id, case_ids, concurrency)
+        # 只排入佇列，由 ExecutionWorker 領取執行；參數於觸發當下存成快照
+        await self._enqueue(
+            record.id,
+            params={"case_ids": case_ids, "concurrency": concurrency},
+            priority=PRIORITY_CHECKLIST,
+            total_count=len(case_ids),
         )
         return record
 
     async def run_trial(self, source_case_id: str, rf_code: Optional[str] = None, case_name: Optional[str] = None) -> ExecutionRecord:
         """Phase 27: Execute trial run with optional RF code override."""
-        from datetime import datetime, timezone
         record = await self._exec_repo.create_for_trial_run(source_case_id=source_case_id)
-        await self._exec_repo.update(record.id, status="running", total_count=1, started_at=datetime.now())
-        await self._session.flush()
-        asyncio.create_task(
-            ExecutionService._execute_trial_bg(record.id, source_case_id, rf_code=rf_code, case_name=case_name)
+        # 試跑是使用者在案例頁等待結果的互動操作，優先於清單執行
+        await self._enqueue(
+            record.id,
+            params={"rf_code": rf_code, "case_name": case_name},
+            priority=PRIORITY_TRIAL_RUN,
+            total_count=1,
         )
         return record
+
+    async def _enqueue(self, execution_id: str, params: dict, priority: int, total_count: int) -> None:
+        from datetime import datetime
+        from src.execution.worker import emit_queue_positions, get_worker
+
+        await self._exec_repo.update(
+            execution_id,
+            status="pending",
+            params=params,
+            priority=priority,
+            queued_at=datetime.now(),
+            total_count=total_count,
+        )
+        await self._session.flush()
+        await emit_queue_positions(self._session)
+        # 先 commit 再通知 worker，worker 才看得到這筆 pending
+        await self._session.commit()
+        get_worker().notify()
 
     @staticmethod
     async def _execute_trial_bg(execution_id: str, source_case_id: str, rf_code: Optional[str] = None, case_name: Optional[str] = None) -> None:
