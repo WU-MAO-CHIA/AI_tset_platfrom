@@ -18,9 +18,13 @@
 
       <div v-if="execution" class="execution-summary">
         <span>執行 ID：{{ execution.id }}</span>
-        <span>狀態：{{ execution.status }}</span>
+        <span>狀態：{{ executionStatusLabel(execution.status) }}</span>
         <span>通過：{{ execution.passed_count }}</span>
         <span>失敗：{{ execution.failed_count }}</span>
+      </div>
+
+      <div v-if="execution?.status === 'interrupted'" class="interrupted-notice" data-testid="interrupted-notice">
+        執行因服務重啟而中斷，以下為中斷前已完成的案例結果。
       </div>
 
       <div v-if="caseResults.length" class="case-results" data-testid="case-results">
@@ -40,7 +44,7 @@
       </div>
 
       <div class="rf-report-tab">
-        <template v-if="execution && (execution.status === 'completed' || execution.status === 'failed')">
+        <template v-if="execution && isFinished(execution.status)">
           <!-- checklist 多案例時顯示案例選擇器 -->
           <div v-if="!execution.source_case_id && caseResults.length > 1" class="case-selector">
             <label>選擇案例：</label>
@@ -107,7 +111,7 @@ async function fetchResults() {
 
     // 試跑／執行在背景非同步進行，剛導頁進來時通常還是 running，
     // 訂閱 SSE 等待完成後再重新抓一次以取得最終狀態與報告
-    if (execution.value.status !== 'completed' && execution.value.status !== 'failed' && !evtSource) {
+    if (!isFinished(execution.value.status) && !evtSource) {
       evtSource = streamExecution(executionId.value, (data) => {
         const event = data as { event?: string }
         if (event.event === 'execution_completed' || event.event === 'execution_error') {
@@ -115,7 +119,7 @@ async function fetchResults() {
           fetchResults()
         }
       })
-    } else if (execution.value.status === 'completed' || execution.value.status === 'failed') {
+    } else if (isFinished(execution.value.status)) {
       // 終態才查報告是否存在，避免 iframe 直接渲染 404 JSON
       await checkReportAvailable()
     }
@@ -126,6 +130,26 @@ async function fetchResults() {
     // 401 由 apiClient 攔截後跳轉 /login，不需額外處理
   } finally {
     loading.value = false
+  }
+}
+
+// 不會再變動的執行狀態（與後端 TERMINAL_STATUSES 一致）
+const FINISHED_STATUSES = ['completed', 'failed', 'error', 'interrupted', 'cancelled']
+
+function isFinished(status: string): boolean {
+  return FINISHED_STATUSES.includes(status)
+}
+
+function executionStatusLabel(status: string): string {
+  switch (status) {
+    case 'pending': return '排隊中'
+    case 'running': return '執行中'
+    case 'completed': return '完成'
+    case 'failed': return '失敗'
+    case 'error': return '錯誤'
+    case 'interrupted': return '已中斷'
+    case 'cancelled': return '已取消'
+    default: return status
   }
 }
 
@@ -249,6 +273,13 @@ onUnmounted(() => evtSource?.close())
   border: none;
   border-radius: 4px;
   cursor: pointer;
+}
+.interrupted-notice {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: #fff4e5;
+  color: #8a5300;
 }
 .fetch-error {
   padding: 40px;

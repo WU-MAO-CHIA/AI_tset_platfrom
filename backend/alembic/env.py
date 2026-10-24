@@ -22,6 +22,7 @@ from src.models.media_attachment import MediaAttachment  # noqa: E402, F401
 from src.models.test_checklist import TestChecklist  # noqa: E402, F401
 from src.models.checklist_item import ChecklistItem  # noqa: E402, F401
 from src.models.execution_record import ExecutionRecord  # noqa: E402, F401
+from src.models.execution_event import ExecutionEvent  # noqa: E402, F401
 from src.models.db_connection import DBConnection  # noqa: E402, F401
 from src.models.automation_code import AutomationCode  # noqa: E402, F401
 from src.models.case_result import CaseResult  # noqa: E402, F401

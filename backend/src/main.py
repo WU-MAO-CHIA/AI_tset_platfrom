@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy import update
 
 # Import all models to register them with SQLAlchemy mapper before any query
-from src.models import test_case, test_data, media_attachment, test_checklist, checklist_item, execution_record, db_connection, automation_code, case_result, execution_media, case_chat_message, robot_script, user, system_category, app_setting  # noqa: F401
+from src.models import test_case, test_data, media_attachment, test_checklist, checklist_item, execution_record, execution_event, db_connection, automation_code, case_result, execution_media, case_chat_message, robot_script, user, system_category, app_setting  # noqa: F401
 from src.models.execution_record import ExecutionRecord
 
 logger = logging.getLogger(__name__)
@@ -90,7 +90,19 @@ async def startup_event() -> None:
             logger.warning("Using default JWT_SECRET_KEY — set a strong value via .env for any shared deployment")
         if settings.is_default_admin_password():
             logger.warning("Using default ADMIN_PASSWORD — change it via .env")
+    await _recover_executions()
     asyncio.create_task(_cleanup_trial_runs())
+
+
+async def _recover_executions() -> None:
+    from src.core.database import AsyncSessionLocal
+    from src.execution.recovery import mark_interrupted_executions
+    try:
+        async with AsyncSessionLocal() as session:
+            await mark_interrupted_executions(session)
+    except Exception:
+        # 恢復失敗不應阻止服務啟動（例如 migration 尚未套用）
+        logger.exception("Execution recovery on startup failed")
 
 
 class HealthResponse(BaseModel):
