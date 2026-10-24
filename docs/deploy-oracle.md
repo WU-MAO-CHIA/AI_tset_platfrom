@@ -71,7 +71,7 @@ nano backend/.env
 | `JWT_SECRET_KEY` | 上面 `openssl` 產生的字串 |
 | `ADMIN_PASSWORD` | 強密碼（`prod` 拒絕預設的 `admin`） |
 | `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` | 至少一組 |
-| `JWT_EXPIRE_HOURS` | 登入有效時數，須為整數；範例檔預設 `1`，覺得太常要重新登入可改為 `168`（7 天） |
+| `JWT_EXPIRE_MINUTES` | 閒置逾時（分鐘，整數）；範例檔為 `10`，有操作就自動續期，閒置超過才需重新登入 |
 | `OLLAMA_BASE_URL` | 留空（VM 上沒有 Ollama） |
 
 讓前端只聽本機，對外一律經過 Caddy：

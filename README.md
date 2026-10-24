@@ -165,7 +165,8 @@ OLLAMA_BASE_URL=http://localhost:11434
 
 # 必須設定為固定值，否則每次重啟 API Server 都會讓既有登入 token 失效（造成 401）
 JWT_SECRET_KEY=change-me-to-a-strong-random-secret-key
-JWT_EXPIRE_HOURS=168
+# 閒置逾時（分鐘）：有操作就自動續期，閒置超過才需重新登入
+JWT_EXPIRE_MINUTES=10
 
 # 初始管理員帳號（供 scripts/seed_admin.py 使用，見下方步驟 6）
 ADMIN_USERNAME=admin

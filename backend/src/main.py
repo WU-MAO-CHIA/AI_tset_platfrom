@@ -23,7 +23,39 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Accept"],
+    expose_headers=["X-Access-Token"],
 )
+
+
+_NO_RENEW_PATHS = ("/api/v1/auth/login", "/api/v1/auth/logout")
+
+
+@app.middleware("http")
+async def sliding_session_middleware(request: Request, call_next):
+    """閒置逾時：通過驗證的 API 請求都換發新 token（X-Access-Token header + cookie），
+    有操作就延長，閒置超過 JWT_EXPIRE_MINUTES 才過期。"""
+    from jose import JWTError
+    from src.core.security import create_access_token, decode_token
+    from src.services.auth_service import set_auth_cookie
+
+    response = await call_next(request)
+    path = request.url.path
+    if response.status_code >= 400 or not path.startswith("/api/") or path in _NO_RENEW_PATHS:
+        return response
+    auth = request.headers.get("authorization", "")
+    token = auth[7:] if auth.lower().startswith("bearer ") else request.cookies.get("access_token")
+    if not token:
+        return response
+    try:
+        payload = decode_token(token)
+    except JWTError:
+        return response
+    if not payload.get("sub"):
+        return response
+    new_token = create_access_token(sub=payload["sub"], role=payload.get("role"))
+    response.headers["X-Access-Token"] = new_token
+    set_auth_cookie(response, new_token)
+    return response
 
 
 @app.middleware("http")

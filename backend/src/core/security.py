@@ -17,7 +17,7 @@ oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", aut
 
 def create_access_token(sub: str, role: str) -> str:
     now = datetime.now(timezone.utc)
-    expire = now + timedelta(hours=settings.jwt_expire_hours)
+    expire = now + timedelta(minutes=settings.jwt_expire_minutes)
     payload = {"sub": sub, "role": role, "iat": now, "jti": uuid.uuid4().hex, "exp": expire}
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=ALGORITHM)
 

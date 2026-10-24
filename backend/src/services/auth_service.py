@@ -6,6 +6,21 @@ from src.core.security import create_access_token, verify_password
 from src.repositories.user_repo import UserRepository
 
 
+def set_auth_cookie(response: Response, token: str) -> None:
+    settings = get_settings()
+    # HttpOnly cookie 僅供 SSE（EventSource 無法自訂 header）使用；
+    # 一般 API 仍走 Authorization: Bearer。prod 強制 Secure。
+    response.set_cookie(
+        key="access_token",
+        value=token,
+        httponly=True,
+        secure=settings.app_env == "prod",
+        samesite="lax",
+        max_age=settings.jwt_expire_minutes * 60,
+        path="/",
+    )
+
+
 class AuthService:
     def __init__(self, db: AsyncSession):
         self.repo = UserRepository(db)
@@ -19,18 +34,7 @@ class AuthService:
         token = create_access_token(sub=user.username, role=user.role)
 
         if response is not None:
-            settings = get_settings()
-            # HttpOnly cookie 僅供 SSE（EventSource 無法自訂 header）使用；
-            # 一般 API 仍走 Authorization: Bearer。prod 強制 Secure。
-            response.set_cookie(
-                key="access_token",
-                value=token,
-                httponly=True,
-                secure=settings.app_env == "prod",
-                samesite="lax",
-                max_age=settings.jwt_expire_hours * 3600,
-                path="/",
-            )
+            set_auth_cookie(response, token)
 
         return {
             "access_token": token,

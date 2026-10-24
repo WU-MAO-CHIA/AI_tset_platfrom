@@ -4,6 +4,7 @@ import axios from 'axios'
 import router from './router'
 import App from './App.vue'
 import { useAuthStore } from './stores/authStore'
+import { RENEWED_TOKEN_HEADER, clearSession, storeRenewedToken } from './services/session'
 
 async function initApp() {
   const app = createApp(App)
@@ -17,17 +18,16 @@ async function initApp() {
   const storedToken = localStorage.getItem('access_token')
   if (storedToken) {
     try {
-      await axios.get('/api/v1/auth/me', {
+      const res = await axios.get('/api/v1/auth/me', {
         headers: { Authorization: `Bearer ${storedToken}` },
       })
+      storeRenewedToken(res.headers[RENEWED_TOKEN_HEADER])
       // token 有效，載入 authStore
       authStore.initFromStorage()
     } catch (err: any) {
       if (err?.response?.status === 401 || err?.response?.status === 403) {
         // token 過期或無效，清除讓路由守衛導向 /login
-        localStorage.removeItem('access_token')
-        localStorage.removeItem('user_role')
-        localStorage.removeItem('username')
+        clearSession()
       } else {
         // 網路錯誤等非 auth 問題，仍保留 token（可能 backend 暫時不可用）
         authStore.initFromStorage()

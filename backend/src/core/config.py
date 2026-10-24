@@ -26,8 +26,8 @@ class Settings(BaseSettings):
     ollama_base_url: str = ""
 
     jwt_secret_key: str = "dev-secret-key-change-in-production"
-    # 168h = 7 天，避免測試人員每天重新登入而觸發 token 過期 401
-    jwt_expire_hours: int = 168
+    # 閒置逾時（分鐘）：每次通過驗證的請求都會換發新 token，閒置超過此時間才需重新登入
+    jwt_expire_minutes: int = 10080
     admin_username: str = "admin"
     admin_password: str = "admin"
 
