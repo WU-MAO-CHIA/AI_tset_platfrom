@@ -63,6 +63,15 @@ class TestOllamaProvider:
         assert roles[0] == "system"
         assert captured["json"]["messages"][0]["content"] == "你是助手"
 
+    async def test_cache_prefix_is_accepted_and_ignored(self):
+        captured: dict = {}
+        with _patch_async_client(captured, content="OK"):
+            provider = OllamaProvider(base_url="http://localhost:11434", model="gemma4:e4b")
+            await provider.complete_with_messages(
+                [{"role": "user", "content": "問題"}], system="規則\n\n情境", cache_prefix="規則"
+            )
+        assert captured["json"]["messages"][0]["content"] == "規則\n\n情境"
+
     async def test_model_name_without_prefix_kept(self):
         captured: dict = {}
         with _patch_async_client(captured):

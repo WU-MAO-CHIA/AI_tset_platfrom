@@ -30,7 +30,7 @@ class MockLLMProvider:
     async def complete_with_vision(self, prompt: str, media: list) -> str:
         return await self.complete(prompt)
 
-    async def complete_with_messages(self, messages: list, system: str = "") -> str:
+    async def complete_with_messages(self, messages: list, system: str = "", cache_prefix: str = "") -> str:
         return await self.complete(system)
 
 

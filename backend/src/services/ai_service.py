@@ -330,7 +330,10 @@ class AIService:
         conversation = [*messages, {"role": "user", "content": user_message}]
         try:
             raw = await asyncio.wait_for(
-                self.provider.complete_with_messages(conversation, system=system_prompt),
+                # 固定的規則可快取；其後的 RF 程式碼與頁面元素每次可能不同
+                self.provider.complete_with_messages(
+                    conversation, system=system_prompt, cache_prefix=_CHAT_SYSTEM_PROMPT,
+                ),
                 timeout=timeout_sec,
             )
         except asyncio.TimeoutError:

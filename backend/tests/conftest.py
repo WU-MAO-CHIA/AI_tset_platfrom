@@ -35,7 +35,7 @@ class FakeLLMProvider:
     async def complete_with_vision(self, prompt: str, media_list: list) -> str:
         return self.RF_CODE
 
-    async def complete_with_messages(self, messages: list[dict], system: str = "") -> str:
+    async def complete_with_messages(self, messages: list[dict], system: str = "", cache_prefix: str = "") -> str:
         return f"---MESSAGE---\nfake reply\n---RF_CODE---\n{self.RF_CODE}\n---END---"
 
 

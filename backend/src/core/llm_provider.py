@@ -1,6 +1,12 @@
+import logging
 from typing import Protocol, runtime_checkable
 
 import httpx
+
+logger = logging.getLogger(__name__)
+
+# 5 分鐘 TTL：對話與探索 agent 的連續請求多在 5 分鐘內，讀取會刷新計時，比 1 小時 TTL（寫入 2 倍）便宜
+_EPHEMERAL_CACHE = {"type": "ephemeral"}
 
 
 @runtime_checkable
@@ -11,8 +17,24 @@ class LLMProvider(Protocol):
     async def complete_with_vision(self, prompt: str, media_list: list) -> str:
         ...
 
-    async def complete_with_messages(self, messages: list[dict], system: str = "") -> str:
+    async def complete_with_messages(self, messages: list[dict], system: str = "", cache_prefix: str = "") -> str:
+        """cache_prefix：system 開頭固定不變的部分（須為 system 的前綴），支援 prompt caching 的
+        provider 會在其結尾設快取點；空字串表示整段 system 都固定。"""
         ...
+
+
+def _anthropic_system_blocks(system: str, cache_prefix: str) -> list[dict]:
+    """在 system 固定開頭的結尾設快取點；其後每次可能不同的內容（RF 程式碼、頁面元素）放在快取點之後，
+    變動時不會讓固定開頭的快取失效。"""
+    if cache_prefix and not system.startswith(cache_prefix):
+        # 呼叫端給的前綴對不上：不設快取點，避免每次都付寫入費卻讀不到
+        return [{"type": "text", "text": system}]
+    stable = cache_prefix or system
+    blocks = [{"type": "text", "text": stable, "cache_control": _EPHEMERAL_CACHE}]
+    rest = system[len(stable):]
+    if rest.strip():
+        blocks.append({"type": "text", "text": rest})
+    return blocks
 
 
 class AnthropicProvider:
@@ -63,16 +85,25 @@ class AnthropicProvider:
         )
         return message.content[0].text
 
-    async def complete_with_messages(self, messages: list[dict], system: str = "") -> str:
+    async def complete_with_messages(self, messages: list[dict], system: str = "", cache_prefix: str = "") -> str:
         client = self._get_client()
         kwargs: dict = {
             "model": self.model,
             "max_tokens": 2048,
             "messages": messages,
+            # 自動快取：快取點跟著對話尾端前進，每輪都能讀到前面已快取的歷史
+            "cache_control": _EPHEMERAL_CACHE,
         }
         if system:
-            kwargs["system"] = system
+            kwargs["system"] = _anthropic_system_blocks(system, cache_prefix)
         message = await client.messages.create(**kwargs)
+        usage = message.usage
+        # 低於模型的最低可快取長度時 API 不報錯、只是不快取，靠這行確認實際命中情形
+        logger.info(
+            "anthropic %s tokens: input=%s cache_write=%s cache_read=%s output=%s",
+            self.model, usage.input_tokens, usage.cache_creation_input_tokens or 0,
+            usage.cache_read_input_tokens or 0, usage.output_tokens,
+        )
         return message.content[0].text
 
 
@@ -124,7 +155,7 @@ class OpenAIProvider:
         )
         return response.choices[0].message.content or ""
 
-    async def complete_with_messages(self, messages: list[dict], system: str = "") -> str:
+    async def complete_with_messages(self, messages: list[dict], system: str = "", cache_prefix: str = "") -> str:
         client = self._get_client()
         all_messages = messages
         if system:
@@ -166,7 +197,7 @@ class OllamaProvider:
         # 本地模型多不支援視覺；退化為純文字
         return await self.complete(prompt)
 
-    async def complete_with_messages(self, messages: list[dict], system: str = "") -> str:
+    async def complete_with_messages(self, messages: list[dict], system: str = "", cache_prefix: str = "") -> str:
         all_messages = messages
         if system:
             all_messages = [{"role": "system", "content": system}] + messages
