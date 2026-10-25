@@ -150,7 +150,7 @@ async function onTrialRun() {
 .rf-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .rf-header button { padding: 6px 14px; border: none; border-radius: 4px; cursor: pointer; background: #0f766e; color: white; font-size: 13px; }
 .rf-header button:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-save { background: #4f46e5 !important; }
+.btn-save { background: var(--brand) !important; color: var(--brand-ink) !important; }
 .btn-trial-run { background: #a855f7 !important; }
 .code-block { background: #1e1e2e; border-radius: 6px; padding: 12px; overflow-x: auto; }
 pre { margin: 0; }

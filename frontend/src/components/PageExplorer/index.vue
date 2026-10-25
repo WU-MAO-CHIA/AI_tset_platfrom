@@ -233,11 +233,11 @@ onUnmounted(stopPolling)
 .log-title { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
 .explore-log ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
 .log-step { color: #6b7280; margin-right: 6px; }
-.log-action { font-family: monospace; background: #eef2ff; padding: 1px 6px; border-radius: 4px; margin-right: 6px; }
+.log-action { font-family: monospace; background: var(--brand-soft); padding: 1px 6px; border-radius: 4px; margin-right: 6px; }
 .log-narrative { color: #374151; }
 .catalog-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .catalog-title { font-weight: 600; font-size: 14px; }
-.btn-apply { padding: 6px 14px; border: none; border-radius: 4px; background: #4f46e5; color: white; cursor: pointer; }
+.btn-apply { padding: 6px 14px; border: none; border-radius: 4px; background: var(--brand); color: var(--brand-ink); cursor: pointer; }
 .btn-apply:disabled { opacity: 0.6; cursor: not-allowed; }
 .catalog-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .catalog-table th, .catalog-table td { padding: 6px 8px; border-bottom: 1px solid #eee; text-align: left; vertical-align: top; }

@@ -74,8 +74,6 @@
         <h2>建立測試清單</h2>
         <label>清單名稱</label>
         <input v-model="newName" placeholder="Sprint 1 Tests" />
-        <label>建立者</label>
-        <input v-model="newCreatedBy" placeholder="tester" />
         <div class="modal-actions">
           <button class="btn-secondary" @click="showCreate = false">取消</button>
           <button class="btn-primary" :disabled="!newName" @click="handleCreate">建立</button>
@@ -103,7 +101,6 @@ const sortOrder = ref<'asc' | 'desc'>('desc')
 
 const showCreate = ref(false)
 const newName = ref('')
-const newCreatedBy = ref('')
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -144,9 +141,8 @@ async function fetchChecklists() {
 
 async function handleCreate() {
   if (!newName.value) return
-  await createChecklist({ name: newName.value, created_by: newCreatedBy.value, case_ids: [] })
+  await createChecklist({ name: newName.value, created_by: authStore.username ?? '', case_ids: [] })
   newName.value = ''
-  newCreatedBy.value = ''
   showCreate.value = false
   await fetchChecklists()
 }
@@ -185,13 +181,13 @@ h1 { font-size: 22px; }
 }
 .sortable { cursor: pointer; user-select: none; }
 .sortable:hover { background: #e9eaf0; }
-.sort-indicator { display: inline-block; width: 12px; color: #4f46e5; font-weight: 700; }
+.sort-indicator { display: inline-block; width: 12px; color: var(--brand-strong); font-weight: 700; }
 .checklist-table td {
   padding: 10px 12px;
   border-bottom: 1px solid #e5e7eb;
 }
 .clickable { cursor: pointer; }
-.clickable:hover { background: #f0f4ff; }
+.clickable:hover { background: var(--brand-soft); }
 .cl-name { font-weight: 500; }
 
 .status-badge {
@@ -210,7 +206,7 @@ h1 { font-size: 22px; }
 
 .pagination { display: flex; align-items: center; gap: 12px; margin-top: 16px; justify-content: center; }
 
-.btn-primary { background: #4f46e5; color: white; padding: 8px 20px; border: none; border-radius: 4px; cursor: pointer; }
+.btn-primary { background: var(--brand); color: var(--brand-ink); padding: 8px 20px; border: none; border-radius: 4px; cursor: pointer; }
 .btn-secondary { background: #e5e7eb; color: #374151; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; }
 
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 100; }

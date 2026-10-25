@@ -1,15 +1,18 @@
 <template>
   <div class="app-layout">
     <nav class="app-nav" v-if="!isLoginPage">
-      <RouterLink class="nav-brand" to="/">AutoTest</RouterLink>
+      <RouterLink class="nav-brand" to="/">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        自動化測試平台
+      </RouterLink>
       <button class="hamburger" @click="menuOpen = !menuOpen" aria-label="選單">
         {{ menuOpen ? '✕' : '☰' }}
       </button>
       <div class="nav-links" :class="{ open: menuOpen }" @click="menuOpen = false">
-        <RouterLink to="/cases" active-class="active">測試案例管理</RouterLink>
-        <RouterLink to="/checklists" active-class="active">測試清單</RouterLink>
-        <RouterLink to="/db-connections" active-class="active">資料庫連線</RouterLink>
-        <RouterLink v-if="authStore.isAdmin" to="/admin" active-class="active">管理後台</RouterLink>
+        <RouterLink to="/cases" :class="{ active: isSection('/cases') }">測試案例</RouterLink>
+        <RouterLink to="/checklists" :class="{ active: isSection('/checklists') }">測試清單</RouterLink>
+        <RouterLink to="/db-connections" :class="{ active: isSection('/db-connections') }">資料庫連線</RouterLink>
+        <RouterLink v-if="authStore.isAdmin" to="/admin" :class="{ active: isSection('/admin') }">管理後台</RouterLink>
       </div>
       <div class="nav-user" v-if="authStore.isLoggedIn">
         <span class="username">{{ authStore.username }}</span>
@@ -31,12 +34,12 @@ const menuOpen = ref(false)
 const authStore = useAuthStore()
 const route = useRoute()
 const isLoginPage = computed(() => route.path === '/login')
-</script>
 
-<style>
-* { box-sizing: border-box; margin: 0; padding: 0; font-family: inherit; }
-body { font-family: 'Noto Sans TC', system-ui, -apple-system, sans-serif; background: #f8fafc; color: #1e293b; }
-</style>
+// 詳情頁（/cases/:id 等）不是巢狀路由，RouterLink 的 active-class 不會套用，改以路徑前綴判斷
+function isSection(prefix: string): boolean {
+  return route.path === prefix || route.path.startsWith(`${prefix}/`)
+}
+</script>
 
 <style scoped>
 .app-layout { min-height: 100vh; display: flex; flex-direction: column; }
@@ -44,105 +47,98 @@ body { font-family: 'Noto Sans TC', system-ui, -apple-system, sans-serif; backgr
 .app-nav {
   display: flex;
   align-items: center;
-  gap: 32px;
-  padding: 0 24px;
-  height: 52px;
-  background: #1e293b;
+  gap: 40px;
+  padding: 0 32px;
+  height: var(--nav-h);
+  background: var(--brand-soft);
+  border-bottom: 1px solid var(--brand-line);
   position: sticky;
   top: 0;
   z-index: 100;
 }
 
 .nav-brand {
-  font-weight: 700;
-  font-size: 16px;
-  color: #f1f5f9;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  font-size: var(--fs-16);
+  color: var(--brand-ink);
   text-decoration: none;
-  letter-spacing: 0.5px;
+  white-space: nowrap;
 }
+
+.brand-mark { width: 20px; height: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }
+.brand-mark i { border-radius: 2px; background: var(--pass); }
+.brand-mark i:first-child { background: var(--brand); }
+.brand-mark i:last-child { background: var(--fail); }
 
 .hamburger {
   display: none;
   background: none;
   border: none;
-  color: #f1f5f9;
+  color: var(--brand-ink);
   font-size: 20px;
-  cursor: pointer;
   margin-left: auto;
   padding: 4px 8px;
 }
+.hamburger:hover:not(:disabled) { background: none; }
 
-.nav-links {
-  display: flex;
-  gap: 4px;
-  flex: 1;
-}
+.nav-links { display: flex; gap: 28px; flex: 1; height: 100%; }
 
 .nav-links a {
-  padding: 6px 14px;
-  border-radius: 6px;
-  color: #94a3b8;
-  text-decoration: none;
-  font-size: 14px;
-  font-weight: 500;
-  transition: background 0.15s, color 0.15s;
-}
-
-.nav-links a:hover { background: #334155; color: #e2e8f0; }
-.nav-links a.active { background: #4f46e5; color: white; }
-
-.nav-user {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-left: auto;
-  white-space: nowrap;
+  height: 100%;
+  color: var(--brand-ink-muted);
+  text-decoration: none;
+  font-size: var(--fs-14);
+  border-bottom: 2px solid transparent;
+  padding-top: 2px;
 }
 
-.username {
-  font-size: 0.875rem;
-  color: #94a3b8;
-}
+.nav-links a:hover { color: var(--brand-ink); }
+.nav-links a.active { color: var(--brand-ink); font-weight: 600; border-bottom-color: var(--brand); }
+
+.nav-user { display: flex; align-items: center; gap: 12px; margin-left: auto; white-space: nowrap; }
+.username { color: var(--brand-ink-muted); }
 
 .logout-btn {
-  background: none;
-  border: 1px solid #475569;
-  color: #94a3b8;
-  padding: 4px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.8rem;
-  transition: background 0.15s, color 0.15s;
+  background: transparent;
+  border: 1px solid var(--brand-line);
+  color: var(--brand-ink-muted);
+  min-height: 28px;
+  padding: 0 12px;
+  font-size: var(--fs-12);
 }
-
-.logout-btn:hover {
-  background: #334155;
-  color: #e2e8f0;
-}
+.logout-btn:hover:not(:disabled) { background: var(--paper); color: var(--brand-ink); }
 
 .app-main { flex: 1; }
 
 @media (max-width: 767px) {
+  .app-nav { padding: 0 16px; gap: 12px; }
   .hamburger { display: block; }
 
   .nav-links {
     display: none;
     position: absolute;
-    top: 52px;
+    top: var(--nav-h);
     left: 0;
     right: 0;
-    background: #1e293b;
+    height: auto;
+    background: var(--brand-soft);
+    border-bottom: 1px solid var(--brand-line);
     flex-direction: column;
     padding: 8px 16px 16px;
-    gap: 4px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    gap: 0;
     flex: none;
   }
 
   .nav-links.open { display: flex; }
-
-  .nav-links a { padding: 10px 14px; font-size: 15px; }
+  .nav-links a { padding: 12px 0; border-bottom: 0; font-size: var(--fs-16); }
+  .nav-links a.active { border-bottom: 0; box-shadow: inset 3px 0 0 var(--brand); padding-left: 12px; }
 
   .nav-user { margin-left: 0; }
+  .username { display: none; }
 }
 </style>

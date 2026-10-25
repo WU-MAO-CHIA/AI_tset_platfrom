@@ -231,16 +231,16 @@ h1 { font-size: 22px; margin-bottom: 4px; }
 .case-table th { background: #f9fafb; font-weight: 600; color: #374151; }
 
 .notes-input { width: 100%; border: 1px solid #e5e7eb; border-radius: 4px; padding: 4px 8px; font-size: 13px; }
-.notes-input:focus { outline: none; border-color: #6366f1; }
+.notes-input:focus { outline: none; border-color: var(--brand-strong); }
 
 .search-row { margin-bottom: 12px; }
 .search-input { width: 320px; border: 1px solid #d1d5db; border-radius: 6px; padding: 8px 12px; font-size: 14px; }
-.search-input:focus { outline: none; border-color: #6366f1; }
+.search-input:focus { outline: none; border-color: var(--brand-strong); }
 
 .empty { color: #9ca3af; font-size: 14px; padding: 16px 0; }
 .error-banner { background: #fee2e2; color: #991b1b; padding: 10px 16px; border-radius: 6px; margin-bottom: 16px; }
 
-.btn-primary { background: #4f46e5; color: white; padding: 8px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+.btn-primary { background: var(--brand); color: var(--brand-ink); padding: 8px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
 .btn-secondary { background: #e5e7eb; color: #374151; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
 .btn-danger-sm { background: #fee2e2; color: #dc2626; padding: 4px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 4px; }
 .btn-danger-sm:hover { background: #fecaca; }
