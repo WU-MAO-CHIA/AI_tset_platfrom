@@ -2,7 +2,7 @@
   <div class="execution-progress">
     <div class="progress-header">
       <h3>執行進度</h3>
-      <span class="status-badge" :class="store.executionStatus">{{ statusLabel }}</span>
+      <StatusBadge class="status-badge" :status="store.executionStatus" :label="statusLabel" />
     </div>
 
     <div v-if="store.executionStatus === 'pending'" class="queue-notice" data-testid="queue-notice">
@@ -44,6 +44,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useAuthStore } from '../../stores/authStore'
 import { useExecutionStore } from '../../stores/executionStore'
 import { cancelExecution, isTerminalEvent, streamExecution } from '../../services/executionApi'
+import StatusBadge from '../StatusBadge/index.vue'
 
 const props = defineProps<{ executionId: string }>()
 const emit = defineEmits<{ (e: 'completed'): void }>()
@@ -111,16 +112,29 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.execution-progress { display: flex; flex-direction: column; gap: 12px; }
+.progress-header { display: flex; align-items: center; gap: 12px; }
+.progress-header h3 { font-size: var(--fs-16); font-weight: 600; }
+
 .queue-notice {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 12px 0;
   padding: 10px 14px;
-  border-radius: 6px;
-  background: #fef3c7;
-  color: #92400e;
+  border-radius: var(--radius);
+  background: var(--queued-bg);
+  color: var(--queued);
 }
-.btn-secondary { background: #e5e7eb; color: #374151; padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
-.btn-secondary:disabled { opacity: 0.6; cursor: default; }
+
+.overall-progress { display: flex; align-items: center; gap: 12px; }
+.progress-bar { flex: 1; height: 10px; border-radius: 5px; background: var(--neutral-bg); overflow: hidden; }
+.progress-fill { height: 100%; background: var(--running); transition: width 0.3s; }
+.progress-text { color: var(--ink-muted); font-size: var(--fs-12); }
+
+.stats { display: flex; flex-wrap: wrap; gap: 16px; font-size: var(--fs-14); }
+.stat.pass { color: var(--pass); }
+.stat.fail { color: var(--fail); }
+.stat.running { color: var(--running); }
+
+.error-message { color: var(--fail); background: var(--fail-bg); padding: 10px 14px; border-radius: var(--radius); }
 </style>

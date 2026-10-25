@@ -2,26 +2,27 @@
   <div class="page">
     <div class="page-header">
       <h1>測試案例管理</h1>
-      <RouterLink v-if="authStore.isEditor" to="/cases/new">
-        <button class="primary">+ 建立案例</button>
-      </RouterLink>
+      <RouterLink v-if="authStore.isEditor" to="/cases/new" class="btn-primary">建立案例</RouterLink>
     </div>
     <TestCaseList ref="listRef" @select="onSelect" @edit="onEdit" @delete="onDelete" />
 
-    <div v-if="deleteConfirm" class="modal-overlay">
-      <div class="modal">
-        <p>確定刪除案例「{{ deleteConfirm.name }}」？</p>
+    <div v-if="deleteConfirm" class="modal-overlay" @click.self="deleteConfirm = null">
+      <div class="modal" role="alertdialog" aria-modal="true">
+        <h2>刪除案例「{{ deleteConfirm.name }}」？</h2>
+        <p v-if="!affectedChecklists.length" class="muted">刪除後無法復原。</p>
         <div v-if="affectedChecklists.length" class="warning">
-          此案例被以下清單引用，無法刪除：
+          這個案例還在以下清單中，請先從清單移除再刪除：
           <ul>
             <li v-for="cl in affectedChecklists" :key="cl.id">{{ cl.name }}</li>
           </ul>
         </div>
         <div class="modal-actions" v-if="!affectedChecklists.length">
-          <button @click="confirmDelete">確認刪除</button>
-          <button @click="deleteConfirm = null">取消</button>
+          <button class="btn-secondary" @click="deleteConfirm = null">取消</button>
+          <button class="btn-danger" @click="confirmDelete">刪除</button>
         </div>
-        <button v-else @click="deleteConfirm = null">關閉</button>
+        <div v-else class="modal-actions">
+          <button class="btn-secondary" @click="deleteConfirm = null">關閉</button>
+        </div>
       </div>
     </div>
   </div>
@@ -68,12 +69,7 @@ async function confirmDelete() {
 </script>
 
 <style scoped>
-.page { max-width: 1200px; margin: 0 auto; padding: 24px; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-h1 { font-size: 22px; }
-.primary { background: var(--brand); color: var(--brand-ink); padding: 8px 20px; border: none; border-radius: 4px; cursor: pointer; }
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; }
-.modal { background: white; padding: 24px; border-radius: 8px; min-width: 300px; }
-.warning { color: #dc2626; margin: 12px 0; }
-.modal-actions { display: flex; gap: 12px; margin-top: 16px; }
+.page-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 24px; }
+.warning { color: var(--fail); }
+.warning ul { margin: 8px 0 0 20px; color: var(--ink); }
 </style>

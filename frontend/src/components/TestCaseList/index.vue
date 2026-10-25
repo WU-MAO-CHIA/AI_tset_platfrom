@@ -8,7 +8,7 @@
       </select>
     </div>
 
-    <table v-if="!loading && cases.length" class="case-table">
+    <table v-if="!loading && cases.length" class="data-table responsive-table case-table">
       <thead>
         <tr>
           <th class="sortable" @click="toggleSort('case_number')">
@@ -31,21 +31,21 @@
       </thead>
       <tbody>
         <tr v-for="c in cases" :key="c.id" @click="$emit('select', c)" class="clickable">
-          <td>{{ c.case_number }}</td>
-          <td>{{ c.name }}</td>
-          <td>{{ c.system_category || '-' }}</td>
-          <td>v{{ c.version }}</td>
-          <td>{{ formatDate(c.updated_at) }}</td>
-          <td v-if="authStore.isEditor">
-            <button @click.stop="$emit('edit', c)">編輯</button>
-            <button @click.stop="$emit('delete', c)" class="danger">刪除</button>
+          <td data-label="編號" class="case-number">{{ c.case_number }}</td>
+          <td class="cell-title">{{ c.name }}</td>
+          <td data-label="系統別">{{ c.system_category || '-' }}</td>
+          <td data-label="版本">v{{ c.version }}</td>
+          <td data-label="更新時間">{{ formatDate(c.updated_at) }}</td>
+          <td v-if="authStore.isEditor" class="cell-actions row-actions">
+            <button class="btn-secondary" @click.stop="$emit('edit', c)">編輯</button>
+            <button class="btn-danger" @click.stop="$emit('delete', c)">刪除</button>
           </td>
         </tr>
       </tbody>
     </table>
 
-    <p v-else-if="!loading && !cases.length" class="empty">無符合條件的測試案例</p>
-    <p v-if="loading">載入中...</p>
+    <p v-else-if="!loading && !cases.length" class="empty-state">沒有符合條件的測試案例，試著調整搜尋或系統別。</p>
+    <p v-if="loading" class="empty-state">載入中...</p>
 
     <div class="pagination" v-if="total > pageSize">
       <button :disabled="page <= 1" @click="page--; load()">上一頁</button>
@@ -58,6 +58,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { caseApi, type TestCaseSummary } from '../../services/caseApi'
+import { formatDate } from '../../utils/format'
 import { useAuthStore } from '../../stores/authStore'
 
 const authStore = useAuthStore()
@@ -119,10 +120,6 @@ async function load() {
   }
 }
 
-function formatDate(iso: string | null) {
-  if (!iso) return '-'
-  return new Date(iso).toLocaleDateString('zh-TW')
-}
 
 onMounted(async () => {
   try {
@@ -139,18 +136,16 @@ defineExpose({ load })
 
 <style scoped>
 .case-list { display: flex; flex-direction: column; gap: 16px; }
-.filters { display: flex; gap: 12px; }
-.filters input, .filters select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
-.case-table { width: 100%; border-collapse: collapse; }
-.case-table th, .case-table td { padding: 10px; border-bottom: 1px solid #eee; text-align: left; font-size: 14px; }
-.case-table thead { background: #f9f9f9; }
-.sortable { cursor: pointer; user-select: none; }
-.sortable:hover { background: #f0f0f0; }
+.filters { display: flex; flex-wrap: wrap; gap: 12px; }
+.filters input { width: 320px; max-width: 100%; }
+.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+.sortable:hover { color: var(--ink); }
 .sort-indicator { display: inline-block; width: 12px; color: var(--brand-strong); font-weight: 700; }
+.case-number { color: var(--ink-muted); white-space: nowrap; }
 .clickable { cursor: pointer; }
-.clickable:hover { background: var(--brand-soft); }
-button { padding: 4px 10px; cursor: pointer; }
-.danger { color: red; }
-.pagination { display: flex; align-items: center; gap: 12px; }
-.empty { color: #888; text-align: center; }
+.clickable:hover td { background: var(--brand-soft); }
+.row-actions { white-space: nowrap; text-align: right; }
+.row-actions button { min-height: 30px; padding: 0 12px; }
+.row-actions button + button { margin-left: 8px; }
+.pagination { display: flex; align-items: center; justify-content: center; gap: 12px; color: var(--ink-muted); }
 </style>
