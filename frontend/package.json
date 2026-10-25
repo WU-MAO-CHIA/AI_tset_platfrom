@@ -12,10 +12,11 @@
     "lint": "eslint . --ext .vue,.ts,.tsx"
   },
   "dependencies": {
+    "@monaco-editor/loader": "^1.4.0",
     "@vueuse/core": "^11.2.0",
     "axios": "^1.7.7",
+    "element-plus": "^2.14.7",
     "monaco-editor": "^0.50.0",
-    "@monaco-editor/loader": "^1.4.0",
     "pinia": "^2.2.4",
     "vue": "^3.5.12",
     "vue-router": "^4.4.5"
