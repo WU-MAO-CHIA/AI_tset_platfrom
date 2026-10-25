@@ -20,6 +20,16 @@ export interface ChecklistExecutionRecord {
   schedule_name?: string | null
 }
 
+export interface RecentRun {
+  id: string
+  status: string
+  passed_count: number
+  failed_count: number
+  total_count: number
+  started_at?: string | null
+  finished_at?: string | null
+}
+
 export interface Checklist {
   id: string
   name: string
@@ -29,6 +39,7 @@ export interface Checklist {
   last_run_at?: string | null
   status?: string | null
   created_at?: string
+  recent_runs?: RecentRun[] // 新到舊，最多 10 筆
 }
 
 export interface ChecklistDetail extends Checklist {

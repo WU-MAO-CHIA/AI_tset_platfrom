@@ -28,10 +28,9 @@
           <th class="sortable" @click="toggleSort('name')">
             清單名稱 <span class="sort-indicator">{{ sortIndicator('name') }}</span>
           </th>
-          <th class="sortable" @click="toggleSort('created_by')">
-            建立人員 <span class="sort-indicator">{{ sortIndicator('created_by') }}</span>
-          </th>
           <th class="num">案例數</th>
+          <th>最近 10 次</th>
+          <th>上次執行</th>
           <th class="sortable" @click="toggleSort('created_at')">
             建立時間 <span class="sort-indicator">{{ sortIndicator('created_at') }}</span>
           </th>
@@ -48,12 +47,16 @@
           class="clickable"
           @click="$router.push(`/checklists/${cl.id}`)"
         >
-          <td class="cl-name cell-title">{{ cl.name }}</td>
-          <td data-label="建立人員">{{ cl.created_by }}</td>
+          <td class="cl-name cell-title">
+            {{ cl.name }}
+            <span class="created-by">{{ cl.created_by }} 建立</span>
+          </td>
           <td data-label="案例數" class="num">{{ cl.case_count ?? '-' }}</td>
-          <td data-label="建立時間">{{ formatDate(cl.created_at) }}</td>
+          <td data-label="最近 10 次"><RunStrip :runs="cl.recent_runs ?? []" /></td>
+          <td data-label="上次執行" class="muted">{{ lastRunText(cl) }}</td>
+          <td data-label="建立時間" class="muted">{{ formatDate(cl.created_at) }}</td>
           <td data-label="狀態">
-            <StatusBadge :status="cl.status" />
+            <StatusBadge v-bind="latestBadge(cl)" />
           </td>
         </tr>
       </tbody>
@@ -85,7 +88,8 @@ import { ref, watch, onMounted } from 'vue'
 import { listChecklists, createChecklist, type Checklist } from '../services/checklistApi'
 import { useAuthStore } from '../stores/authStore'
 import StatusBadge from '../components/StatusBadge/index.vue'
-import { formatDate } from '../utils/format'
+import RunStrip from '../components/RunStrip/index.vue'
+import { formatDate, formatDateTime } from '../utils/format'
 
 const authStore = useAuthStore()
 
@@ -146,6 +150,23 @@ async function handleCreate() {
   await fetchChecklists()
 }
 
+// 「完成」不代表全部通過：有失敗案例時直接顯示失敗數
+function latestBadge(cl: Checklist): { status: string | null | undefined; label?: string } {
+  const last = cl.recent_runs?.[0]
+  if (last?.status === 'completed') {
+    return last.failed_count > 0
+      ? { status: 'failed', label: `${last.failed_count} 個失敗` }
+      : { status: 'passed' }
+  }
+  return { status: cl.status }
+}
+
+function lastRunText(cl: Checklist): string {
+  const last = cl.recent_runs?.[0]
+  if (!last) return '-'
+  return formatDateTime(last.started_at ?? last.finished_at)
+}
+
 watch(page, fetchChecklists)
 onMounted(fetchChecklists)
 </script>
@@ -163,6 +184,7 @@ onMounted(fetchChecklists)
 .clickable { cursor: pointer; }
 .clickable:hover td { background: var(--brand-soft); }
 .cl-name { font-weight: 600; }
+.created-by { display: block; font-weight: 400; font-size: var(--fs-12); color: var(--ink-muted); }
 
 .loading { padding: 40px; text-align: center; color: var(--ink-muted); }
 .empty-state { padding: 48px 0; text-align: center; }
