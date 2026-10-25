@@ -53,6 +53,16 @@ exit   # 重新登入讓 docker 群組生效
 
 重新登入後確認：`docker compose version`。
 
+### 擋住容器連到雲端元資料服務
+
+測試腳本能執行任意程式，不要讓它從容器裡連到 Oracle 的元資料服務 `169.254.169.254`（可查到 VM 的身分資訊）。
+`DOCKER-USER` 只影響容器的流量，VM 本身照常可用：
+
+```bash
+sudo iptables -I DOCKER-USER -d 169.254.169.254 -j DROP
+sudo netfilter-persistent save
+```
+
 ## 4. 下載專案並設定
 
 ```bash
@@ -82,9 +92,9 @@ echo 'FRONTEND_PORT=127.0.0.1:8080' > .env
 
 （專案根目錄的 `.env` 由 docker compose 讀取，和 `backend/.env` 是不同的檔案。）
 
-> **帳號角色注意**：editor 可以上傳並執行 Robot Framework 腳本，而 RF 腳本能執行任意 Python，
-> 和後端跑在同一個容器裡。因此 editor 實際上能讀到伺服器上的金鑰與資料庫，等同系統管理員。
-> 只把 editor 給完全信任的人；其他人一律用 viewer（只能看結果，不能執行或呼叫 AI）。
+> **帳號角色注意**：editor 可以上傳並執行 Robot Framework 腳本，而 RF 腳本能執行任意 Python。
+> 後端容器以另一個使用者 `runner` 執行測試，讀不到 JWT / LLM 金鑰與資料庫，也改不到其他人的腳本；
+> 但它仍在同一個容器、可以上網，所以 editor 還是只給信任的人，其他人用 viewer（只能看結果，不能執行或呼叫 AI）。
 
 ## 5. 建置並啟動
 

@@ -23,6 +23,16 @@ def create_access_token(sub: str, role: str, token_version: int = 0) -> str:
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=ALGORITHM)
 
 
+CAPTCHA_SCOPE = "captcha"
+
+
+def create_captcha_token(minutes: int = 20) -> str:
+    """給 robot 子程序的短期 token：只能呼叫驗證碼解碼 API，沒有 sub，不能當登入 token 用。"""
+    now = datetime.now(timezone.utc)
+    payload = {"scope": CAPTCHA_SCOPE, "iat": now, "jti": uuid.uuid4().hex, "exp": now + timedelta(minutes=minutes)}
+    return jwt.encode(payload, settings.jwt_secret_key, algorithm=ALGORITHM)
+
+
 def decode_token(token: str) -> dict:
     return jwt.decode(token, settings.jwt_secret_key, algorithms=[ALGORITHM])
 
