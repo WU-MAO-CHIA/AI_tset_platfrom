@@ -2,7 +2,7 @@
 
 **Feature Branch**: `005-windows-desktop-testing`
 **Created**: 2026-10-25
-**Status**: Draft
+**Status**: Approved
 **Input**: 「有些應用程式只有 Windows 可以執行」——讓平台除了網頁，也能測試只能在 Windows 上執行的桌面應用程式
 
 ## 背景
@@ -136,7 +136,7 @@ keyword、從受測程式設定帶入執行檔路徑、優先沿用視窗探索�
 - macOS / Linux 桌面程式、手機 App
 - 在 Windows 上執行網頁測試（網頁一律在 Linux runner）
 
-## Decisions（草稿，待確認）
+## Decisions
 
 1. **桌面自動化函式庫**：建議 `robotframework-flaui`（以 Microsoft UI Automation 操作 Win32 / WinForms / WPF 程式，持續維護中）。替代方案是 `rpaframework-windows`（RPA.Windows）。第一階段以 libdoc 與記事本範例實測後定案。
 2. **Windows 主機**：平台不限定。雲端 Windows VM（例如 Azure、AWS 的 Windows Server）或公司內實體電腦都可以，條件是能開機自動登入、保持桌面不鎖定。
@@ -144,3 +144,5 @@ keyword、從受測程式設定帶入執行檔路徑、優先沿用視窗探索�
 4. **執行環境在前端登記與選擇**（2026-10-25 使用者要求）：可登記多個 Linux 容器與 Windows 環境；每個 Windows 環境一次一個工作，桌面案例依序執行。
 5. **案例有預設環境，執行時可改選**：案例存預設環境，試跑與清單執行可改選同類型的其他環境；網頁或桌面由環境類型決定，不另設欄位。
 6. **token 保存方式**：執行環境的 token 以 `JWT_SECRET_KEY` 衍生的金鑰加密存在 DB（`cryptography` 的 Fernet），API 永不回傳；更換 `JWT_SECRET_KEY` 後需重新輸入 token。
+
+第 1–6 點於 2026-10-25 經使用者確認規格後開始實作（第 4、5 點為使用者要求）；第 1 點的函式庫在第二階段實測後定案。
