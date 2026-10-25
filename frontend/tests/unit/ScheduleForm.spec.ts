@@ -1,6 +1,11 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import ScheduleForm from '../../src/components/ScheduleForm/index.vue'
+
+vi.mock('../../src/services/runnerEnvironmentApi', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  listEnvironments: vi.fn().mockResolvedValue([]),
+}))
 
 async function submit(wrapper: ReturnType<typeof mount>) {
   await wrapper.find('form').trigger('submit')
@@ -21,6 +26,8 @@ describe('ScheduleForm', () => {
       interval_minutes: null,
       parallel_mode: false,
       max_workers: 1,
+      linux_environment_id: null,
+      windows_environment_id: null,
     })
   })
 

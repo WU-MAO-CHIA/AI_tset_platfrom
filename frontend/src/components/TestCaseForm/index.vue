@@ -20,6 +20,18 @@
     </div>
 
     <div class="field">
+      <label>執行環境</label>
+      <RunnerEnvironmentSelect
+        v-model="form.runner_environment_id"
+        :environments="environments"
+        :placeholder="form.runner_environment_id ? '選擇執行環境' : '原本的環境已刪除，請重新選擇'"
+        data-testid="case-env-select"
+      />
+      <span class="hint">選 Linux 容器為網頁測試，選 Windows 為桌面應用程式測試。</span>
+      <span v-if="libraryMismatch" class="warn" data-testid="env-library-warning">{{ libraryMismatch }}</span>
+    </div>
+
+    <div class="field">
       <label>描述</label>
       <input v-model="form.description" placeholder="（選填）測試目的說明" />
     </div>
@@ -81,7 +93,11 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import MediaUploader from '../MediaUploader/index.vue'
 import RFCodeUpload from '../RFCodeUpload/index.vue'
 import RFCodePreview from '../RFCodePreview/index.vue'
+import RunnerEnvironmentSelect from '../RunnerEnvironmentSelect/index.vue'
 import { caseApi } from '../../services/caseApi'
+import {
+  BUILTIN_ENVIRONMENT_ID, kindOf, listEnvironments, type RunnerEnvironment,
+} from '../../services/runnerEnvironmentApi'
 import { useAuthStore } from '../../stores/authStore'
 
 const authStore = useAuthStore()
@@ -116,6 +132,21 @@ const form = reactive({
   precondition_steps: '',
   system_category: '',
   tags: [] as string[],
+  runner_environment_id: BUILTIN_ENVIRONMENT_ID as string | null,
+})
+const environments = ref<RunnerEnvironment[]>([])
+
+// 既有腳本使用的函式庫與所選環境的類型不符時提醒（網頁用 Browser、桌面用 FlaUI）
+const libraryMismatch = computed(() => {
+  const kind = kindOf(environments.value, form.runner_environment_id)
+  const code = rfCode.value ?? ''
+  if (kind === 'windows' && /Library\s+Browser\b/.test(code)) {
+    return '目前的 RF 程式碼是網頁測試（Browser library），在 Windows 環境需要改寫成桌面程式的腳本。'
+  }
+  if (kind === 'linux' && /Library\s+FlaUILibrary\b/.test(code)) {
+    return '目前的 RF 程式碼是桌面程式測試，Linux 容器只能執行網頁測試。'
+  }
+  return ''
 })
 
 const saving = ref(false)
@@ -139,6 +170,8 @@ onMounted(async () => {
   } catch {
     // silently ignore; select will be empty
   }
+  // 不必等待：讀不到時只剩已選的值，儲存不受影響
+  listEnvironments().then((items) => { environments.value = items }).catch(() => {})
   if (props.initialData) {
     Object.assign(form, props.initialData)
     if (!externalSteps.value && props.initialData.main_steps) {
@@ -161,7 +194,14 @@ async function onSubmit() {
   saving.value = true
   saveError.value = ''
   try {
-    const payload = { ...form, main_steps: effectiveMainSteps.value, created_by: authStore.username ?? '' }
+    const { runner_environment_id, ...fields } = form
+    const payload = {
+      ...fields,
+      main_steps: effectiveMainSteps.value,
+      created_by: authStore.username ?? '',
+      // null 表示尚未重新選擇，後端視為不變
+      ...(runner_environment_id ? { runner_environment_id } : {}),
+    }
     if (props.caseId) {
       await caseApi.updateCase(props.caseId, payload)
       // If there's pending RF content, upload it
@@ -257,4 +297,6 @@ defineExpose({ takePendingRfCode })
 .actions button[type="submit"] { background: var(--brand); color: var(--brand-ink); }
 .actions button:disabled { opacity: 0.6; cursor: not-allowed; }
 .error { color: red; font-size: 13px; }
+.hint { color: var(--ink-faint); font-size: var(--fs-12); }
+.warn { color: var(--queued); font-size: var(--fs-12); }
 </style>

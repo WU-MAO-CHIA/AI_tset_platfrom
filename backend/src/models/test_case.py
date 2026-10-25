@@ -18,6 +18,10 @@ class TestCase(Base, TimestampMixin):
     main_steps: Mapped[str] = mapped_column(Text, nullable=False)
     system_category: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
     tags: Mapped[Optional[list]] = mapped_column(JSON, nullable=True, default=list)
+    # 預設執行環境（spec 005）；null 表示原本的環境被刪除、需要重新選擇
+    runner_environment_id: Mapped[Optional[str]] = mapped_column(
+        String(36), nullable=True, default="builtin-linux", server_default="builtin-linux"
+    )
     version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     created_by: Mapped[str] = mapped_column(String(100), nullable=False)
     modified_by: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)

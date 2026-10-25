@@ -9,6 +9,8 @@ export interface TestCaseSummary {
   version: number
   created_by: string
   updated_at: string | null
+  // 預設執行環境（spec 005）；null 表示原本的環境已被刪除、需要重新選擇
+  runner_environment_id: string | null
 }
 
 export interface TestDataItem {
@@ -39,6 +41,7 @@ export interface CreateCaseRequest {
   system_category?: string
   tags?: string[]
   created_by: string
+  runner_environment_id?: string | null
 }
 
 export interface UpdateCaseRequest {
@@ -49,6 +52,7 @@ export interface UpdateCaseRequest {
   system_category?: string
   tags?: string[]
   created_by: string
+  runner_environment_id?: string | null
   test_data?: Array<{
     field_name: string
     rf_variable?: string | null
@@ -205,15 +209,20 @@ export const caseApi = {
     return apiClient.delete(`/cases/${id}/attachments/${attachmentId}`)
   },
 
-  trialRun(id: string) {
-    return apiClient.post<{ execution_id: string; stream_url: string }>(`/cases/${id}/trial-run`)
+  // environmentId：這次改用的執行環境（須與案例預設環境同類型），未指定時用案例的預設環境
+  trialRun(id: string, environmentId?: string | null) {
+    return apiClient.post<{ execution_id: string; stream_url: string }>(
+      `/cases/${id}/trial-run`,
+      environmentId ? { environment_id: environmentId } : undefined,
+    )
   },
 
   // Phase 27: Trial run with RF code from preview area
-  runTrialFromCode(id: string, rfCode: string, caseName?: string) {
+  runTrialFromCode(id: string, rfCode: string, caseName?: string, environmentId?: string | null) {
     return apiClient.post<{ execution_id: string; stream_url: string }>(`/cases/${id}/trial-run`, {
       rf_code: rfCode,
       case_name: caseName || undefined,
+      environment_id: environmentId || undefined,
     })
   },
 

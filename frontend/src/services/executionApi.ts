@@ -22,12 +22,20 @@ export interface CaseResultItem {
   status: string
   elapsed_ms: number | null
   failure_message: string | null
+  // 執行當下實際使用的環境（spec 005），舊的結果沒有
+  runner_environment_name?: string | null
   media: Array<{ media_type: string; file_path: string | null; step_index: number | null }>
 }
 
 export async function executeChecklist(
   checklistId: string,
-  options: { parallel_mode: boolean; max_workers: number }
+  // linux_environment_id / windows_environment_id：這次把整批網頁 / 桌面案例改送到指定環境（spec 005）
+  options: {
+    parallel_mode: boolean
+    max_workers: number
+    linux_environment_id?: string | null
+    windows_environment_id?: string | null
+  }
 ): Promise<{ execution_id: string; stream_url: string }> {
   const res = await apiClient.post(`/checklists/${checklistId}/execute`, options)
   return res.data

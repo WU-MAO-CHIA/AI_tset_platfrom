@@ -19,6 +19,11 @@ vi.mock('@/services/caseApi', () => ({
 
 import { caseApi } from '@/services/caseApi'
 
+vi.mock('../../src/services/runnerEnvironmentApi', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  listEnvironments: vi.fn().mockResolvedValue([]),
+}))
+
 const globalStubs = {
   stubs: {
     MediaUploader: {

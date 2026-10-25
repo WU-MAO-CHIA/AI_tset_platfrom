@@ -24,6 +24,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import threading
 import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import PurePosixPath
@@ -197,10 +198,18 @@ def run_job(spec: dict, archive: bytes, run_as: str) -> tuple[dict, bytes]:
         shutil.rmtree(workdir, ignore_errors=True)
 
 
+_active_jobs = 0
+_active_lock = threading.Lock()
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "autotest-runner"
     token: str = ""
     run_as: str = ""
+
+    def _authorized(self) -> bool:
+        auth = self.headers.get("Authorization", "")
+        return bool(self.token) and hmac.compare_digest(auth.encode(), f"Bearer {self.token}".encode())
 
     def log_message(self, fmt, *args):  # noqa: N802 - stdlib 介面
         logger.info("%s " + fmt, self.address_string(), *args)
@@ -220,15 +229,20 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):  # noqa: N802
         if self.path == "/health":
-            self._reply(200, b'{"status":"ok"}')
+            # 帶 token 時多回報 token 是否正確與執行中的工作數，供平台的執行環境頁顯示
+            body = {"status": "ok"}
+            if self.headers.get("Authorization"):
+                body["authorized"] = self._authorized()
+                if body["authorized"]:
+                    body["active_jobs"] = _active_jobs
+            self._reply(200, json.dumps(body).encode())
         else:
             self._error(404, "not found")
 
     def do_POST(self):  # noqa: N802
         if self.path != "/run":
             return self._error(404, "not found")
-        auth = self.headers.get("Authorization", "")
-        if not self.token or not hmac.compare_digest(auth.encode(), f"Bearer {self.token}".encode()):
+        if not self._authorized():
             return self._error(401, "unauthorized")
         try:
             length = int(self.headers.get("Content-Length", "0"))
@@ -243,6 +257,9 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError:
             return self._error(400, "X-Runner-Spec must be a JSON object")
         archive = self.rfile.read(length)
+        global _active_jobs
+        with _active_lock:
+            _active_jobs += 1
         try:
             result, output = run_job(spec, archive, self.run_as)
         except JobError as exc:
@@ -250,6 +267,9 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as exc:  # 執行環境問題，回給後端記錄
             logger.exception("job failed")
             return self._error(500, f"runner error: {exc}")
+        finally:
+            with _active_lock:
+                _active_jobs -= 1
         self._reply(200, output, content_type="application/zip", result=result)
 
 

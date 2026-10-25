@@ -113,7 +113,7 @@ keyword、從受測程式設定帶入執行檔路徑、優先沿用視窗探索�
 
 ### Key Entities
 
-- **RunnerEnvironment**（新）：`name`、`kind`（`linux` / `windows`）、`url`、`token`（加密保存）、`enabled`、`is_builtin`、`last_health`、`last_checked_at`
+- **RunnerEnvironment**（新）：`name`、`kind`（`linux` / `windows`）、`url`、`token`（加密保存）、`enabled`；內建的「預設容器」以固定 id 代表，不存表
 - **TestCase**（既有，擴充）：新增 `runner_environment_id`、`desktop_app_id`（nullable）
 - **DesktopApp**（新）：`name`、`executable_path`、`arguments`、`window_title`、`notes`、`created_by`
 - **CaseResult**（既有，擴充）：新增 `runner_environment_id` 與 `runner_environment_name`，保留執行當下的環境（環境刪除後仍顯示名稱）

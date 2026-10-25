@@ -4,7 +4,12 @@ export interface ChecklistItem {
   id: string
   test_case_id: string
   position: number
-  test_case?: { case_number: string | null; name: string | null; system_category: string | null } | null
+  test_case?: {
+    case_number: string | null
+    name: string | null
+    system_category: string | null
+    runner_environment_id?: string | null
+  } | null
 }
 
 export interface ChecklistExecutionRecord {

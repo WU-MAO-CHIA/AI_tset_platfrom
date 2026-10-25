@@ -36,6 +36,25 @@
         <input v-model.number="form.max_workers" type="number" min="1" class="modal-input" />
       </label>
 
+      <label v-if="hasKind('linux')">網頁案例的執行環境
+        <RunnerEnvironmentSelect
+          v-model="form.linux_environment_id"
+          :environments="environments"
+          kind="linux"
+          default-label="依各案例設定"
+          data-testid="schedule-linux-env"
+        />
+      </label>
+      <label v-if="hasKind('windows')">桌面案例的執行環境
+        <RunnerEnvironmentSelect
+          v-model="form.windows_environment_id"
+          :environments="environments"
+          kind="windows"
+          default-label="依各案例設定"
+          data-testid="schedule-windows-env"
+        />
+      </label>
+
       <label class="inline">
         <input type="checkbox" v-model="form.enabled" />啟用
       </label>
@@ -51,7 +70,9 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
+import RunnerEnvironmentSelect from '../RunnerEnvironmentSelect/index.vue'
+import { listEnvironments, type EnvironmentKind, type RunnerEnvironment } from '../../services/runnerEnvironmentApi'
 import type { Schedule, ScheduleInput } from '../../services/scheduleApi'
 import { WEEKDAY_LABELS } from '../../utils/scheduleFormat'
 
@@ -75,8 +96,24 @@ const form = reactive({
   interval_minutes: props.schedule?.interval_minutes ?? 60,
   parallel_mode: props.schedule?.parallel_mode ?? false,
   max_workers: props.schedule?.max_workers ?? 1,
+  linux_environment_id: props.schedule?.linux_environment_id ?? null,
+  windows_environment_id: props.schedule?.windows_environment_id ?? null,
 })
 const error = ref('')
+
+// 執行環境（spec 005）：只有一個環境可選時（例如只有預設容器）不顯示
+const environments = ref<RunnerEnvironment[]>([])
+function hasKind(kind: EnvironmentKind): boolean {
+  return environments.value.filter((e) => e.enabled && e.kind === kind).length > (kind === 'linux' ? 1 : 0)
+}
+
+onMounted(async () => {
+  try {
+    environments.value = await listEnvironments()
+  } catch {
+    // 讀不到時排程照各案例的預設環境執行
+  }
+})
 
 function submit() {
   error.value = ''
@@ -105,6 +142,8 @@ function submit() {
     interval_minutes: form.frequency === 'interval' ? form.interval_minutes : null,
     parallel_mode: form.parallel_mode,
     max_workers: form.parallel_mode ? form.max_workers : 1,
+    linux_environment_id: form.linux_environment_id,
+    windows_environment_id: form.windows_environment_id,
   })
 }
 

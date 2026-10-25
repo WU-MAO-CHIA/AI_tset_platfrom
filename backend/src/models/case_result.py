@@ -19,6 +19,9 @@ class CaseResult(Base, TimestampMixin):
     elapsed_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     failure_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # 執行當下實際使用的環境；保存名稱，環境之後被刪除仍能顯示
+    runner_environment_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    runner_environment_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     test_case: Mapped[Optional["TestCase"]] = relationship("TestCase", foreign_keys="[CaseResult.test_case_id]", lazy="select")
     media: Mapped[list["ExecutionMedia"]] = relationship(

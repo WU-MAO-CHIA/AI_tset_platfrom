@@ -66,6 +66,7 @@ class CaseResultItem(BaseModel):
     status: str
     elapsed_ms: Optional[int] = None
     failure_message: Optional[str] = None
+    runner_environment_name: Optional[str] = None
     media: list[ExecutionMediaItem]
 
 
@@ -175,6 +176,7 @@ async def get_execution_results(execution_id: str, db: AsyncSession = Depends(ge
             "status": cr.status,
             "elapsed_ms": cr.elapsed_ms,
             "failure_message": cr.failure_message,
+            "runner_environment_name": cr.runner_environment_name,
             "media": media_items,
         })
 

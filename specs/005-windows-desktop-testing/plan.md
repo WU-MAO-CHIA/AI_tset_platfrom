@@ -56,24 +56,23 @@ ExecutionWorker
 
 | 欄位 | 型別 | 說明 |
 |---|---|---|
-| `id` | String(36) PK | uuid；內建環境固定 id `builtin-linux` |
-| `name` | String(100), unique | 例如「預設容器」「Windows 測試機 A」 |
-| `kind` | String(20) | `linux` / `windows` |
-| `url` | String(500) | 內建環境為空，執行時讀 `RUNNER_URL` |
-| `token_encrypted` | Text, nullable | Fernet 加密（金鑰由 `JWT_SECRET_KEY` 以 HKDF 衍生）；內建環境為空，讀 `RUNNER_TOKEN` |
+| `id` | String(36) PK | uuid |
+| `name` | String(100), unique | 例如「Windows 測試機 A」 |
+| `kind` | String(20) | `linux` / `windows`；建立後不能修改 |
+| `url` | String(500) | |
+| `token_encrypted` | Text, nullable | Fernet 加密（金鑰由 `JWT_SECRET_KEY` 以 HKDF 衍生） |
 | `enabled` | Boolean, default true | |
-| `is_builtin` | Boolean, default false | 不能刪除、不能改類型 |
-| `last_health` | JSON, nullable | 最近一次 `/health` 結果（連線、忙碌、桌面狀態） |
-| `last_checked_at` | DateTime(tz), nullable | |
 | `created_at` / `updated_at` | TimestampMixin | |
 
-migration 建表時寫入內建環境一筆。`EXECUTION_RUNNER=local`（本機開發）時，內建環境代表後端自己執行。
+內建環境「預設容器」不存在這張表裡，以固定 id `builtin-linux` 代表，位址與 token 讀 `RUNNER_URL` / `RUNNER_TOKEN`；
+`EXECUTION_RUNNER=local`（本機開發）時代表後端自己執行。這樣測試以 `create_all` 建表時也不必另外寫入資料。
+連線狀態只存在記憶體（單一後端行程），不存 DB。
 
 ### `test_cases`（擴充）
 
 | 欄位 | 型別 | 說明 |
 |---|---|---|
-| `runner_environment_id` | String(36), default `builtin-linux`, not null | 既有案例全部指向內建環境；不加 FK（避免 SQLite batch alter），刪除環境時由服務層改寫引用 |
+| `runner_environment_id` | String(36), server default `builtin-linux`, nullable | 既有案例全部指向內建環境；null 表示原本的 Windows 環境被刪除、需要重新選擇；不加 FK，刪除環境時由服務層改寫引用 |
 | `desktop_app_id` | String(36), nullable | 不加 FK，刪除受測程式時把引用設為 null |
 
 案例是網頁或桌面由環境的 `kind` 決定（`platform_of(case)`），不另存欄位。
@@ -107,7 +106,8 @@ migration 建表時寫入內建環境一筆。`EXECUTION_RUNNER=local`（本機�
 | DELETE | `/runner-environments/{id}` | admin；內建環境 400；引用的 linux 案例改回內建環境，windows 案例設為「需重新選擇」（指向 null 並在前端提示） |
 | POST | `/runner-environments/{id}/check` | editor+；立即重新檢查連線 |
 
-- 背景每 60 秒檢查所有啟用中的環境，更新 `last_health`（與 `ScheduleRunner` 同樣在 startup 開啟的 asyncio task）。
+- 背景每 60 秒檢查內建環境與所有啟用中的環境，結果存在記憶體（與 `ScheduleRunner` 同樣在 startup 開啟的 asyncio task；`RUNNER_HEALTH_CHECK_ENABLED=false` 可關閉）。
+- runner 的 `/health` 帶 token 時多回報 `authorized`（token 是否正確）與 `active_jobs`，平台據此顯示「已連線 / 執行中 / 未連線 / token 錯誤」。
 - url 驗證：只允許 `http` / `https`；這是 admin 才能設定的值，不做 SSRF 阻擋，但不回傳 `/health` 以外的內容。
 
 ### 2. runner 選擇

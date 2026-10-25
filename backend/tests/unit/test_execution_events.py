@@ -92,7 +92,7 @@ async def test_sequential_run_writes_events_and_final_status_first(maker, monkey
                 seen_status_at_done.append(record.status)
         await real_emit(self, payload)
 
-    async def fake_run(case_id, robot_code, timeout_sec, report_dest):
+    async def fake_run(case_id, robot_code, timeout_sec, report_dest, target=None):
         return {"status": "passed" if case_id == "case-1" else "failed", "elapsed_ms": 5}
 
     monkeypatch.setattr(EventSink, "emit", spying_emit)

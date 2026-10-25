@@ -78,6 +78,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, requiresAdmin: true },
   },
   {
+    path: '/runner-environments',
+    name: 'RunnerEnvironments',
+    component: () => import('../pages/RunnerEnvironmentsPage.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true },
+  },
+  {
     path: '/admin',
     name: 'Admin',
     component: () => import('../pages/AdminPage.vue'),

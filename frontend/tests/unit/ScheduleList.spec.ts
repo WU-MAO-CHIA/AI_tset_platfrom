@@ -8,6 +8,11 @@ import ScheduleForm from '../../src/components/ScheduleForm/index.vue'
 import * as scheduleApi from '../../src/services/scheduleApi'
 import { confirmAction } from '../../src/composables/useConfirm'
 
+vi.mock('../../src/services/runnerEnvironmentApi', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  listEnvironments: vi.fn().mockResolvedValue([]),
+}))
+
 vi.mock('../../src/services/scheduleApi', () => ({
   listSchedules: vi.fn(),
   listChecklistSchedules: vi.fn(),
