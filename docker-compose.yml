@@ -1,4 +1,4 @@
-# AutoTest Platform — 以 Docker 執行前後端
+# 自動化測試平台 — 以 Docker 執行前後端
 #
 #   準備：cp backend/.env.example backend/.env，填入 LLM 金鑰、JWT_SECRET_KEY、ADMIN_PASSWORD
 #         echo "RUNNER_TOKEN=$(openssl rand -hex 32)" >> .env   （專案根目錄的 .env，給 backend 與 runner 共用）
