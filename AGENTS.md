@@ -67,6 +67,9 @@ setup; this file covers what agents get wrong.
   worker runs it. Schedule datetimes are stored as UTC (SQLite returns them
   naive, so wrap reads in `as_utc`); `time_of_day`/`weekdays` are read in
   `SCHEDULE_TIMEZONE`. Test `tick(now)` directly with a fixed `now`.
+  CRUD lives in `src/api/schedules.py` + `ScheduleService`; `PUT /schedules/{id}`
+  is a partial update and recomputes `next_run_at` only when a timing field or
+  `enabled` changes.
 
 ## Frontend (`frontend/`, workdir `frontend/`)
 
