@@ -15,6 +15,9 @@ export interface ChecklistExecutionRecord {
   total_count: number
   started_at: string | null
   finished_at: string | null
+  // 排程觸發時才有值；排程已刪除時 schedule_name 為 null
+  schedule_id?: string | null
+  schedule_name?: string | null
 }
 
 export interface Checklist {

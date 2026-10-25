@@ -19,6 +19,7 @@
       <div v-if="execution" class="execution-summary">
         <span>執行 ID：{{ execution.id }}</span>
         <span>狀態：{{ executionStatusLabel(execution.status) }}</span>
+        <span v-if="execution.schedule_id" data-testid="schedule-trigger">{{ triggerLabel(execution) }}</span>
         <span>通過：{{ execution.passed_count }}</span>
         <span>失敗：{{ execution.failed_count }}</span>
       </div>
@@ -82,6 +83,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getExecution, getExecutionResults, exportReport, getRfReportStatus, isTerminalEvent, streamExecution, type ExecutionRecord, type CaseResultItem } from '../services/executionApi'
+import { triggerLabel } from '../utils/scheduleFormat'
 
 const route = useRoute()
 const router = useRouter()

@@ -11,6 +11,7 @@
       <div class="nav-links" :class="{ open: menuOpen }" @click="menuOpen = false">
         <RouterLink to="/cases" :class="{ active: isSection('/cases') }">測試案例</RouterLink>
         <RouterLink to="/checklists" :class="{ active: isSection('/checklists') }">測試清單</RouterLink>
+        <RouterLink to="/schedules" :class="{ active: isSection('/schedules') }">排程</RouterLink>
         <RouterLink to="/db-connections" :class="{ active: isSection('/db-connections') }">資料庫連線</RouterLink>
         <RouterLink v-if="authStore.isAdmin" to="/admin" :class="{ active: isSection('/admin') }">管理後台</RouterLink>
       </div>

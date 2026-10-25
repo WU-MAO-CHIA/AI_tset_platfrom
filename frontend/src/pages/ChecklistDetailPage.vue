@@ -108,13 +108,19 @@
       </table>
     </div>
 
+    <!-- 排程區 -->
+    <div class="section" data-testid="schedules">
+      <h2>排程</h2>
+      <ScheduleList :checklist-id="checklist.id" />
+    </div>
+
     <!-- 執行歷史區 -->
     <div class="section" data-testid="execution-history">
       <h2>執行歷史</h2>
       <div v-if="executions.length === 0" class="empty">尚無執行紀錄</div>
       <table v-else class="history-table">
         <thead>
-          <tr><th>執行 ID</th><th>狀態</th><th>開始時間</th><th>通過</th><th>失敗</th></tr>
+          <tr><th>執行 ID</th><th>狀態</th><th>觸發</th><th>開始時間</th><th>通過</th><th>失敗</th></tr>
         </thead>
         <tbody>
           <tr
@@ -125,6 +131,7 @@
           >
             <td>{{ ex.id.slice(0, 8) }}...</td>
             <td>{{ ex.status }}</td>
+            <td>{{ triggerLabel(ex) }}</td>
             <td>{{ ex.started_at ?? '-' }}</td>
             <td>{{ ex.passed_count }}</td>
             <td>{{ ex.failed_count }}</td>
@@ -177,6 +184,8 @@ import {
 } from '../services/checklistApi'
 import { executeChecklist } from '../services/executionApi'
 import { useAuthStore } from '../stores/authStore'
+import ScheduleList from '../components/ScheduleList/index.vue'
+import { triggerLabel } from '../utils/scheduleFormat'
 
 const authStore = useAuthStore()
 
