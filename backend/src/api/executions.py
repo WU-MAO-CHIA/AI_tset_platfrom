@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.config import get_settings
 from src.core.database import AsyncSessionLocal, get_db
 from src.core.dependencies import (
+    _user_from_token,
     get_current_user,
     get_current_user_header_or_cookie,
     require_editor_or_above,
@@ -201,26 +202,9 @@ async def stream_execution(
 ):
     # SSE 無法自訂 Authorization header，一律走 HttpOnly cookie（登入時寫入）。
     # 不再接受 ?token= query，避免 JWT 進 access log / browser history / Referer。
-    token = access_token
-    
-    if token:
-        from src.core.security import decode_token
-        from src.repositories.user_repo import UserRepository
-        from jose import JWTError
-        try:
-            payload = decode_token(token)
-            username = payload.get("sub")
-            if username:
-                repo_u = UserRepository(db)
-                user = await repo_u.get_by_username(username)
-                if not user or not user.is_active:
-                    raise HTTPException(status_code=401, detail="Invalid token")
-            else:
-                raise HTTPException(status_code=401, detail="Invalid token")
-        except JWTError:
-            raise HTTPException(status_code=401, detail="Invalid token")
-    else:
+    if not access_token:
         raise HTTPException(status_code=401, detail="Token required")
+    await _user_from_token(access_token, db)
 
     repo = ExecutionRepository(db)
     record = await repo.get(execution_id)
@@ -339,6 +323,9 @@ async def export_report(execution_id: str, db: AsyncSession = Depends(get_db)):
     )
 
 
+RF_REPORT_CSP = "sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox"
+
+
 @router.get(
     "/{execution_id}/rf-report/{filename:path}",
     response_class=FileResponse,
@@ -357,7 +344,10 @@ async def get_rf_report(execution_id: str, filename: str, db: AsyncSession = Dep
         raise HTTPException(status_code=404, detail="報告尚未生成或不存在")
     if not file_path.is_file():
         raise HTTPException(status_code=404, detail="報告尚未生成或不存在")
-    return FileResponse(str(file_path))
+    # RF log.html 可被腳本寫入任意 HTML（*HTML* 訊息）。以 CSP sandbox 讓報告跑在獨立的
+    # opaque origin：腳本仍可執行（RF 報告需要 JS），但讀不到平台的 localStorage token 或呼叫 API。
+    return FileResponse(str(file_path), headers={"Content-Security-Policy": RF_REPORT_CSP})
+
 
 
 @router.get("/{execution_id}/rf-report-status", response_model=RfReportStatusResponse, dependencies=_auth)

@@ -1,6 +1,6 @@
 from fastapi import Cookie, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, FileResponse
-from jose import JWTError
+from .security import JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .database import get_db
@@ -39,6 +39,8 @@ async def _user_from_token(token: str | None, db: AsyncSession):
     user = await repo.get_by_username(username)
     if not user or not user.is_active:
         raise credentials_exception
+    if payload.get("tv", 0) != user.token_version:
+        raise credentials_exception  # 已登出或密碼／權限變更後的舊 token
     return user
 
 

@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta, timezone
 
 from httpx import ASGITransport, AsyncClient
-from jose import jwt
+import jwt
 
 from src.core.config import get_settings
 from src.core.security import ALGORITHM, create_access_token, decode_token

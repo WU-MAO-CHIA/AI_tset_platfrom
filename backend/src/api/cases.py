@@ -547,7 +547,7 @@ async def delete_case(
         raise HTTPException(400, detail={"error": "error", "message": msg})
 
 
-@router.post("/preview-rf", response_model=PreviewRFResponse)
+@router.post("/preview-rf", response_model=PreviewRFResponse, dependencies=[Depends(require_editor_or_above)])
 async def preview_rf_code(body: PreviewRFRequest, session: AsyncSession = Depends(get_db)):
     """Generate Robot Framework code preview from steps without creating execution records."""
     if not body.main_steps or not body.main_steps.strip():
@@ -569,7 +569,7 @@ async def preview_rf_code(body: PreviewRFRequest, session: AsyncSession = Depend
     return {"rf_code": rf_code}
 
 
-@router.post("/ai-complete", response_model=AICompleteResponse)
+@router.post("/ai-complete", response_model=AICompleteResponse, dependencies=[Depends(require_editor_or_above)])
 async def ai_complete_steps_preview(
     body: AICompleteRequest,
     session: AsyncSession = Depends(get_db),
@@ -587,7 +587,7 @@ async def ai_complete_steps_preview(
     return {"completed_steps": completed, "model_used": model}
 
 
-@router.post("/{case_id}/ai-complete", response_model=AICompleteResponse)
+@router.post("/{case_id}/ai-complete", response_model=AICompleteResponse, dependencies=[Depends(require_editor_or_above)])
 async def ai_complete_steps(
     case_id: str,
     body: AICompleteRequest,
@@ -611,7 +611,7 @@ async def ai_complete_steps(
     return {"completed_steps": completed, "model_used": model}
 
 
-@router.post("/chat-preview", response_model=ChatResponse)
+@router.post("/chat-preview", response_model=ChatResponse, dependencies=[Depends(require_editor_or_above)])
 async def chat_preview(
     body: ChatPreviewRequest,
     session: AsyncSession = Depends(get_db),
@@ -737,7 +737,7 @@ async def get_explore_session(case_id: str, session_id: str):
     return public_view(snippet)
 
 
-@router.post("/{case_id}/chat", response_model=ChatResponse)
+@router.post("/{case_id}/chat", response_model=ChatResponse, dependencies=[Depends(require_editor_or_above)])
 async def chat_with_ai(
     case_id: str,
     body: ChatRequest,
@@ -905,7 +905,7 @@ async def delete_attachment(
     return {"deleted": True}
 
 
-@router.post("/{case_id}/import-test-data", response_model=ImportPreviewResponse)
+@router.post("/{case_id}/import-test-data", response_model=ImportPreviewResponse, dependencies=[Depends(require_editor_or_above)])
 async def import_test_data_preview(
     case_id: str,
     file: UploadFile = File(...),
@@ -932,7 +932,7 @@ async def import_test_data_preview(
     }
 
 
-@router.post("/{case_id}/import-test-data/confirm", status_code=201, response_model=ConfirmImportResponse)
+@router.post("/{case_id}/import-test-data/confirm", status_code=201, response_model=ConfirmImportResponse, dependencies=[Depends(require_editor_or_above)])
 async def confirm_import_test_data(
     case_id: str,
     body: ConfirmImportRequest,

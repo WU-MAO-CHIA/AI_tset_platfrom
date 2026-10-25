@@ -79,6 +79,7 @@ async def isolated_app(monkeypatch, tmp_path):
                         staticmethod(_skip_background_run))
     monkeypatch.setattr(cases_api, "get_provider", lambda model_id, settings: FakeLLMProvider())
     monkeypatch.setattr(auth_api, "_LOGIN_ATTEMPTS", {})  # 登入限流每個測試重新計算
+    monkeypatch.setattr(auth_api, "_FAILED_LOGINS", {})
 
     yield maker
 

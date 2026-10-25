@@ -515,7 +515,8 @@ class ExecutionService:
             loop = asyncio.get_event_loop()
             _pabot_result = await loop.run_in_executor(
                 None,
-                lambda: _subprocess.run(cmd, capture_output=True, timeout=600),
+                # 與試跑相同，過濾掉 JWT / LLM 金鑰等敏感環境變數
+                lambda: _subprocess.run(cmd, capture_output=True, timeout=600, env=_build_robot_env()),
             )
             stderr_bytes = _pabot_result.stderr
 

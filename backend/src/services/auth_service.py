@@ -31,7 +31,7 @@ class AuthService:
             raise HTTPException(status_code=401, detail="帳號或密碼錯誤")
         if not verify_password(password, user.hashed_password):
             raise HTTPException(status_code=401, detail="帳號或密碼錯誤")
-        token = create_access_token(sub=user.username, role=user.role)
+        token = create_access_token(sub=user.username, role=user.role, token_version=user.token_version)
 
         if response is not None:
             set_auth_cookie(response, token)

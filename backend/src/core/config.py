@@ -3,6 +3,11 @@ from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_JWT_SECRET = "dev-secret-key-change-in-production"
+# 公開出現在程式碼或文件中的範例值：任何人都知道，prod 一律拒絕
+KNOWN_PLACEHOLDER_SECRETS = frozenset({
+    DEFAULT_JWT_SECRET,
+    "change-me-to-a-strong-random-secret-key",  # backend/.env.example
+})
 DEFAULT_ADMIN_PASSWORD = "admin"
 
 
@@ -59,7 +64,7 @@ class Settings(BaseSettings):
         return v
 
     def is_default_secret(self) -> bool:
-        return self.jwt_secret_key == DEFAULT_JWT_SECRET
+        return self.jwt_secret_key in KNOWN_PLACEHOLDER_SECRETS
 
     def is_default_admin_password(self) -> bool:
         return self.admin_password == DEFAULT_ADMIN_PASSWORD

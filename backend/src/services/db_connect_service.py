@@ -1,4 +1,5 @@
 import re
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy import create_engine, text
@@ -31,6 +32,36 @@ def _validate_sqlite_only(connection_string: str) -> None:
     driver = (url.drivername or "").split("+")[0].lower()
     if driver != "sqlite":
         raise ValueError("query_error: only sqlite connections are allowed in MVP")
+    _validate_sqlite_target(url)
+
+
+def _platform_data_paths() -> tuple[list[Path], list[Path]]:
+    """平台自己的資料（自身 DB 檔、附件、執行報告），外部連線不得指向。回傳 (檔案, 目錄)。"""
+    from src.core.config import get_settings
+
+    settings = get_settings()
+    files: list[Path] = []
+    app_db = make_url(settings.database_url).database
+    if app_db and app_db != ":memory:":
+        files.append(Path(app_db).resolve())
+    dirs = [Path(settings.media_root).resolve(), Path(settings.execution_reports_dir).resolve()]
+    return files, dirs
+
+
+def _validate_sqlite_target(url) -> None:
+    """擋住以 SQLite 連線讀取平台自己的資料庫（帳號密碼雜湊、測試帳密）。"""
+    database = url.database or ""
+    if not database or database == ":memory:":
+        return
+    # file: URI 或 ?uri=true 可改寫實際開啟的路徑，一律不接受
+    if database.lower().startswith("file:") or "uri" in {k.lower() for k in url.query}:
+        raise ValueError("query_error: sqlite URI filenames are not allowed")
+    target = Path(database).resolve()
+    files, dirs = _platform_data_paths()
+    # 含 WAL 模式的 -wal / -shm 附屬檔
+    blocked_files = {f.with_name(f.name + suffix) for f in files for suffix in ("", "-wal", "-shm", "-journal")}
+    if target in blocked_files or any(target.is_relative_to(d) for d in dirs):
+        raise ValueError("query_error: connections to the platform's own data are not allowed")
 
 
 def _sanitize_error() -> str:
