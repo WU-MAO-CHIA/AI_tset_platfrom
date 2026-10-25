@@ -54,6 +54,8 @@ class ExecutionRecord(Base, TimestampMixin):
     priority: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     queued_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     heartbeat_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # 由排程觸發時記錄排程 ID（spec 004）；不設 FK，排程刪除後執行記錄照常保留
+    schedule_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True, index=True)
 
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

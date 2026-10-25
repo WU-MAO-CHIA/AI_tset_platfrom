@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy import delete, update
 
 # Import all models to register them with SQLAlchemy mapper before any query
-from src.models import test_case, test_data, media_attachment, test_checklist, checklist_item, execution_record, execution_event, db_connection, automation_code, case_result, execution_media, case_chat_message, robot_script, user, system_category, app_setting  # noqa: F401
+from src.models import test_case, test_data, media_attachment, test_checklist, checklist_item, execution_record, execution_event, execution_schedule, db_connection, automation_code, case_result, execution_media, case_chat_message, robot_script, user, system_category, app_setting  # noqa: F401
 from src.models.execution_event import ExecutionEvent
 from src.models.execution_record import ExecutionRecord
 
@@ -132,12 +132,18 @@ async def startup_event() -> None:
     # 恢復程序之後才開啟 worker：重啟前的 running 已標為 interrupted，pending 會依序被領取
     from src.execution.worker import get_worker
     get_worker().start()
+    # 排程只負責在時間到時排入佇列（spec 004），實際執行仍由上面的 worker 處理
+    if settings.schedule_enabled:
+        from src.scheduling.runner import get_schedule_runner
+        get_schedule_runner().start()
     asyncio.create_task(_cleanup_trial_runs())
 
 
 @app.on_event("shutdown")
 async def shutdown_event() -> None:
     from src.execution.worker import get_worker
+    from src.scheduling.runner import get_schedule_runner
+    await get_schedule_runner().stop()
     await get_worker().stop()
 
 
