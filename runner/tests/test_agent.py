@@ -108,3 +108,15 @@ def test_http_runs_job(server):
         result = json.loads(resp.headers["X-Runner-Result"])
         names = zipfile.ZipFile(io.BytesIO(resp.read())).namelist()
     assert result["returncode"] == 0 and "output.xml" in names
+
+
+def _health(url, token=None):
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    with urllib.request.urlopen(urllib.request.Request(f"{url}/health", headers=headers), timeout=10) as resp:
+        return json.loads(resp.read())
+
+
+def test_health_reports_token_check(server):
+    assert _health(server) == {"status": "ok"}
+    assert _health(server, "wrong") == {"status": "ok", "authorized": False}
+    assert _health(server, TOKEN) == {"status": "ok", "authorized": True, "active_jobs": 0}

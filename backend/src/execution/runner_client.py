@@ -53,12 +53,18 @@ def _extract(data: bytes, dest: str) -> None:
                     out.write(chunk)
 
 
-async def run_remote(workdir: str, spec: dict, env: dict) -> dict:
-    """回傳 {"returncode", "timed_out", "stderr_tail", ...}；失敗時 raise RunnerError。"""
+async def run_remote(workdir: str, spec: dict, env: dict, *, url: str | None = None,
+                     token: str | None = None) -> dict:
+    """回傳 {"returncode", "timed_out", "stderr_tail", ...}；失敗時 raise RunnerError。
+
+    url / token 未指定時使用 docker compose 內建的 runner（RUNNER_URL / RUNNER_TOKEN）。
+    """
     settings = get_settings()
+    url = url or settings.runner_url
+    token = settings.runner_token if token is None else token
     body = _zip_dir(workdir)
     headers = {
-        "Authorization": f"Bearer {settings.runner_token}",
+        "Authorization": f"Bearer {token}",
         "Content-Type": "application/zip",
         "X-Runner-Spec": json.dumps({**spec, "env": env}),
     }
@@ -66,7 +72,7 @@ async def run_remote(workdir: str, spec: dict, env: dict) -> dict:
     timeout = httpx.Timeout(float(spec.get("timeout", 60)) + 120, connect=10)
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.post(f"{settings.runner_url.rstrip('/')}/run", content=body, headers=headers)
+            resp = await client.post(f"{url.rstrip('/')}/run", content=body, headers=headers)
     except httpx.HTTPError as exc:
         raise RunnerError(f"無法連線到測試執行器（runner）：{exc.__class__.__name__}") from exc
     if resp.status_code != 200:

@@ -58,6 +58,7 @@ class CaseCreateRequest(BaseModel):
     tags: Optional[list[str]] = None
     created_by: str
     test_data: Optional[list[CaseTestDataInput]] = None
+    runner_environment_id: Optional[str] = None  # 未指定時為內建環境（spec 005）
 
 
 class CaseUpdateRequest(BaseModel):
@@ -69,6 +70,7 @@ class CaseUpdateRequest(BaseModel):
     tags: Optional[list[str]] = None
     created_by: str  # used as modified_by
     test_data: Optional[list[CaseTestDataInput]] = None  # full-replace; None = no change
+    runner_environment_id: Optional[str] = None  # None = no change
 
 
 class CaseDeleteRequest(BaseModel):
@@ -133,6 +135,7 @@ class CaseSummaryResponse(BaseModel):
     version: int
     created_by: str
     updated_at: Optional[str] = None
+    runner_environment_id: Optional[str] = None
 
 
 class CaseListResponse(BaseModel):
@@ -168,6 +171,7 @@ class CaseDetailResponse(BaseModel):
     modified_by: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
+    runner_environment_id: Optional[str] = None
     test_data: list[CaseTestDataResponse]
 
 
@@ -305,6 +309,7 @@ def serialize_case_summary(case) -> dict:
         "version": case.version,
         "created_by": case.created_by,
         "updated_at": case.updated_at.isoformat() if case.updated_at else None,
+        "runner_environment_id": case.runner_environment_id,
     }
 
 
@@ -336,6 +341,7 @@ def serialize_case_detail(case) -> dict:
         "modified_by": case.modified_by,
         "created_at": case.created_at.isoformat() if case.created_at else None,
         "updated_at": case.updated_at.isoformat() if case.updated_at else None,
+        "runner_environment_id": case.runner_environment_id,
         "test_data": [serialize_test_data_item(td) for td in test_data],
     }
 
@@ -370,6 +376,14 @@ def _build_test_data_rows(case_id: str, items: list[CaseTestDataInput]) -> list[
     ]
 
 
+async def _require_selectable_environment(session: AsyncSession, environment_id: str) -> None:
+    from src.services.runner_environment_service import RunnerEnvironmentService
+    try:
+        await RunnerEnvironmentService(session).require_selectable(environment_id)
+    except ValueError as e:
+        raise HTTPException(400, detail={"error": "validation_error", "message": str(e)})
+
+
 # ─── Endpoints ───────────────────────────────────────────────────────────────
 
 @router.get("/categories", response_model=CategoryListResponse)
@@ -386,6 +400,8 @@ async def create_case(
     service: CaseService = Depends(get_case_service),
     session: AsyncSession = Depends(get_db),
 ):
+    if body.runner_environment_id:
+        await _require_selectable_environment(session, body.runner_environment_id)
     try:
         case = await service.create(
             name=body.name,
@@ -401,6 +417,9 @@ async def create_case(
     except ValueError as e:
         raise HTTPException(400, detail={"error": "validation_error", "message": str(e)})
 
+    if body.runner_environment_id:
+        case.runner_environment_id = body.runner_environment_id
+        await session.flush()
     if body.test_data:
         session.add_all(_build_test_data_rows(case.id, body.test_data))
         await session.flush()
@@ -489,6 +508,8 @@ async def update_case(
     service: CaseService = Depends(get_case_service),
     session: AsyncSession = Depends(get_db),
 ):
+    if body.runner_environment_id:
+        await _require_selectable_environment(session, body.runner_environment_id)
     try:
         await service.update(
             case_id,
@@ -505,6 +526,11 @@ async def update_case(
             raise HTTPException(404, detail={"error": "not_found", "message": "案例不存在"})
         raise HTTPException(400, detail={"error": "validation_error", "message": str(e)})
 
+    if body.runner_environment_id:
+        from sqlalchemy import update as _update
+        await session.execute(
+            _update(TestCase).where(TestCase.id == case_id).values(runner_environment_id=body.runner_environment_id)
+        )
     if body.test_data is not None:
         from sqlalchemy import delete as _delete
         await session.execute(_delete(TestData).where(TestData.test_case_id == case_id))
@@ -1088,6 +1114,7 @@ class TrialRunRequest(BaseModel):
     """Phase 27: Trial run request with optional RF code override."""
     rf_code: Optional[str] = None
     case_name: Optional[str] = None
+    environment_id: Optional[str] = None  # 這次改用的執行環境，須與案例預設環境同類型（spec 005）
 
 
 @router.post("/{case_id}/trial-run", status_code=202, response_model=ExecutionStartResponse, dependencies=[Depends(require_editor_or_above)])
@@ -1115,10 +1142,25 @@ async def trial_run(case_id: str, request: TrialRunRequest = TrialRunRequest(), 
         if not has_db_code and not os.path.exists(script_path):
             raise HTTPException(422, detail={"error": "no_robot_code", "message": "尚未產生 RF 程式碼，請先透過 AI 對話生成或上傳後再試跑"})
 
+    from src.services.runner_environment_service import RunnerEnvironmentService
+    env_service = RunnerEnvironmentService(session)
+    if request.environment_id:
+        try:
+            case_kind = await env_service.kind_of(case.runner_environment_id)
+            if case_kind is None:
+                # 案例原本的環境已被刪除：直接選一個可用的環境即可
+                case_kind = await env_service.require_selectable(request.environment_id)
+            await env_service.require_kind(request.environment_id, case_kind)
+        except ValueError as e:
+            raise HTTPException(400, detail={"error": "validation_error", "message": str(e)})
+    elif await env_service.kind_of(case.runner_environment_id) is None:
+        raise HTTPException(422, detail={"error": "no_environment", "message": "案例的執行環境已被刪除，請先選擇執行環境"})
+
     exec_service = ExecutionService(session)
     record = await exec_service.run_trial(
         source_case_id=case_id,
         rf_code=request.rf_code,
-        case_name=request.case_name or case.name
+        case_name=request.case_name or case.name,
+        environment_id=request.environment_id,
     )
     return {"execution_id": record.id, "stream_url": f"/api/v1/executions/{record.id}/stream"}

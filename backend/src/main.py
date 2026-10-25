@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy import delete, update
 
 # Import all models to register them with SQLAlchemy mapper before any query
-from src.models import test_case, test_data, media_attachment, test_checklist, checklist_item, execution_record, execution_event, execution_schedule, db_connection, automation_code, case_result, execution_media, case_chat_message, robot_script, user, system_category, app_setting  # noqa: F401
+from src.models import test_case, test_data, media_attachment, test_checklist, checklist_item, execution_record, execution_event, execution_schedule, db_connection, automation_code, case_result, execution_media, case_chat_message, robot_script, user, system_category, app_setting, runner_environment  # noqa: F401
 from src.models.execution_event import ExecutionEvent
 from src.models.execution_record import ExecutionRecord
 
@@ -138,6 +138,9 @@ async def startup_event() -> None:
     if settings.schedule_enabled:
         from src.scheduling.runner import get_schedule_runner
         get_schedule_runner().start()
+    if settings.runner_health_check_enabled:
+        from src.services.runner_environment_service import get_health_monitor
+        get_health_monitor().start()
     asyncio.create_task(_cleanup_trial_runs())
 
 
@@ -145,6 +148,8 @@ async def startup_event() -> None:
 async def shutdown_event() -> None:
     from src.execution.worker import get_worker
     from src.scheduling.runner import get_schedule_runner
+    from src.services.runner_environment_service import get_health_monitor
+    await get_health_monitor().stop()
     await get_schedule_runner().stop()
     await get_worker().stop()
 
@@ -180,6 +185,7 @@ from src.api.llm_models import router as llm_models_router  # noqa: E402
 from src.api.schedules import router as schedules_router  # noqa: E402
 from src.api.dashboard import router as dashboard_router  # noqa: E402
 from src.api.internal import router as internal_router  # noqa: E402
+from src.api.runner_environments import router as runner_environments_router  # noqa: E402
 
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(admin_router, prefix="/api/v1")
@@ -192,3 +198,4 @@ app.include_router(media_router, prefix="/api/v1")
 app.include_router(llm_models_router, prefix="/api/v1")
 app.include_router(schedules_router, prefix="/api/v1")
 app.include_router(internal_router, prefix="/api/v1")
+app.include_router(runner_environments_router, prefix="/api/v1")

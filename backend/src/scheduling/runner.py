@@ -81,6 +81,8 @@ async def fire_schedule(schedule_id: str, now: datetime) -> Optional[str]:
             parallel_mode=schedule.parallel_mode,
             max_workers=schedule.max_workers,
             schedule_id=schedule_id,
+            linux_environment_id=schedule.linux_environment_id,
+            windows_environment_id=schedule.windows_environment_id,
         )
         await session.execute(
             update(ExecutionSchedule)

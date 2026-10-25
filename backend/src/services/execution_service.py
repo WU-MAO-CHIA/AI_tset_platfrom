@@ -113,22 +113,26 @@ async def _run_robot_job(
     outputdir: str,
     timeout_sec: float,
     processes: int = 1,
+    target=None,
 ) -> dict:
     """在 workdir 執行 robot / pabot，輸出寫在 workdir/outputdir/output.xml。
 
-    tests、outputdir 都是相對 workdir 的路徑。EXECUTION_RUNNER=remote 時交給 runner 容器
+    tests、outputdir 都是相對 workdir 的路徑。target 是 admin 登記的執行環境（spec 005）時送到
+    該 runner；內建環境（target 為 None 或沒有 url）在 EXECUTION_RUNNER=remote 時交給 runner 容器
     （腳本在那裡執行，碰不到後端的金鑰與資料庫），否則在本機以子程序執行。
     回傳 {"timed_out": bool, "stderr": str}；runner 連不上時 raise RunnerError。
     """
     from src.core.config import get_settings
 
     env = _build_robot_env()
-    if get_settings().execution_runner == "remote":
+    remote_url = getattr(target, "url", None)
+    if remote_url or get_settings().execution_runner == "remote":
         from src.execution.runner_client import run_remote
 
         spec = {"tool": tool, "tests": tests, "outputdir": outputdir,
                 "timeout": int(timeout_sec), "processes": processes}
-        result = await run_remote(workdir, spec, env)
+        result = await run_remote(workdir, spec, env, url=remote_url,
+                                  token=target.token if remote_url else None)
         return {"timed_out": bool(result.get("timed_out")), "stderr": result.get("stderr_tail", "")}
 
     import subprocess
@@ -155,6 +159,21 @@ async def _run_robot_job(
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, _run_sync)
 
+def _with_overrides(params: dict, linux_environment_id: Optional[str],
+                    windows_environment_id: Optional[str]) -> dict:
+    """執行時改選的環境依類型存成 {"linux": id, "windows": id}；沒有改選時不加這個鍵。"""
+    overrides = {"linux": linux_environment_id, "windows": windows_environment_id}
+    overrides = {kind: env_id for kind, env_id in overrides.items() if env_id}
+    return {**params, "environment_overrides": overrides} if overrides else params
+
+
+def _environment_fields(target) -> dict:
+    """CaseResult 保存執行當下的環境（spec 005）。"""
+    if target is None:
+        return {}
+    return {"runner_environment_id": target.id, "runner_environment_name": target.name}
+
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import AsyncSessionLocal
@@ -178,7 +197,11 @@ class ExecutionService:
         parallel_mode: bool,
         max_workers: int,
         schedule_id: Optional[str] = None,
+        linux_environment_id: Optional[str] = None,
+        windows_environment_id: Optional[str] = None,
     ) -> ExecutionRecord:
+        """linux_environment_id / windows_environment_id：這次把整批同類型案例改送到指定環境
+        （spec 005），呼叫端應先以 RunnerEnvironmentService.require_kind 驗證。"""
         from src.core.config import get_settings
         # 以 PARALLEL_MAX_WORKERS 為上限，避免請求直接決定 pabot --processes 數量
         max_workers = max(1, min(max_workers, get_settings().parallel_max_workers))
@@ -200,19 +223,25 @@ class ExecutionService:
         # 只排入佇列，由 ExecutionWorker 領取執行；參數於觸發當下存成快照
         await self._enqueue(
             record.id,
-            params={"case_ids": case_ids, "concurrency": concurrency},
+            params=_with_overrides({"case_ids": case_ids, "concurrency": concurrency},
+                                   linux_environment_id, windows_environment_id),
             priority=PRIORITY_CHECKLIST,
             total_count=len(case_ids),
         )
         return record
 
-    async def run_trial(self, source_case_id: str, rf_code: Optional[str] = None, case_name: Optional[str] = None) -> ExecutionRecord:
-        """Phase 27: Execute trial run with optional RF code override."""
+    async def run_trial(self, source_case_id: str, rf_code: Optional[str] = None, case_name: Optional[str] = None,
+                        environment_id: Optional[str] = None) -> ExecutionRecord:
+        """Phase 27: Execute trial run with optional RF code override.
+
+        environment_id：這次改用的執行環境，未指定時用案例的預設環境（spec 005）。
+        """
         record = await self._exec_repo.create_for_trial_run(source_case_id=source_case_id)
         # 試跑是使用者在案例頁等待結果的互動操作，優先於清單執行
         await self._enqueue(
             record.id,
-            params={"rf_code": rf_code, "case_name": case_name},
+            params={"rf_code": rf_code, "case_name": case_name,
+                    **({"environment_id": environment_id} if environment_id else {})},
             priority=PRIORITY_TRIAL_RUN,
             total_count=1,
         )
@@ -237,16 +266,26 @@ class ExecutionService:
         get_worker().notify()
 
     @staticmethod
-    async def _execute_trial_bg(execution_id: str, source_case_id: str, rf_code: Optional[str] = None, case_name: Optional[str] = None) -> None:
+    async def _execute_trial_bg(execution_id: str, source_case_id: str, rf_code: Optional[str] = None, case_name: Optional[str] = None,
+                                environment_id: Optional[str] = None) -> None:
         from src.core.config import get_settings
         from src.repositories.test_case_repo import TestCaseRepository
 
         settings = get_settings()
         sink = EventSink(execution_id)
 
+        target = None
+        target_error: Optional[str] = None
         async with AsyncSessionLocal() as session:
             case_repo = TestCaseRepository(session)
             case = await case_repo.get(source_case_id)
+            if case:
+                from src.services.runner_environment_service import EnvironmentUnavailable, RunnerEnvironmentService
+                try:
+                    target = await RunnerEnvironmentService(session).resolve(
+                        environment_id or case.runner_environment_id)
+                except EnvironmentUnavailable as exc:
+                    target_error = str(exc)
             # DB-first read path (mirrors get_robot_script + trial-run guard)
             db_rf_code: Optional[str] = None
             if case and not rf_code:
@@ -274,9 +313,13 @@ class ExecutionService:
         await sink.emit({"event": "case_started", "execution_id": execution_id, "case_id": source_case_id, "case_number": case_number})
 
         _report_dest = os.path.join(settings.execution_reports_dir, execution_id)
-        result = await ExecutionService._run_single_case_with_timeout(
-            case_id=source_case_id, robot_code=robot_code, timeout_sec=60, report_dest=_report_dest
-        )
+        if target_error:
+            result = {"status": "error", "elapsed_ms": 0, "failure_message": target_error}
+        else:
+            result = await ExecutionService._run_single_case_with_timeout(
+                case_id=source_case_id, robot_code=robot_code, timeout_sec=60, report_dest=_report_dest,
+                target=target,
+            )
 
         case_status = result.get("status", "error")
         passed = 1 if case_status == "passed" else 0
@@ -310,6 +353,7 @@ class ExecutionService:
                 elapsed_ms=result.get("elapsed_ms", 0),
                 failure_message=result.get("failure_message"),
                 position=0,
+                **_environment_fields(target),
             )
             session.add(cr)
 
@@ -413,32 +457,76 @@ class ExecutionService:
 請分析失敗原因並提供修正建議。如可能，請提供更新後的 RF 程式碼片段。"""
 
     @staticmethod
-    async def _execute_all_cases_bg(execution_id: str, case_ids: list[str], max_workers: int) -> None:
+    async def _execute_all_cases_bg(execution_id: str, case_ids: list[str], max_workers: int,
+                                    environment_overrides: Optional[dict] = None) -> None:
         from src.core.config import get_settings
         from src.repositories.test_case_repo import TestCaseRepository
+        from src.services.runner_environment_service import EnvironmentUnavailable, RunnerEnvironmentService
 
         settings = get_settings()
         sink = EventSink(execution_id)
+        environment_overrides = environment_overrides or {}
 
+        # 依實際使用的執行環境分組（spec 005）：案例的預設環境，或這次依類型改選的環境
+        groups: dict[str, list[str]] = {}
+        targets: dict[str, object] = {}
+        unavailable: dict[str, str] = {}  # case_id → 無法執行的原因
         async with AsyncSessionLocal() as session:
             case_repo = TestCaseRepository(session)
+            env_service = RunnerEnvironmentService(session)
             case_number_map: dict[str, str] = {}
+            case_envs: dict[str, Optional[str]] = {}
             for cid in case_ids:
                 case = await case_repo.get(cid)
                 if case:
                     case_number_map[cid] = case.case_number
+                    case_envs[cid] = case.runner_environment_id
+            kinds = await env_service.kinds({e for e in case_envs.values() if e})
+            failures: dict[Optional[str], str] = {}
+            for cid in case_ids:
+                if cid not in case_envs:
+                    # 案例已刪除：沿用原本的行為，交給內建環境回報「尚無 RF 程式碼」
+                    groups.setdefault("__missing__", []).append(cid)
+                    continue
+                default_env = case_envs[cid]
+                kind = kinds.get(default_env) if default_env else None
+                env_id = environment_overrides.get(kind, default_env) if kind else default_env
+                if env_id not in targets and env_id not in failures:
+                    try:
+                        targets[env_id] = await env_service.resolve(env_id)
+                    except EnvironmentUnavailable as exc:
+                        failures[env_id] = str(exc)
+                if env_id in failures:
+                    unavailable[cid] = failures[env_id]
+                else:
+                    groups.setdefault(env_id, []).append(cid)
 
-        use_pabot = max_workers > 1 and len(case_ids) > 1
+        positions = {cid: idx for idx, cid in enumerate(case_ids)}
+
+        async def run_group(env_id: str, group: list[str]) -> tuple[int, int, int]:
+            target = targets.get(env_id)
+            # 桌面只有一個，windows 環境一律依序執行
+            use_pabot = (max_workers > 1 and len(group) > 1
+                         and getattr(target, "kind", "linux") == "linux")
+            if use_pabot:
+                return await ExecutionService._run_pabot(
+                    execution_id, group, case_number_map, max_workers, settings, sink,
+                    target=target, positions=positions,
+                )
+            return await ExecutionService._run_sequential(
+                execution_id, group, case_number_map, settings, sink, target=target, positions=positions,
+            )
 
         try:
-            if use_pabot:
-                passed, failed, total = await ExecutionService._run_pabot(
-                    execution_id, case_ids, case_number_map, max_workers, settings, sink
-                )
-            else:
-                passed, failed, total = await ExecutionService._run_sequential(
-                    execution_id, case_ids, case_number_map, settings, sink
-                )
+            outcomes = await asyncio.gather(*(run_group(e, g) for e, g in groups.items()))
+            passed = sum(o[0] for o in outcomes)
+            failed = sum(o[1] for o in outcomes)
+            total = sum(o[2] for o in outcomes)
+            if unavailable:
+                await ExecutionService._record_unavailable(
+                    execution_id, unavailable, case_number_map, positions, sink)
+                failed += len(unavailable)
+                total += len(unavailable)
         except Exception as exc:
             async with AsyncSessionLocal() as session:
                 from datetime import datetime, timezone
@@ -476,17 +564,46 @@ class ExecutionService:
         })
 
     @staticmethod
+    async def _record_unavailable(
+        execution_id: str,
+        reasons: dict[str, str],
+        case_number_map: dict[str, str],
+        positions: dict[str, int],
+        sink: EventSink,
+    ) -> None:
+        """執行環境無法使用的案例直接記為 error，不送出執行。"""
+        from src.models.base import generate_uuid
+        from src.models.case_result import CaseResult
+
+        async with AsyncSessionLocal() as session:
+            for cid, reason in reasons.items():
+                session.add(CaseResult(
+                    id=generate_uuid(), execution_id=execution_id, test_case_id=cid, case_version=1,
+                    status="error", elapsed_ms=0, failure_message=reason, position=positions.get(cid, 0),
+                ))
+            await session.commit()
+        for cid, reason in reasons.items():
+            await sink.emit({
+                "event": "case_completed", "execution_id": execution_id, "case_id": cid,
+                "case_number": case_number_map.get(cid, ""), "status": "error", "elapsed_ms": 0,
+                "message": reason,
+            })
+
+    @staticmethod
     async def _run_sequential(
         execution_id: str,
         case_ids: list[str],
         case_number_map: dict[str, str],
         settings,
         sink: EventSink,
+        target=None,
+        positions: Optional[dict[str, int]] = None,
     ) -> tuple[int, int, int]:
         passed = 0
         failed = 0
 
         for idx, case_id in enumerate(case_ids):
+            position = positions.get(case_id, idx) if positions else idx
             case_number = case_number_map.get(case_id)
             await sink.emit({
                 "event": "case_started",
@@ -503,13 +620,14 @@ class ExecutionService:
                         robot_code = f.read()
 
             _report_dest = os.path.join(
-                settings.execution_reports_dir, execution_id, case_number or f"case_{idx}"
+                settings.execution_reports_dir, execution_id, case_number or f"case_{position}"
             )
             result = await ExecutionService._run_single_case_with_timeout(
                 case_id=case_id,
                 robot_code=robot_code,
                 timeout_sec=300,
                 report_dest=_report_dest,
+                target=target,
             )
 
             case_status = result.get("status", "error")
@@ -529,7 +647,8 @@ class ExecutionService:
                     status=case_status,
                     elapsed_ms=result.get("elapsed_ms", 0),
                     failure_message=result.get("failure_message"),
-                    position=idx,
+                    position=position,
+                    **_environment_fields(target),
                 )
                 session.add(cr)
                 await session.commit()
@@ -554,6 +673,8 @@ class ExecutionService:
         max_workers: int,
         settings,
         sink: EventSink,
+        target=None,
+        positions: Optional[dict[str, int]] = None,
     ) -> tuple[int, int, int]:
         robot_files: list[str] = []
         case_number_to_id: dict[str, str] = {v: k for k, v in case_number_map.items()}
@@ -598,7 +719,7 @@ class ExecutionService:
             tests = [f"robot_scripts/{os.path.basename(p)}" for p in robot_files]
             try:
                 job = await _run_robot_job(tmp_dir, "pabot", tests, "results", timeout_sec=600,
-                                           processes=max_workers)
+                                           processes=max_workers, target=target)
                 stderr_text_job = job["stderr"]
             except Exception as exc:  # runner 連不上：整批記為失敗並顯示原因
                 stderr_text_job = str(exc)
@@ -649,7 +770,8 @@ class ExecutionService:
                             "status": status,
                             "elapsed_ms": agg["elapsed_ms"],
                             "failure_message": agg["failure_message"],
-                            "position": idx,
+                            "position": positions.get(cid, idx) if positions else idx,
+                            **_environment_fields(target),
                         })
                     await sink.emit({
                         "event": "case_completed",
@@ -701,6 +823,7 @@ class ExecutionService:
         robot_code: Optional[str],
         timeout_sec: float,
         report_dest: Optional[str] = None,
+        target=None,
     ) -> dict:
         if robot_code is None:
             return {"status": "skipped", "elapsed_ms": 0, "failure_message": "尚無 RF 程式碼（請先透過 AI 對話生成或上傳）"}
@@ -726,7 +849,7 @@ class ExecutionService:
 
             try:
                 result = await asyncio.wait_for(
-                    ExecutionService._execute_robot_subprocess(robot_file, output_xml, timeout_sec),
+                    ExecutionService._execute_robot_subprocess(robot_file, output_xml, timeout_sec, target=target),
                     timeout=timeout_sec + 140,  # 內層自己會在逾時後回報；這裡只是最後防線（含 runner 傳輸）
                 )
             except asyncio.TimeoutError:
@@ -743,6 +866,7 @@ class ExecutionService:
         robot_file: str,
         output_xml: str,
         timeout_sec: float,
+        target=None,
     ) -> dict:
         import time
         start_ms = int(time.time() * 1000)
@@ -751,7 +875,7 @@ class ExecutionService:
         test = os.path.relpath(os.path.abspath(robot_file), workdir)
         try:
             job = await asyncio.wait_for(
-                _run_robot_job(workdir, "robot", [test], ".", timeout_sec),
+                _run_robot_job(workdir, "robot", [test], ".", timeout_sec, target=target),
                 timeout=timeout_sec + 130,
             )
         except asyncio.TimeoutError:

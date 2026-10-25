@@ -15,6 +15,9 @@ export interface Schedule {
   interval_minutes: number | null
   parallel_mode: boolean
   max_workers: number
+  // 整批網頁 / 桌面案例改用的執行環境（spec 005）；null = 依各案例設定
+  linux_environment_id: string | null
+  windows_environment_id: string | null
   // 排程時間的解讀時區（後端 SCHEDULE_TIMEZONE）
   timezone: string
   next_run_at: string | null
@@ -34,6 +37,8 @@ export interface ScheduleInput {
   interval_minutes: number | null
   parallel_mode: boolean
   max_workers: number
+  linux_environment_id: string | null
+  windows_environment_id: string | null
 }
 
 export async function listSchedules(): Promise<{ items: Schedule[]; total: number }> {

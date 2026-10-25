@@ -36,6 +36,7 @@ class ChecklistItemTestCaseInfo(BaseModel):
     case_number: Optional[str] = None
     name: Optional[str] = None
     system_category: Optional[str] = None
+    runner_environment_id: Optional[str] = None
 
 
 class ChecklistItemResponse(BaseModel):
@@ -297,6 +298,7 @@ async def get_checklist(
                     case_number=item.test_case.case_number if item.test_case else None,
                     name=item.test_case.name if item.test_case else None,
                     system_category=item.test_case.system_category if item.test_case else None,
+                    runner_environment_id=item.test_case.runner_environment_id if item.test_case else None,
                 ) if item.test_case else None,
             )
             for item in sorted(checklist.items, key=lambda x: x.position or 0)
@@ -476,6 +478,9 @@ async def reorder_checklist_cases(
 class ExecuteRequest(BaseModel):
     parallel_mode: bool = False
     max_workers: int = 1
+    # 這次把整批網頁 / 桌面案例改送到指定環境（spec 005）；未指定時用各案例的預設環境
+    linux_environment_id: Optional[str] = None
+    windows_environment_id: Optional[str] = None
 
 
 @router.post("/{checklist_id}/execute", status_code=status.HTTP_202_ACCEPTED, response_model=ExecutionStartResponse, dependencies=[Depends(require_editor_or_above)])
@@ -490,11 +495,21 @@ async def execute_checklist(
     if checklist is None:
         raise HTTPException(status_code=404, detail={"error": "not_found"})
 
+    from src.services.runner_environment_service import RunnerEnvironmentService
+    env_service = RunnerEnvironmentService(db)
+    try:
+        await env_service.require_kind(body.linux_environment_id, "linux")
+        await env_service.require_kind(body.windows_environment_id, "windows")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail={"error": "validation_error", "message": str(exc)})
+
     exec_service = ExecutionService(db)
     record = await exec_service.run_checklist_parallel(
         checklist_id=checklist_id,
         parallel_mode=body.parallel_mode,
         max_workers=body.max_workers,
+        linux_environment_id=body.linux_environment_id,
+        windows_environment_id=body.windows_environment_id,
     )
     return {
         "execution_id": record.id,

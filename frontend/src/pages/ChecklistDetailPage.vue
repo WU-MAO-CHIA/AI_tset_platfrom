@@ -34,6 +34,34 @@
       </dl>
     </div>
 
+    <!-- 執行環境（spec 005）：不改選時，各案例用自己的預設環境 -->
+    <div v-if="authStore.isEditor && kindsInChecklist.size > 0" class="section" data-testid="run-environments">
+      <h2>執行環境</h2>
+      <div class="env-row">
+        <label v-if="kindsInChecklist.has('linux')">
+          網頁案例
+          <RunnerEnvironmentSelect
+            v-model="linuxEnvironmentId"
+            :environments="environments"
+            kind="linux"
+            default-label="依各案例設定"
+            data-testid="linux-env-select"
+          />
+        </label>
+        <label v-if="kindsInChecklist.has('windows')">
+          桌面案例
+          <RunnerEnvironmentSelect
+            v-model="windowsEnvironmentId"
+            :environments="environments"
+            kind="windows"
+            default-label="依各案例設定"
+            data-testid="windows-env-select"
+          />
+        </label>
+      </div>
+      <p class="env-hint">桌面案例一次只跑一個；網頁案例與桌面案例會同時在各自的環境執行。</p>
+    </div>
+
     <!-- 案例列表區 -->
     <div class="section" data-testid="case-list">
       <h2>所含案例</h2>
@@ -48,6 +76,7 @@
             <th>案例編號</th>
             <th>名稱</th>
             <th>系統別</th>
+            <th>執行環境</th>
           </tr>
         </thead>
         <tbody>
@@ -62,9 +91,10 @@
               <td>{{ item.test_case?.case_number ?? item.test_case_id }}</td>
               <td>{{ item.test_case?.name ?? '-' }}</td>
               <td>{{ item.test_case?.system_category ?? '-' }}</td>
+              <td>{{ environmentName(item.test_case?.runner_environment_id) }}</td>
             </tr>
             <tr v-if="expandedRows.has(item.test_case_id)" class="expanded-row">
-              <td colspan="5" class="expanded-cell">
+              <td colspan="6" class="expanded-cell">
                 <div class="test-data-area">
                   <template v-if="itemsMap.has(item.test_case_id)">
                     <div v-if="(itemsMap.get(item.test_case_id)!.test_data ?? []).length === 0" class="no-test-data">
@@ -185,6 +215,8 @@ import {
 import { executeChecklist } from '../services/executionApi'
 import { useAuthStore } from '../stores/authStore'
 import ScheduleList from '../components/ScheduleList/index.vue'
+import RunnerEnvironmentSelect from '../components/RunnerEnvironmentSelect/index.vue'
+import { kindOf, listEnvironments, type EnvironmentKind, type RunnerEnvironment } from '../services/runnerEnvironmentApi'
 import StatusBadge from '../components/StatusBadge/index.vue'
 import { confirmAction } from '../composables/useConfirm'
 import { triggerLabel } from '../utils/scheduleFormat'
@@ -322,6 +354,8 @@ async function handleExecute() {
     const { execution_id } = await executeChecklist(checklist.value.id, {
       parallel_mode: false,
       max_workers: 1,
+      linux_environment_id: linuxEnvironmentId.value,
+      windows_environment_id: windowsEnvironmentId.value,
     })
     router.push(`/executions/${execution_id}`)
   } catch {
@@ -329,7 +363,36 @@ async function handleExecute() {
   }
 }
 
-onMounted(fetchChecklist)
+const environments = ref<RunnerEnvironment[]>([])
+const linuxEnvironmentId = ref<string | null>(null)
+const windowsEnvironmentId = ref<string | null>(null)
+
+const kindsInChecklist = computed(() => {
+  const kinds = new Set<EnvironmentKind>()
+  for (const item of checklist.value?.items ?? []) {
+    const kind = kindOf(environments.value, item.test_case?.runner_environment_id)
+    if (kind) kinds.add(kind)
+  }
+  return kinds
+})
+
+function environmentName(id: string | null | undefined): string {
+  if (!id) return '需重新選擇'
+  return environments.value.find((e) => e.id === id)?.name ?? '-'
+}
+
+async function loadEnvironments() {
+  try {
+    environments.value = await listEnvironments()
+  } catch {
+    // 讀不到時各案例照預設環境執行
+  }
+}
+
+onMounted(() => {
+  fetchChecklist()
+  loadEnvironments()
+})
 </script>
 
 <style scoped>
@@ -337,6 +400,9 @@ onMounted(fetchChecklist)
 h1 { margin-bottom: 4px; }
 .subtitle { color: var(--ink-muted); }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.env-row { display: flex; gap: 24px; flex-wrap: wrap; }
+.env-row label { display: flex; flex-direction: column; gap: 4px; color: var(--ink-muted); }
+.env-hint { color: var(--ink-faint); font-size: var(--fs-12); margin-top: 8px; }
 
 .section { margin-bottom: 32px; }
 .section h2 { margin-bottom: 12px; }

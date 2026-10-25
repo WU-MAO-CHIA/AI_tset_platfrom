@@ -91,12 +91,14 @@ async def run_execution(record: ExecutionRecord) -> None:
             record.source_case_id,
             rf_code=params.get("rf_code"),
             case_name=params.get("case_name"),
+            environment_id=params.get("environment_id"),
         )
     else:
         await ExecutionService._execute_all_cases_bg(
             record.id,
             list(params.get("case_ids") or []),
             int(params.get("concurrency") or 1),
+            params.get("environment_overrides") or {},
         )
 
 

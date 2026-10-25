@@ -244,11 +244,11 @@ class TestRunExecutionDispatch:
     async def test_dispatches_by_type_with_params(self, monkeypatch):
         calls = []
 
-        async def fake_trial(execution_id, source_case_id, rf_code=None, case_name=None):
-            calls.append(("trial", execution_id, source_case_id, rf_code, case_name))
+        async def fake_trial(execution_id, source_case_id, rf_code=None, case_name=None, environment_id=None):
+            calls.append(("trial", execution_id, source_case_id, rf_code, case_name, environment_id))
 
-        async def fake_checklist(execution_id, case_ids, max_workers):
-            calls.append(("checklist", execution_id, case_ids, max_workers))
+        async def fake_checklist(execution_id, case_ids, max_workers, environment_overrides=None):
+            calls.append(("checklist", execution_id, case_ids, max_workers, environment_overrides))
 
         monkeypatch.setattr(ExecutionService, "_execute_trial_bg", staticmethod(fake_trial))
         monkeypatch.setattr(ExecutionService, "_execute_all_cases_bg", staticmethod(fake_checklist))
@@ -261,8 +261,13 @@ class TestRunExecutionDispatch:
             id="c", execution_type="checklist", checklist_id="cl-1",
             params={"case_ids": ["case-1", "case-2"], "concurrency": 2},
         ))
+        await worker_module.run_execution(ExecutionRecord(
+            id="e", execution_type="checklist", checklist_id="cl-1",
+            params={"case_ids": ["case-1"], "concurrency": 1, "environment_overrides": {"linux": "env-1"}},
+        ))
 
         assert calls == [
-            ("trial", "t", "case-1", "x", "n"),
-            ("checklist", "c", ["case-1", "case-2"], 2),
+            ("trial", "t", "case-1", "x", "n", None),
+            ("checklist", "c", ["case-1", "case-2"], 2, {}),
+            ("checklist", "e", ["case-1"], 1, {"linux": "env-1"}),
         ]

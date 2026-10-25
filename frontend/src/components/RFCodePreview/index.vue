@@ -58,6 +58,8 @@ const props = defineProps<{
   rfCodeOverride?: string
   chatMode?: boolean
   caseId?: string
+  // 試跑改用的執行環境（spec 005），未指定時用案例的預設環境
+  environmentId?: string | null
 }>()
 
 const emit = defineEmits<{ (e: 'trial-started', executionId: string): void }>()
@@ -128,7 +130,7 @@ async function onTrialRun() {
   trialRunning.value = true
   const startTime = Date.now()
   try {
-    const res = await caseApi.runTrialFromCode(props.caseId, rfCode.value)
+    const res = await caseApi.runTrialFromCode(props.caseId, rfCode.value, undefined, props.environmentId)
     emit('trial-started', res.data.execution_id)
   } catch (err) {
     console.error('Trial run failed:', err)

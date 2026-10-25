@@ -11,7 +11,15 @@
           <button class="btn-secondary btn-cancel" @click="cancelEdit">取消</button>
           <button class="btn-primary btn-save-edit" @click="saveFromPageHeader">儲存案例</button>
         </template>
-        <button v-if="!editing" class="btn-primary" @click="onTrialRun" :disabled="trialRunning">
+        <RunnerEnvironmentSelect
+          v-if="!editing && authStore.isEditor"
+          v-model="trialEnvironmentId"
+          :environments="environments"
+          :kind="caseKind"
+          placeholder="選擇試跑環境"
+          data-testid="trial-env-select"
+        />
+        <button v-if="!editing" class="btn-primary" @click="onTrialRun" :disabled="trialRunning || !trialEnvironmentId">
           {{ trialRunning ? '試跑中...' : '立即試跑' }}
         </button>
       </div>
@@ -129,6 +137,7 @@
             :selected-model="selectedModel"
             :rf-code-override="rfCode"
             :chat-mode="true"
+            :environment-id="trialOverride"
             @trial-started="trialExecutionId = $event"
           />
         </section>
@@ -166,6 +175,7 @@
           <h2>基本資訊</h2>
           <dl>
             <dt>系統別</dt><dd>{{ caseData.system_category || '-' }}</dd>
+            <dt>執行環境</dt><dd data-testid="case-env-name">{{ environmentName }}</dd>
             <dt>版本</dt><dd>v{{ caseData.version }}</dd>
             <dt>建立者</dt><dd>{{ caseData.created_by }}</dd>
             <dt>更新時間</dt><dd>{{ formatDateTime(caseData.updated_at) }}</dd>
@@ -301,6 +311,8 @@ import AIChatPanel from '../components/AIChatPanel/index.vue'
 import RFCodePreview from '../components/RFCodePreview/index.vue'
 import RFCodeEditor from '../components/RFCodeEditor/index.vue'
 import PageExplorer from '../components/PageExplorer/index.vue'
+import RunnerEnvironmentSelect from '../components/RunnerEnvironmentSelect/index.vue'
+import { kindOf, listEnvironments, type RunnerEnvironment } from '../services/runnerEnvironmentApi'
 import type { ExploreElement } from '../services/caseApi'
 import { useAuthStore } from '../stores/authStore'
 import { formatDateTime } from '../utils/format'
@@ -387,10 +399,35 @@ async function reloadTestData() {
 
 const editInitialData = computed(() => caseData.value ? { ...caseData.value } : undefined)
 
+// 執行環境（spec 005）：試跑預設用案例的環境，可改選同類型的其他環境
+const environments = ref<RunnerEnvironment[]>([])
+const trialEnvironmentId = ref<string | null>(null)
+const caseKind = computed(() => kindOf(environments.value, caseData.value?.runner_environment_id))
+const environmentName = computed(() => {
+  const id = caseData.value?.runner_environment_id
+  if (!id) return '原本的環境已刪除，請編輯案例重新選擇'
+  return environments.value.find((e) => e.id === id)?.name ?? id
+})
+// 與案例預設相同時不必送出，後端會用案例的環境
+const trialOverride = computed(() =>
+  trialEnvironmentId.value && trialEnvironmentId.value !== caseData.value?.runner_environment_id
+    ? trialEnvironmentId.value
+    : null,
+)
+
+async function loadEnvironments() {
+  try {
+    environments.value = await listEnvironments()
+  } catch {
+    // 讀不到時試跑仍用案例的預設環境
+  }
+}
+
 onMounted(async () => {
   const res = await caseApi.getCase(caseId)
   caseData.value = res.data
-  await loadAttachments()
+  trialEnvironmentId.value = res.data.runner_environment_id
+  await Promise.all([loadAttachments(), loadEnvironments()])
 
   try {
     const scriptRes = await caseApi.getRobotScript(caseId)
@@ -487,6 +524,7 @@ async function onSaved(_id: string) {
   })
   const res = await caseApi.getCase(caseId)
   caseData.value = res.data
+  trialEnvironmentId.value = res.data.runner_environment_id
   await loadAttachments()
   editing.value = false
 }
@@ -500,7 +538,7 @@ async function loadHistory() {
 async function onTrialRun() {
   trialRunning.value = true
   try {
-    const res = await caseApi.trialRun(caseId)
+    const res = await caseApi.trialRun(caseId, trialOverride.value)
     router.push(`/executions/${res.data.execution_id}`)
   } finally {
     trialRunning.value = false

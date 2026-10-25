@@ -35,11 +35,12 @@
       <div v-if="caseResults.length" class="case-results" data-testid="case-results">
         <h2>案例結果</h2>
         <table class="results-table">
-          <thead><tr><th>案例編號</th><th>名稱</th><th>狀態</th><th>耗時(ms)</th><th>失敗訊息</th></tr></thead>
+          <thead><tr><th>案例編號</th><th>名稱</th><th>執行環境</th><th>狀態</th><th>耗時(ms)</th><th>失敗訊息</th></tr></thead>
           <tbody>
             <tr v-for="cr in caseResults" :key="cr.id" :class="`row-${cr.status}`">
               <td>{{ cr.case_number }}</td>
               <td>{{ cr.case_name }}</td>
+              <td data-testid="result-env">{{ cr.runner_environment_name || '-' }}</td>
               <td>{{ statusLabel(cr.status) }}</td>
               <td>{{ cr.elapsed_ms ?? '-' }}</td>
               <td class="failure-msg">{{ cr.failure_message || '-' }}</td>

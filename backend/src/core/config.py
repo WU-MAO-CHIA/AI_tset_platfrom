@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     # 排程（spec 004）：排程時間以此時區解讀；SCHEDULE_ENABLED=false 可整個關閉排程器
     schedule_timezone: str = "Asia/Taipei"
     schedule_enabled: bool = True
+    # 執行環境（spec 005）：背景每 60 秒檢查各 runner 是否連線
+    runner_health_check_enabled: bool = True
 
     anthropic_api_key: str = ""
     openai_api_key: str = ""

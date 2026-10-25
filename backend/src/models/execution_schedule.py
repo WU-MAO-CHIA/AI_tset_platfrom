@@ -38,6 +38,9 @@ class ExecutionSchedule(Base, TimestampMixin):
 
     parallel_mode: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     max_workers: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    # 改用指定的執行環境（spec 005）；null = 依各案例的預設環境
+    linux_environment_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    windows_environment_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
 
     # 停用時為 null
     next_run_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

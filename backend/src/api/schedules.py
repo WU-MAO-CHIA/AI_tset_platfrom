@@ -26,6 +26,8 @@ class ScheduleCreateRequest(BaseModel):
     interval_minutes: Optional[int] = None
     parallel_mode: bool = False
     max_workers: int = 1
+    linux_environment_id: Optional[str] = None
+    windows_environment_id: Optional[str] = None
 
 
 class ScheduleUpdateRequest(BaseModel):
@@ -39,6 +41,9 @@ class ScheduleUpdateRequest(BaseModel):
     interval_minutes: Optional[int] = None
     parallel_mode: Optional[bool] = None
     max_workers: Optional[int] = None
+    # 明確送 null 表示改回「依各案例設定」
+    linux_environment_id: Optional[str] = None
+    windows_environment_id: Optional[str] = None
 
 
 class ScheduleResponse(BaseModel):
@@ -53,6 +58,8 @@ class ScheduleResponse(BaseModel):
     interval_minutes: Optional[int] = None
     parallel_mode: bool
     max_workers: int
+    linux_environment_id: Optional[str] = None
+    windows_environment_id: Optional[str] = None
     timezone: str
     next_run_at: Optional[str] = None
     last_triggered_at: Optional[str] = None
@@ -90,6 +97,8 @@ async def _serialize(service: ScheduleService, schedules: list[ExecutionSchedule
             "interval_minutes": s.interval_minutes,
             "parallel_mode": s.parallel_mode,
             "max_workers": s.max_workers,
+            "linux_environment_id": s.linux_environment_id,
+            "windows_environment_id": s.windows_environment_id,
             "timezone": tz,
             "next_run_at": _iso(s.next_run_at),
             "last_triggered_at": _iso(s.last_triggered_at),

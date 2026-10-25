@@ -14,6 +14,7 @@
         <RouterLink to="/schedules" :class="{ active: isSection('/schedules') }">排程</RouterLink>
         <RouterLink to="/db-connections" :class="{ active: isSection('/db-connections') }">資料庫連線</RouterLink>
         <RouterLink v-if="authStore.isAdmin" to="/dashboard" :class="{ active: isSection('/dashboard') }">監控</RouterLink>
+        <RouterLink v-if="authStore.isAdmin" to="/runner-environments" :class="{ active: isSection('/runner-environments') }">執行環境</RouterLink>
         <RouterLink v-if="authStore.isAdmin" to="/admin" :class="{ active: isSection('/admin') }">管理後台</RouterLink>
       </div>
       <div class="nav-user" v-if="authStore.isLoggedIn">

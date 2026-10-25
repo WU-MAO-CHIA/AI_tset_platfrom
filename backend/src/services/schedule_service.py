@@ -44,6 +44,14 @@ class ScheduleService:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    async def _validate_environments(self, values: dict[str, Any]) -> None:
+        """排程可指定整批網頁 / 桌面案例改用的執行環境（spec 005）。"""
+        from src.services.runner_environment_service import RunnerEnvironmentService
+
+        service = RunnerEnvironmentService(self._session)
+        await service.require_kind(values.get("linux_environment_id"), "linux")
+        await service.require_kind(values.get("windows_environment_id"), "windows")
+
     async def get(self, schedule_id: str) -> Optional[ExecutionSchedule]:
         return await self._session.get(ExecutionSchedule, schedule_id)
 
@@ -59,6 +67,7 @@ class ScheduleService:
         values = _normalize(dict(fields))
         values["name"] = values["name"].strip()
         _validate(values)
+        await self._validate_environments(values)
         schedule = ExecutionSchedule(checklist_id=checklist_id, created_by=created_by, **values)
         schedule.next_run_at = next_run_for(schedule, utcnow())
         self._session.add(schedule)
@@ -72,11 +81,14 @@ class ScheduleService:
         current = {
             key: getattr(schedule, key)
             for key in ("name", "enabled", "frequency", "time_of_day", "weekdays",
-                        "interval_minutes", "parallel_mode", "max_workers")
+                        "interval_minutes", "parallel_mode", "max_workers",
+                        "linux_environment_id", "windows_environment_id")
         }
         values = _normalize({**current, **fields})
         values["name"] = values["name"].strip()
         _validate(values)
+        if any(values[k] != current[k] for k in ("linux_environment_id", "windows_environment_id")):
+            await self._validate_environments(values)
         timing_changed = any(values[key] != current[key] for key in _TIMING_FIELDS)
         for key, value in values.items():
             setattr(schedule, key, value)
