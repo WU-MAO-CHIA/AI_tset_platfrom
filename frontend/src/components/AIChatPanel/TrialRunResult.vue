@@ -117,7 +117,7 @@ function showFullImage(path: string) {
 
 .report-link {
   font-size: 13px;
-  color: #3b82f6;
+  color: var(--brand-strong);
   text-decoration: none;
   width: fit-content;
 }

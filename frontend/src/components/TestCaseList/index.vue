@@ -146,9 +146,9 @@ defineExpose({ load })
 .case-table thead { background: #f9f9f9; }
 .sortable { cursor: pointer; user-select: none; }
 .sortable:hover { background: #f0f0f0; }
-.sort-indicator { display: inline-block; width: 12px; color: #4f46e5; font-weight: 700; }
+.sort-indicator { display: inline-block; width: 12px; color: var(--brand-strong); font-weight: 700; }
 .clickable { cursor: pointer; }
-.clickable:hover { background: #f0f4ff; }
+.clickable:hover { background: var(--brand-soft); }
 button { padding: 4px 10px; cursor: pointer; }
 .danger { color: red; }
 .pagination { display: flex; align-items: center; gap: 12px; }

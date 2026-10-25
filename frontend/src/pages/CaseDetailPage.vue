@@ -1,14 +1,17 @@
 <template>
   <div class="page" v-if="caseData">
     <div class="page-header">
-      <h1>{{ caseData.case_number }} — {{ caseData.name }}</h1>
+      <div>
+        <p class="case-number">{{ caseData.case_number }}</p>
+        <h1>{{ caseData.name }}</h1>
+      </div>
       <div class="actions">
-        <button v-if="!editing && authStore.isEditor" @click="startEdit">編輯</button>
+        <button v-if="!editing && authStore.isEditor" class="btn-secondary" @click="startEdit">編輯</button>
         <template v-else-if="editing">
-          <button class="btn-save-edit" @click="saveFromPageHeader">儲存案例</button>
-          <button class="btn-cancel" @click="cancelEdit">取消</button>
+          <button class="btn-secondary btn-cancel" @click="cancelEdit">取消</button>
+          <button class="btn-primary btn-save-edit" @click="saveFromPageHeader">儲存案例</button>
         </template>
-        <button v-if="!editing" @click="onTrialRun" :disabled="trialRunning">
+        <button v-if="!editing" class="btn-primary" @click="onTrialRun" :disabled="trialRunning">
           {{ trialRunning ? '試跑中...' : '立即試跑' }}
         </button>
       </div>
@@ -165,7 +168,7 @@
             <dt>系統別</dt><dd>{{ caseData.system_category || '-' }}</dd>
             <dt>版本</dt><dd>v{{ caseData.version }}</dd>
             <dt>建立者</dt><dd>{{ caseData.created_by }}</dd>
-            <dt>更新時間</dt><dd>{{ caseData.updated_at }}</dd>
+            <dt>更新時間</dt><dd>{{ formatDateTime(caseData.updated_at) }}</dd>
           </dl>
         </div>
         <div class="section">
@@ -300,6 +303,7 @@ import RFCodeEditor from '../components/RFCodeEditor/index.vue'
 import PageExplorer from '../components/PageExplorer/index.vue'
 import type { ExploreElement } from '../services/caseApi'
 import { useAuthStore } from '../stores/authStore'
+import { formatDateTime } from '../utils/format'
 
 const authStore = useAuthStore()
 
@@ -472,7 +476,7 @@ function cancelEdit() {
 async function onSaved(_id: string) {
   // save test_data changes (full replace)
   await caseApi.updateCase(caseId, {
-    created_by: 'current_user',
+    created_by: authStore.username ?? '',
     test_data: editTestData.value.map((row, idx) => ({
       field_name: row.field_name,
       rf_variable: row.rf_variable || null,
@@ -531,11 +535,9 @@ function saveFromPageHeader() {
 </script>
 
 <style scoped>
-.page { padding: 24px; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-h1 { font-size: 20px; }
-.actions { display: flex; gap: 8px; }
-.btn-cancel { background: #e2e8f0; color: #475569; }
+.page-header { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: 24px; }
+.case-number { font-size: var(--fs-12); color: var(--ink-muted); }
+.actions { display: flex; gap: 8px; flex-shrink: 0; }
 
 .tabs {
   display: flex;
@@ -557,8 +559,8 @@ h1 { font-size: 20px; }
 }
 
 .tab-btn.active {
-  color: #3b82f6;
-  border-bottom-color: #3b82f6;
+  color: var(--brand-strong);
+  border-bottom-color: var(--brand-strong);
   font-weight: 600;
 }
 
@@ -622,18 +624,7 @@ h1 { font-size: 20px; }
   padding: 16px;
 }
 
-.btn-save-edit {
-  background: #4f46e5;
-  color: white;
-  padding: 8px 16px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-}
 
-.btn-save-edit:disabled { opacity: 0.6; cursor: not-allowed; }
 
 @media (max-width: 767px) {
   .split-layout, .steps-split { grid-template-columns: 1fr; height: auto; }
@@ -647,11 +638,11 @@ pre { white-space: pre-wrap; background: #f9f9f9; padding: 12px; border-radius: 
 .history-table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .history-table th, .history-table td { padding: 8px; border-bottom: 1px solid #eee; }
 .clickable { cursor: pointer; }
-.clickable:hover { background: #f0f4ff; }
+.clickable:hover { background: var(--brand-soft); }
 .empty { color: #888; }
 .attachment-list { list-style: none; padding: 0; margin: 0; }
 .attachment-list li { padding: 4px 0; font-size: 14px; }
-.attachment-list a { color: #4f46e5; text-decoration: none; }
+.attachment-list a { color: var(--brand-strong); text-decoration: none; }
 .attachment-list a:hover { text-decoration: underline; }
 
 .chat-history { display: flex; flex-direction: column; gap: 12px; }
@@ -693,7 +684,7 @@ pre { white-space: pre-wrap; background: #f9f9f9; padding: 12px; border-radius: 
   font-size: 13px;
   box-sizing: border-box;
 }
-.td-input:focus { outline: none; border-color: #6366f1; }
+.td-input:focus { outline: none; border-color: var(--brand-strong); }
 
 .btn-del-row {
   background: none;
@@ -716,7 +707,7 @@ pre { white-space: pre-wrap; background: #f9f9f9; padding: 12px; border-radius: 
   padding: 5px 14px;
   border-radius: 4px;
 }
-.btn-add-row:hover { border-color: #4f46e5; color: #4f46e5; }
+.btn-add-row:hover { border-color: var(--brand-strong); color: var(--brand-strong); }
 
 .td-empty { font-size: 13px; margin-bottom: 8px; }
 

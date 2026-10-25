@@ -3,6 +3,7 @@ import { createPinia } from 'pinia'
 import axios from 'axios'
 import router from './router'
 import App from './App.vue'
+import './styles/tokens.css'
 import { useAuthStore } from './stores/authStore'
 import { RENEWED_TOKEN_HEADER, clearSession, storeRenewedToken } from './services/session'
 

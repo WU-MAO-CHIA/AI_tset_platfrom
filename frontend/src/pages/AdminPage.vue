@@ -369,8 +369,8 @@ onMounted(async () => {
 }
 
 .tab-btn.active {
-  color: #4f46e5;
-  border-bottom-color: #4f46e5;
+  color: var(--brand-strong);
+  border-bottom-color: var(--brand-strong);
   font-weight: 500;
 }
 
@@ -427,8 +427,8 @@ onMounted(async () => {
 }
 
 .primary {
-  background: #4f46e5;
-  color: white;
+  background: var(--brand);
+  color: var(--brand-ink);
   border: none;
   border-radius: 4px;
   padding: 6px 14px;

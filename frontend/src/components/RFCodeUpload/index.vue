@@ -95,8 +95,8 @@ function clearFile() {
   padding: 16px; border: 2px dashed #ccc; border-radius: 8px;
   cursor: pointer; transition: border-color 0.2s, background 0.2s;
 }
-.upload-label:hover { border-color: #4f46e5; background: #f8fafc; }
-.upload-label.dragover { border-color: #4f46e5; background: #eef2ff; }
+.upload-label:hover { border-color: var(--brand-strong); background: #f8fafc; }
+.upload-label.dragover { border-color: var(--brand-strong); background: var(--brand-soft); }
 .file-input { display: none; }
 .upload-text { font-size: 14px; color: #666; flex: 1; }
 .upload-icon { width: 24px; height: 24px; color: #999; flex-shrink: 0; }

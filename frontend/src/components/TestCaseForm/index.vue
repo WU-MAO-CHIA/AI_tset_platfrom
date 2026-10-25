@@ -82,6 +82,9 @@ import MediaUploader from '../MediaUploader/index.vue'
 import RFCodeUpload from '../RFCodeUpload/index.vue'
 import RFCodePreview from '../RFCodePreview/index.vue'
 import { caseApi } from '../../services/caseApi'
+import { useAuthStore } from '../../stores/authStore'
+
+const authStore = useAuthStore()
 
 const props = defineProps<{
   caseId?: string
@@ -158,7 +161,7 @@ async function onSubmit() {
   saving.value = true
   saveError.value = ''
   try {
-    const payload = { ...form, main_steps: effectiveMainSteps.value, created_by: 'current_user' }
+    const payload = { ...form, main_steps: effectiveMainSteps.value, created_by: authStore.username ?? '' }
     if (props.caseId) {
       await caseApi.updateCase(props.caseId, payload)
       // If there's pending RF content, upload it
@@ -251,7 +254,7 @@ defineExpose({ takePendingRfCode })
 .field input, .field textarea { padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
 .actions { display: flex; gap: 12px; }
 .actions button { padding: 8px 20px; border: none; border-radius: 4px; cursor: pointer; }
-.actions button[type="submit"] { background: #4f46e5; color: white; }
+.actions button[type="submit"] { background: var(--brand); color: var(--brand-ink); }
 .actions button:disabled { opacity: 0.6; cursor: not-allowed; }
 .error { color: red; font-size: 13px; }
 </style>

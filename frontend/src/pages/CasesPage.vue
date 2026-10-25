@@ -57,7 +57,7 @@ function onDelete(c: TestCaseSummary) {
 async function confirmDelete() {
   if (!deleteConfirm.value) return
   try {
-    await caseApi.deleteCase(deleteConfirm.value.id, 'current_user')
+    await caseApi.deleteCase(deleteConfirm.value.id, authStore.username ?? '')
     deleteConfirm.value = null
     listRef.value?.load()
   } catch (e: any) {
@@ -71,7 +71,7 @@ async function confirmDelete() {
 .page { max-width: 1200px; margin: 0 auto; padding: 24px; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
 h1 { font-size: 22px; }
-.primary { background: #4f46e5; color: white; padding: 8px 20px; border: none; border-radius: 4px; cursor: pointer; }
+.primary { background: var(--brand); color: var(--brand-ink); padding: 8px 20px; border: none; border-radius: 4px; cursor: pointer; }
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; }
 .modal { background: white; padding: 24px; border-radius: 8px; min-width: 300px; }
 .warning { color: #dc2626; margin: 12px 0; }

@@ -173,7 +173,7 @@ defineExpose({ flushPending })
 
 <style scoped>
 .upload-area { border: 2px dashed #ccc; padding: 20px; text-align: center; cursor: pointer; }
-.drag-over { border-color: #4f46e5; background: #f0f0ff; }
+.drag-over { border-color: var(--brand-strong); background: var(--brand-soft); }
 .hidden { display: none; }
 .hint { font-size: 12px; color: #888; }
 .url-input { display: flex; gap: 8px; margin-top: 8px; }

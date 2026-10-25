@@ -327,8 +327,8 @@ async function scrollToBottom() {
 }
 
 .bubble-user .bubble-content {
-  background: #3b82f6;
-  color: white;
+  background: var(--brand);
+  color: var(--brand-ink);
   border-bottom-right-radius: 4px;
 }
 
@@ -360,8 +360,8 @@ async function scrollToBottom() {
 
 .chat-input-area button {
   padding: 10px 20px;
-  background: #3b82f6;
-  color: white;
+  background: var(--brand);
+  color: var(--brand-ink);
   border: none;
   border-radius: 8px;
   cursor: pointer;

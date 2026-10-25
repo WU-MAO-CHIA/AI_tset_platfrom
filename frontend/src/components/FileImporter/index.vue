@@ -105,7 +105,7 @@ function reset() {
 
 <style scoped>
 .drop-zone { border: 2px dashed #ccc; padding: 20px; text-align: center; cursor: pointer; border-radius: 4px; }
-.drop-zone.active { border-color: #4f46e5; background: #f0f0ff; }
+.drop-zone.active { border-color: var(--brand-strong); background: var(--brand-soft); }
 .hidden { display: none; }
 .preview { margin-top: 12px; }
 .preview h3 { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
