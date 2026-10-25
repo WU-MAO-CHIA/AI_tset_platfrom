@@ -26,6 +26,7 @@ from src.models.execution_media import ExecutionMedia
 from src.models.execution_record import ExecutionRecord
 from src.repositories.execution_repo import ExecutionRepository
 from src.services.report_service import ReportService
+from src.services.schedule_service import ScheduleService
 
 router = APIRouter(prefix="/executions", tags=["executions"])
 
@@ -44,6 +45,9 @@ class ExecutionResponse(BaseModel):
     passed_count: int
     failed_count: int
     total_count: int
+    # 排程觸發時才有值；排程已刪除時 schedule_name 為 null
+    schedule_id: Optional[str] = None
+    schedule_name: Optional[str] = None
 
 
 class ExecutionMediaItem(BaseModel):
@@ -79,6 +83,7 @@ async def get_execution(execution_id: str, db: AsyncSession = Depends(get_db)):
     record = await repo.get(execution_id)
     if record is None:
         raise HTTPException(status_code=404, detail={"error": "not_found"})
+    schedule_names = await ScheduleService(db).names_by_id({record.schedule_id})
     return {
         "id": record.id,
         "status": record.status,
@@ -89,6 +94,8 @@ async def get_execution(execution_id: str, db: AsyncSession = Depends(get_db)):
         "passed_count": record.passed_count,
         "failed_count": record.failed_count,
         "total_count": record.total_count,
+        "schedule_id": record.schedule_id,
+        "schedule_name": schedule_names.get(record.schedule_id),
     }
 
 

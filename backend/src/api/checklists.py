@@ -9,6 +9,7 @@ from src.core.database import get_db
 from src.core.dependencies import get_current_user, require_editor_or_above
 from src.services.checklist_service import ChecklistService
 from src.services.execution_service import ExecutionService
+from src.services.schedule_service import ScheduleService
 
 router = APIRouter(prefix="/checklists", tags=["checklists"], dependencies=[Depends(get_current_user)])
 
@@ -83,6 +84,8 @@ class ChecklistExecutionItem(BaseModel):
     total_count: int
     started_at: Optional[str] = None
     finished_at: Optional[str] = None
+    schedule_id: Optional[str] = None
+    schedule_name: Optional[str] = None
 
 
 class ChecklistExecutionsResponse(BaseModel):
@@ -274,6 +277,7 @@ async def get_checklist_executions(
 
     exec_repo = ExecutionRepository(db)
     records = await exec_repo.get_history_for_checklist(checklist_id)
+    schedule_names = await ScheduleService(db).names_by_id({r.schedule_id for r in records})
     return {
         "items": [
             {
@@ -284,6 +288,8 @@ async def get_checklist_executions(
                 "total_count": r.total_count,
                 "started_at": r.started_at.isoformat() if r.started_at else None,
                 "finished_at": r.finished_at.isoformat() if r.finished_at else None,
+                "schedule_id": r.schedule_id,
+                "schedule_name": schedule_names.get(r.schedule_id),
             }
             for r in records
         ],
