@@ -29,9 +29,19 @@ RUN pip install -r requirements.txt \
 
 COPY . .
 
-RUN useradd --create-home --uid 10001 app \
+# 測試腳本能執行任意程式，所以 robot / pabot 以另一個使用者 runner 執行（ROBOT_RUN_AS_USER）：
+# 它讀不到後端 app 行程的環境變數（JWT / LLM 金鑰）與只給 app 的 data/（資料庫、附件、報告），
+# 也改不到 robot_scripts/。app 只能「以 runner 身分」執行指令，不能反過來提權。
+RUN apt-get update && apt-get install -y --no-install-recommends sudo \
+ && rm -rf /var/lib/apt/lists/* \
+ && useradd --create-home --uid 10001 app \
+ && useradd --create-home --uid 10002 runner \
+ && echo 'app ALL=(runner) NOPASSWD:SETENV: ALL' > /etc/sudoers.d/robot-runner \
+ && chmod 0440 /etc/sudoers.d/robot-runner \
  && mkdir -p data/media data/execution_reports robot_scripts \
- && chown -R app:app data robot_scripts
+ && chown -R app:app data robot_scripts \
+ && chmod 0700 data
+ENV ROBOT_RUN_AS_USER=runner
 USER app
 
 EXPOSE 8000
@@ -39,4 +49,5 @@ EXPOSE 8000
 # 啟動前套用 migration（alembic.ini 固定使用 ./data/autotest.db）並建立初始 admin（已存在則略過）。
 # 只能跑單一 worker：執行佇列與頁面探索 session 存在 process 記憶體中。
 # 只經由 frontend 的 nginx 存取，故信任其 X-Forwarded-For（登入限流才能依實際 client IP 計算）。
-CMD ["sh", "-c", "alembic upgrade head && python -m scripts.seed_admin && exec uvicorn src.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips='*'"]
+# chmod：既有的 volume 保留舊權限，啟動時再收緊一次，runner 才讀不到資料庫。
+CMD ["sh", "-c", "chmod 0700 data && alembic upgrade head && python -m scripts.seed_admin && exec uvicorn src.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips='*'"]

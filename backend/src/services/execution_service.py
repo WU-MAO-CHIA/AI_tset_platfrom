@@ -63,6 +63,11 @@ def _build_robot_env() -> dict:
             env.setdefault(k, v)
     except Exception as exc:
         _logging.getLogger(__name__).warning("load backend env for robot failed: %s", exc)
+    # 驗證碼關鍵字改呼叫後端 API 解碼（子程序沒有 LLM 金鑰），只給一個短期、只能解驗證碼的 token
+    from src.core.config import get_settings
+    from src.core.security import create_captcha_token
+    env["AUTOTEST_API_URL"] = get_settings().internal_api_url
+    env["AUTOTEST_CAPTCHA_TOKEN"] = create_captcha_token()
     # 確保子程序找得到 python / 系統 dll
     env.setdefault("PATH", os.environ.get("PATH", ""))
     if os.name == "nt":
@@ -70,6 +75,32 @@ def _build_robot_env() -> dict:
             if k in os.environ:
                 env.setdefault(k, os.environ[k])
     return env
+
+
+def _robot_command(args: list[str], timeout_sec: float) -> list[str]:
+    """ROBOT_RUN_AS_USER 有設定時，以另一個系統使用者執行 robot / pabot。
+
+    腳本能執行任意程式；換成另一個使用者後，它讀不到後端行程的環境變數（/proc/<pid>/environ）
+    與只給後端使用者的資料庫、資料目錄。umask 000 讓後端能讀取並清掉子程序產生的檔案。
+    需要 sudoers：`<後端使用者> ALL=(<runner>) NOPASSWD:SETENV: ALL`（見 backend/Dockerfile）。
+    """
+    from src.core.config import get_settings
+
+    user = get_settings().robot_run_as_user
+    if not user:
+        return args
+    # 後端無權 kill 另一個使用者的行程：逾時改由 runner 端的 timeout 整組結束（含 Chromium）
+    limit = str(int(timeout_sec))
+    return ["sudo", "-n", "-E", "-H", "-u", user, "--", "sh", "-c", 'umask 000 && exec "$@"', "sh",
+            "timeout", "--kill-after=10", limit, *args]
+
+
+def _make_shared_dir(path: str) -> None:
+    """robot 以另一個使用者執行時，它要能寫入後端建立的暫存目錄。"""
+    from src.core.config import get_settings
+
+    if get_settings().robot_run_as_user:
+        os.chmod(path, 0o777)
 
 
 MAX_RF_CODE_BYTES = 200 * 1024  # trial-run / 上傳單檔上限外再加一道防線
@@ -482,7 +513,7 @@ class ExecutionService:
             if case_number:
                 script_path = os.path.join(settings.robot_scripts_dir, f"{case_number}.robot")
                 if os.path.exists(script_path):
-                    robot_files.append(script_path)
+                    robot_files.append(os.path.abspath(script_path))
 
         if not robot_files:
             return 0, len(case_ids), len(case_ids)
@@ -501,22 +532,25 @@ class ExecutionService:
             tmp_dir = tempfile.mkdtemp()
             output_dir = os.path.join(tmp_dir, "results")
             os.makedirs(output_dir, exist_ok=True)
+            _make_shared_dir(tmp_dir)
+            _make_shared_dir(output_dir)
             output_xml = os.path.join(output_dir, "output.xml")
 
             import subprocess as _subprocess
-            cmd = [
-                _PYTHON_EXE, "-m", "pabot",
+            cmd = _robot_command([
+                _PYTHON_EXE, "-m", "pabot.pabot",  # pabot 5.x 沒有 __main__，python -m pabot 會直接失敗
                 "--processes", str(max_workers),
                 "--outputdir", output_dir,
                 "--output", "output.xml",
                 "--nostatusrc",
-            ] + robot_files
+            ] + robot_files, timeout_sec=590)
 
             loop = asyncio.get_event_loop()
             _pabot_result = await loop.run_in_executor(
                 None,
                 # 與試跑相同，過濾掉 JWT / LLM 金鑰等敏感環境變數
-                lambda: _subprocess.run(cmd, capture_output=True, timeout=600, env=_build_robot_env()),
+                # cwd 設在暫存目錄：pabot 會在目前目錄寫 .pabotsuitenames
+                lambda: _subprocess.run(cmd, capture_output=True, timeout=600, env=_build_robot_env(), cwd=tmp_dir),
             )
             stderr_bytes = _pabot_result.stderr
 
@@ -628,6 +662,7 @@ class ExecutionService:
             # ${CURDIR}/../libs/... library imports still resolve when copied here.
             scripts_dir = os.path.join(tmp_dir, "robot_scripts")
             os.makedirs(scripts_dir, exist_ok=True)
+            _make_shared_dir(tmp_dir)
             robot_file = os.path.join(scripts_dir, "test.robot")
             output_xml = os.path.join(tmp_dir, "output.xml")
             with open(robot_file, "w", encoding="utf-8") as f:
@@ -666,11 +701,11 @@ class ExecutionService:
         def _run_sync() -> subprocess.CompletedProcess:
             env = _build_robot_env()
             return subprocess.run(
-                [_PYTHON_EXE, "-m", "robot",
-                 "--outputdir", os.path.dirname(output_xml),
-                 "--output", output_xml,
-                 "--nostatusrc",
-                 robot_file],
+                _robot_command([_PYTHON_EXE, "-m", "robot",
+                                "--outputdir", os.path.dirname(output_xml),
+                                "--output", output_xml,
+                                "--nostatusrc",
+                                robot_file], timeout_sec=max(1, timeout_sec - 5)),
                 capture_output=True,
                 timeout=timeout_sec,
                 env=env,

@@ -125,3 +125,43 @@ class TestSolveCaptchaFromFile:
             assert result == "AB12"
         finally:
             os.unlink(tmp_path)
+
+
+class TestBackendDispatch:
+    """平台內執行時改呼叫後端 API，robot 行程不需要 LLM 金鑰。"""
+
+    def test_uses_backend_when_token_present(self, monkeypatch):
+        import json as _json
+
+        monkeypatch.setenv("AUTOTEST_CAPTCHA_TOKEN", "tok")
+        monkeypatch.setenv("AUTOTEST_API_URL", "http://127.0.0.1:8000")
+        seen = {}
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = b'{"text": "XY9", "model_used": "m"}'
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        def fake_urlopen(req, timeout):
+            seen["url"] = req.full_url
+            seen["auth"] = req.get_header("Authorization")
+            seen["body"] = _json.loads(req.data)
+            return mock_resp
+
+        with patch("urllib.request.urlopen", side_effect=fake_urlopen), \
+             patch("libs.CaptchaSolverLibrary._call_anthropic") as direct:
+            text = CaptchaSolverLibrary().solve_captcha_from_base64("aGk=", "image/png")
+        assert text == "XY9"
+        assert seen["url"] == "http://127.0.0.1:8000/api/v1/internal/captcha/solve"
+        assert seen["auth"] == "Bearer tok"
+        assert seen["body"]["image_base64"] == "aGk="
+        direct.assert_not_called()
+
+    def test_backend_rejection_is_not_retried(self, monkeypatch):
+        import urllib.error
+
+        monkeypatch.setenv("AUTOTEST_CAPTCHA_TOKEN", "tok")
+        err = urllib.error.HTTPError("u", 429, "limit", {}, None)
+        with patch("urllib.request.urlopen", side_effect=err) as op:
+            with pytest.raises(RuntimeError, match="HTTP 429"):
+                CaptchaSolverLibrary(max_retries=2).solve_captcha_from_base64("aGk=")
+        assert op.call_count == 1

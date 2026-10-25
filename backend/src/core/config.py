@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     default_llm_model: str = "claude-sonnet-4-6"
     # 本地 Ollama 原生 API base URL（空字串＝未啟用本地模型）
     ollama_base_url: str = ""
+    # robot 子程序呼叫後端內部 API（驗證碼解碼）用的位址；Docker 內與本機開發都是同一行程的 8000 port
+    internal_api_url: str = "http://127.0.0.1:8000"
+    # 設定後 robot / pabot 以這個系統使用者執行（需 sudoers 允許），讀不到後端的環境變數與資料庫
+    robot_run_as_user: str = ""
 
     jwt_secret_key: str = "dev-secret-key-change-in-production"
     # 閒置逾時（分鐘）：每次通過驗證的請求都會換發新 token，閒置超過此時間才需重新登入

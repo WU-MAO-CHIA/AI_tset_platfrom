@@ -1,10 +1,13 @@
 """
 CaptchaSolverLibrary — Robot Framework keyword library for solving image CAPTCHAs.
 
-Uses the active LLM model from the backend admin settings (GET /api/v1/llm-models).
-Falls back to claude-haiku-4-5-20251001 if backend is unreachable.
+Run from the platform (trial run / checklist run): the image is sent to the backend
+(POST /api/v1/internal/captcha/solve with the AUTOTEST_CAPTCHA_TOKEN the backend injects),
+which calls the active LLM model. The robot process never holds LLM API keys.
 
-Supports Anthropic Claude (vision), OpenAI GPT-4o (vision), and Ollama (vision).
+Run by hand outside the platform (no AUTOTEST_CAPTCHA_TOKEN): calls the LLM directly with
+keys from the environment or backend/.env, as before. Supports Anthropic Claude, OpenAI and
+Ollama vision models.
 
 Usage in .robot file:
     Library    ${CURDIR}/../libs/CaptchaSolverLibrary.py
@@ -18,6 +21,7 @@ import base64
 import json
 import os
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -55,6 +59,35 @@ def _fetch_active_model(backend_url: str) -> str:
             return data.get("default", "")
     except Exception:
         return ""
+
+
+def _call_backend(api_url: str, token: str, image_data: str, media_type: str, prompt: str,
+                  model: str, max_retries: int) -> str:
+    url = f"{api_url.rstrip('/')}/api/v1/internal/captcha/solve"
+    payload = json.dumps({
+        "image_base64": image_data,
+        "media_type": media_type,
+        "prompt": prompt,
+        "model": model or None,
+    }).encode()
+    last_err = None
+    for attempt in range(max_retries + 1):
+        try:
+            req = urllib.request.Request(url, data=payload, headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {token}",
+            })
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                return json.loads(resp.read()).get("text", "").strip()
+        except urllib.error.HTTPError as exc:
+            if exc.code < 500:  # 401 / 422 / 429 重試也沒用
+                raise RuntimeError(f"CAPTCHA solving rejected by backend: HTTP {exc.code}") from exc
+            last_err = exc
+        except Exception as exc:
+            last_err = exc
+        if attempt < max_retries:
+            time.sleep(1.5 * (attempt + 1))
+    raise RuntimeError(f"CAPTCHA solving via backend failed: {last_err}")
 
 
 def _provider(model_id: str) -> str:
@@ -214,6 +247,11 @@ class CaptchaSolverLibrary:
         return self.solve_captcha_from_file(output_file, prompt)
 
     def _dispatch(self, image_data: str, media_type: str, prompt: str) -> str:
+        token = os.environ.get("AUTOTEST_CAPTCHA_TOKEN", "")
+        if token:
+            api_url = os.environ.get("AUTOTEST_API_URL", "") or self._backend_url
+            return _call_backend(api_url, token, image_data, media_type, prompt,
+                                 self._override_model, self._max_retries)
         model = self._resolve_model()
         provider = _provider(model)
         if provider == "openai":

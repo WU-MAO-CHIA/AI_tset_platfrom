@@ -179,6 +179,7 @@ from src.api.media import router as media_router  # noqa: E402
 from src.api.llm_models import router as llm_models_router  # noqa: E402
 from src.api.schedules import router as schedules_router  # noqa: E402
 from src.api.dashboard import router as dashboard_router  # noqa: E402
+from src.api.internal import router as internal_router  # noqa: E402
 
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(admin_router, prefix="/api/v1")
@@ -190,3 +191,4 @@ app.include_router(executions_router, prefix="/api/v1")
 app.include_router(media_router, prefix="/api/v1")
 app.include_router(llm_models_router, prefix="/api/v1")
 app.include_router(schedules_router, prefix="/api/v1")
+app.include_router(internal_router, prefix="/api/v1")
