@@ -111,19 +111,14 @@ function submit() {
 </script>
 
 <style scoped>
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-.modal { background: white; border-radius: 8px; padding: 24px; min-width: 360px; max-width: 92vw; }
-.modal h3 { font-size: 18px; margin-bottom: 16px; }
-.modal label { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; font-size: 14px; color: #374151; }
-.modal label.inline { flex-direction: row; align-items: center; gap: 6px; }
-.modal label.weekday { flex-direction: row; align-items: center; gap: 4px; margin-bottom: 0; }
+.modal-overlay { position: fixed; inset: 0; background: rgba(14, 42, 68, 0.35); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+.modal { background: var(--paper); border-radius: var(--radius-lg); padding: 24px; min-width: 360px; max-width: 92vw; }
+.modal h3 { font-size: var(--fs-20); font-weight: 600; margin-bottom: 16px; }
+.modal label { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; color: var(--ink-muted); }
+.modal label.inline { flex-direction: row; align-items: center; gap: 6px; color: var(--ink); }
+.modal label.weekday { flex-direction: row; align-items: center; gap: 4px; margin-bottom: 0; color: var(--ink); }
 .weekday-row { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-bottom: 12px; }
-
-.modal-input { border: 1px solid #d1d5db; border-radius: 4px; padding: 8px 10px; font-size: 14px; }
-.modal-input:focus { outline: none; border-color: #6366f1; }
+.modal-input { width: 100%; }
 .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
-.form-error { background: #fee2e2; color: #991b1b; padding: 8px 12px; border-radius: 4px; font-size: 13px; }
-.btn-primary { background: #4f46e5; color: white; padding: 8px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
-.btn-primary:disabled { opacity: 0.6; cursor: default; }
-.btn-secondary { background: #e5e7eb; color: #374151; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+.form-error { background: var(--fail-bg); color: var(--fail); padding: 8px 12px; border-radius: var(--radius); font-size: var(--fs-12); }
 </style>

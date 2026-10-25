@@ -14,7 +14,7 @@
 
     <div v-if="loading" class="empty">載入中...</div>
     <div v-else-if="schedules.length === 0" class="empty" data-testid="schedule-empty">尚無排程</div>
-    <table v-else class="schedule-table">
+    <table v-else class="data-table schedule-table">
       <thead>
         <tr>
           <th>名稱</th>
@@ -38,13 +38,13 @@
           <td>{{ formatScheduleTime(s.last_triggered_at, s.timezone) }}</td>
           <td>
             <span v-if="s.last_skip_reason" class="skip" :title="s.last_skip_reason">略過：{{ s.last_skip_reason }}</span>
-            <RouterLink v-else-if="s.last_execution_id" :to="`/results/${s.last_execution_id}`">
-              {{ statusLabel(s.last_execution_status) }}
+            <RouterLink v-else-if="s.last_execution_id" :to="`/results/${s.last_execution_id}`" class="result-link">
+              <span :class="['badge', statusBadge(s.last_execution_status)]">{{ statusLabel(s.last_execution_status) }}</span>
             </RouterLink>
             <span v-else>-</span>
           </td>
           <td>
-            <span :class="['badge', s.enabled ? 'on' : 'off']">{{ s.enabled ? '啟用' : '停用' }}</span>
+            <span :class="['toggle-state', s.enabled ? 'on' : 'off']">{{ s.enabled ? '啟用' : '停用' }}</span>
           </td>
           <td v-if="authStore.isEditor" class="row-actions">
             <button class="btn-link" data-testid="btn-toggle-schedule" @click="toggle(s)">{{ s.enabled ? '停用' : '啟用' }}</button>
@@ -105,6 +105,19 @@ const STATUS_LABELS: Record<string, string> = {
   error: '錯誤',
   interrupted: '已中斷',
   cancelled: '已取消',
+}
+
+// 狀態色只用在測試結果：通過綠、失敗紅、執行中紫、排隊黃，其餘中性
+const STATUS_BADGES: Record<string, string> = {
+  completed: 'badge-pass',
+  failed: 'badge-fail',
+  error: 'badge-fail',
+  running: 'badge-running',
+  pending: 'badge-queued',
+}
+
+function statusBadge(status: string | null): string {
+  return (status && STATUS_BADGES[status]) || ''
 }
 
 function statusLabel(status: string | null): string {
@@ -185,22 +198,21 @@ onMounted(load)
 
 <style scoped>
 .list-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.tz-note { font-size: 12px; color: #6b7280; }
-.schedule-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-.schedule-table th, .schedule-table td { padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: left; }
-.schedule-table th { background: #f9fafb; font-weight: 600; color: #374151; }
-.schedule-table a { color: #4f46e5; text-decoration: none; }
+.tz-note { font-size: var(--fs-12); color: var(--ink-muted); }
+.schedule-table a { text-decoration: none; }
 .schedule-table a:hover { text-decoration: underline; }
-.badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; }
-.badge.on { background: #dcfce7; color: #166534; }
-.badge.off { background: #f3f4f6; color: #6b7280; }
-.skip { color: #b45309; font-size: 13px; }
-.row-actions { white-space: nowrap; }
-.btn-link { background: none; border: none; color: #4f46e5; cursor: pointer; font-size: 13px; padding: 2px 6px; }
-.btn-link.danger { color: #dc2626; }
-.empty { color: #9ca3af; font-size: 14px; padding: 16px 0; }
-.error-banner { background: #fee2e2; color: #991b1b; padding: 10px 16px; border-radius: 6px; margin-top: 12px; }
-.btn-primary { background: #4f46e5; color: white; padding: 6px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+.result-link:hover { text-decoration: none; }
+.toggle-state { font-size: var(--fs-12); font-weight: 600; }
+.toggle-state.on { color: var(--brand-strong); }
+.toggle-state.off { color: var(--ink-faint); }
+.skip { color: var(--queued); font-size: var(--fs-12); }
+.row-actions { white-space: nowrap; text-align: right; }
+.btn-link { background: none; border: none; min-height: 0; color: var(--brand-strong); font-size: var(--fs-12); padding: 2px 6px; }
+.btn-link:hover:not(:disabled) { background: var(--brand-soft); }
+.btn-link.danger { color: var(--fail); }
+.btn-link.danger:hover:not(:disabled) { background: var(--fail-bg); }
+.empty { color: var(--ink-muted); padding: 16px 0; }
+.error-banner { background: var(--fail-bg); color: var(--fail); padding: 10px 16px; border-radius: var(--radius); margin-top: 12px; }
 @media (max-width: 767px) {
   .schedule-table { display: block; overflow-x: auto; }
 }
