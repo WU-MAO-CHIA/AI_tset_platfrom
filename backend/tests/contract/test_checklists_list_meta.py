@@ -46,3 +46,44 @@ class TestChecklistListMeta:
         ranks = [rank.get(item["status"], 99) for item in r.json()["items"]]
         # asc：rank 由小到大（completed 在前）；desc：反之
         assert ranks == sorted(ranks, reverse=(order == "desc"))
+
+
+class TestChecklistRecentRuns:
+    async def test_recent_runs_are_newest_first_and_capped(self, isolated_app, admin_headers):
+        from datetime import datetime, timedelta, timezone
+
+        from src.models.execution_record import ExecutionRecord
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test", headers=admin_headers) as c:
+            r = await c.post("/api/v1/checklists", json={"name": "冒煙測試", "created_by": "admin"})
+            checklist_id = r.json()["id"]
+            empty_id = (await c.post("/api/v1/checklists", json={"name": "未執行", "created_by": "admin"})).json()["id"]
+
+            base = datetime(2026, 10, 1, tzinfo=timezone.utc)
+            async with isolated_app() as session:
+                for i in range(12):
+                    session.add(
+                        ExecutionRecord(
+                            id=f"run-{i:02d}",
+                            checklist_id=checklist_id,
+                            status="completed",
+                            passed_count=3,
+                            failed_count=1 if i % 4 == 0 else 0,
+                            total_count=3,
+                            created_at=base + timedelta(hours=i),
+                        )
+                    )
+                session.add(
+                    ExecutionRecord(
+                        id="run-deleted", checklist_id=checklist_id, status="deleted", created_at=base + timedelta(days=1)
+                    )
+                )
+                await session.commit()
+
+            items = {i["id"]: i for i in (await c.get("/api/v1/checklists?page=1&page_size=20")).json()["items"]}
+
+        runs = items[checklist_id]["recent_runs"]
+        assert [run["id"] for run in runs] == [f"run-{i:02d}" for i in range(11, 1, -1)]
+        assert runs[0]["failed_count"] == 0 and runs[3]["failed_count"] == 1
+        assert items[checklist_id]["status"] == "completed"
+        assert items[empty_id]["recent_runs"] == []

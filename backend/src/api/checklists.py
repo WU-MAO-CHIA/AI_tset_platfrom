@@ -13,6 +13,8 @@ from src.services.schedule_service import ScheduleService
 
 router = APIRouter(prefix="/checklists", tags=["checklists"], dependencies=[Depends(get_current_user)])
 
+RECENT_RUNS_LIMIT = 10
+
 
 class ChecklistCreateRequest(BaseModel):
     name: str
@@ -59,6 +61,16 @@ class ChecklistDetailResponse(BaseModel):
     items: list[ChecklistItemResponse]
 
 
+class ChecklistRecentRun(BaseModel):
+    id: str
+    status: str
+    passed_count: int
+    failed_count: int
+    total_count: int
+    started_at: Optional[str] = None
+    finished_at: Optional[str] = None
+
+
 class ChecklistListItem(BaseModel):
     id: str
     name: str
@@ -67,6 +79,7 @@ class ChecklistListItem(BaseModel):
     case_count: int
     status: Optional[str] = None  # 最新一次執行狀態；未執行為 None
     created_at: Optional[str] = None
+    recent_runs: list[ChecklistRecentRun] = []  # 最近 RECENT_RUNS_LIMIT 次執行，新到舊
 
 
 class ChecklistListResponse(BaseModel):
@@ -188,12 +201,14 @@ async def list_checklists(
 
     # 補上案例數與最新執行狀態（分組查詢，避免 N+1）
     from sqlalchemy import select, func
+    from sqlalchemy.orm import aliased
     from src.models.checklist_item import ChecklistItem
     from src.models.execution_record import ExecutionRecord
 
     ids = [c.id for c in items]
     case_counts: dict[str, int] = {}
     statuses: dict[str, str] = {}
+    recent_runs: dict[str, list[dict]] = {}
     if ids:
         cc = await db.execute(
             select(ChecklistItem.checklist_id, func.count())
@@ -202,15 +217,41 @@ async def list_checklists(
         )
         case_counts = {row[0]: row[1] for row in cc.all()}
 
-        ex = await db.execute(
-            select(ExecutionRecord.checklist_id, ExecutionRecord.status)
+        # 每份清單只取最近 RECENT_RUNS_LIMIT 筆（window function），新到舊
+        rn = (
+            func.row_number()
+            .over(
+                partition_by=ExecutionRecord.checklist_id,
+                order_by=(ExecutionRecord.created_at.desc(), ExecutionRecord.id.desc()),
+            )
+            .label("rn")
+        )
+        ranked = (
+            select(ExecutionRecord, rn)
             .where(ExecutionRecord.checklist_id.in_(ids))
             .where(ExecutionRecord.status != "deleted")
-            .order_by(ExecutionRecord.created_at.desc())
+            .subquery()
         )
-        for cl_id, status in ex.all():
-            if cl_id not in statuses:  # 第一筆即最新（created_at desc）
-                statuses[cl_id] = status
+        recent = aliased(ExecutionRecord, ranked)
+        ex = await db.execute(
+            select(recent)
+            .where(ranked.c.rn <= RECENT_RUNS_LIMIT)
+            .order_by(ranked.c.checklist_id, ranked.c.rn)
+        )
+        for run in ex.scalars().all():
+            if run.checklist_id not in statuses:  # 第一筆即最新
+                statuses[run.checklist_id] = run.status
+            recent_runs.setdefault(run.checklist_id, []).append(
+                {
+                    "id": run.id,
+                    "status": run.status,
+                    "passed_count": run.passed_count,
+                    "failed_count": run.failed_count,
+                    "total_count": run.total_count,
+                    "started_at": run.started_at.isoformat() if run.started_at else None,
+                    "finished_at": run.finished_at.isoformat() if run.finished_at else None,
+                }
+            )
 
     return {
         "items": [
@@ -222,6 +263,7 @@ async def list_checklists(
                 "case_count": case_counts.get(c.id, 0),
                 "status": statuses.get(c.id),
                 "created_at": c.created_at.isoformat() if c.created_at else None,
+                "recent_runs": recent_runs.get(c.id, []),
             }
             for c in items
         ],
