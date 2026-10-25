@@ -1,0 +1,4 @@
+# 只裝執行測試需要的套件；版本與 backend/requirements.txt 一致
+robotframework==7.4.2
+robotframework-browser==20.0.0
+robotframework-pabot==5.2.2

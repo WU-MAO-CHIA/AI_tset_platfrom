@@ -41,7 +41,7 @@ _SENSITIVE_ENV_KEYS = frozenset({
     "JWT_SECRET_KEY", "JWT_SECRET", "SECRET_KEY",
     "ADMIN_PASSWORD", "ADMIN_USERNAME",
     "ANTHROPIC_API_KEY", "OPENAI_API_KEY",
-    "DATABASE_URL",
+    "DATABASE_URL", "RUNNER_TOKEN",
 })
 
 
@@ -104,6 +104,56 @@ def _make_shared_dir(path: str) -> None:
 
 
 MAX_RF_CODE_BYTES = 200 * 1024  # trial-run / 上傳單檔上限外再加一道防線
+
+
+async def _run_robot_job(
+    workdir: str,
+    tool: str,
+    tests: list[str],
+    outputdir: str,
+    timeout_sec: float,
+    processes: int = 1,
+) -> dict:
+    """在 workdir 執行 robot / pabot，輸出寫在 workdir/outputdir/output.xml。
+
+    tests、outputdir 都是相對 workdir 的路徑。EXECUTION_RUNNER=remote 時交給 runner 容器
+    （腳本在那裡執行，碰不到後端的金鑰與資料庫），否則在本機以子程序執行。
+    回傳 {"timed_out": bool, "stderr": str}；runner 連不上時 raise RunnerError。
+    """
+    from src.core.config import get_settings
+
+    env = _build_robot_env()
+    if get_settings().execution_runner == "remote":
+        from src.execution.runner_client import run_remote
+
+        spec = {"tool": tool, "tests": tests, "outputdir": outputdir,
+                "timeout": int(timeout_sec), "processes": processes}
+        result = await run_remote(workdir, spec, env)
+        return {"timed_out": bool(result.get("timed_out")), "stderr": result.get("stderr_tail", "")}
+
+    import subprocess
+
+    if tool == "robot":
+        args = [_PYTHON_EXE, "-m", "robot"]
+    else:
+        # pabot 5.x 沒有 __main__，python -m pabot 會直接失敗
+        args = [_PYTHON_EXE, "-m", "pabot.pabot", "--processes", str(processes)]
+    args += ["--outputdir", outputdir, "--output", "output.xml", "--nostatusrc", *tests]
+    cmd = _robot_command(args, timeout_sec=max(1, timeout_sec - 5))
+
+    def _run_sync() -> dict:
+        try:
+            # cwd 設在工作目錄：pabot 會在目前目錄寫 .pabotsuitenames
+            completed = subprocess.run(cmd, capture_output=True, timeout=timeout_sec, env=env, cwd=workdir)
+        except subprocess.TimeoutExpired:
+            return {"timed_out": True, "stderr": ""}
+        stderr = (completed.stderr or b"").decode("utf-8", errors="replace").strip()
+        # ROBOT_RUN_AS_USER 時逾時由 runner 端的 timeout 結束，exit code 124 / 137
+        return {"timed_out": completed.returncode in (124, 137) and bool(get_settings().robot_run_as_user),
+                "stderr": stderr}
+
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _run_sync)
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -513,7 +563,7 @@ class ExecutionService:
             if case_number:
                 script_path = os.path.join(settings.robot_scripts_dir, f"{case_number}.robot")
                 if os.path.exists(script_path):
-                    robot_files.append(os.path.abspath(script_path))
+                    robot_files.append(script_path)
 
         if not robot_files:
             return 0, len(case_ids), len(case_ids)
@@ -532,27 +582,27 @@ class ExecutionService:
             tmp_dir = tempfile.mkdtemp()
             output_dir = os.path.join(tmp_dir, "results")
             os.makedirs(output_dir, exist_ok=True)
-            _make_shared_dir(tmp_dir)
-            _make_shared_dir(output_dir)
+            # 腳本與 libs 複製成獨立的工作目錄（runner 容器沒有 robot_scripts/），
+            # 維持 robot_scripts/../libs 的相對位置，${CURDIR}/../libs 照常可用
+            scripts_dir = os.path.join(tmp_dir, "robot_scripts")
+            os.makedirs(scripts_dir, exist_ok=True)
+            for path in robot_files:
+                _shutil.copy(path, scripts_dir)
+            libs_dir = os.path.join(os.path.dirname(os.path.abspath(settings.robot_scripts_dir)), "libs")
+            if os.path.isdir(libs_dir):
+                _shutil.copytree(libs_dir, os.path.join(tmp_dir, "libs"), dirs_exist_ok=True)
+            for d in (tmp_dir, output_dir, scripts_dir):
+                _make_shared_dir(d)
             output_xml = os.path.join(output_dir, "output.xml")
 
-            import subprocess as _subprocess
-            cmd = _robot_command([
-                _PYTHON_EXE, "-m", "pabot.pabot",  # pabot 5.x 沒有 __main__，python -m pabot 會直接失敗
-                "--processes", str(max_workers),
-                "--outputdir", output_dir,
-                "--output", "output.xml",
-                "--nostatusrc",
-            ] + robot_files, timeout_sec=590)
-
-            loop = asyncio.get_event_loop()
-            _pabot_result = await loop.run_in_executor(
-                None,
-                # 與試跑相同，過濾掉 JWT / LLM 金鑰等敏感環境變數
-                # cwd 設在暫存目錄：pabot 會在目前目錄寫 .pabotsuitenames
-                lambda: _subprocess.run(cmd, capture_output=True, timeout=600, env=_build_robot_env(), cwd=tmp_dir),
-            )
-            stderr_bytes = _pabot_result.stderr
+            tests = [f"robot_scripts/{os.path.basename(p)}" for p in robot_files]
+            try:
+                job = await _run_robot_job(tmp_dir, "pabot", tests, "results", timeout_sec=600,
+                                           processes=max_workers)
+                stderr_text_job = job["stderr"]
+            except Exception as exc:  # runner 連不上：整批記為失敗並顯示原因
+                stderr_text_job = str(exc)
+            stderr_bytes = stderr_text_job.encode("utf-8")
 
             if not os.path.exists(output_xml):
                 for fname in os.listdir(output_dir):
@@ -677,7 +727,7 @@ class ExecutionService:
             try:
                 result = await asyncio.wait_for(
                     ExecutionService._execute_robot_subprocess(robot_file, output_xml, timeout_sec),
-                    timeout=timeout_sec + 10,
+                    timeout=timeout_sec + 140,  # 內層自己會在逾時後回報；這裡只是最後防線（含 runner 傳輸）
                 )
             except asyncio.TimeoutError:
                 return {"status": "timeout", "elapsed_ms": int(timeout_sec * 1000), "failure_message": "Execution timed out"}
@@ -694,39 +744,26 @@ class ExecutionService:
         output_xml: str,
         timeout_sec: float,
     ) -> dict:
-        import subprocess
         import time
         start_ms = int(time.time() * 1000)
 
-        def _run_sync() -> subprocess.CompletedProcess:
-            env = _build_robot_env()
-            return subprocess.run(
-                _robot_command([_PYTHON_EXE, "-m", "robot",
-                                "--outputdir", os.path.dirname(output_xml),
-                                "--output", output_xml,
-                                "--nostatusrc",
-                                robot_file], timeout_sec=max(1, timeout_sec - 5)),
-                capture_output=True,
-                timeout=timeout_sec,
-                env=env,
-            )
-
-        loop = asyncio.get_event_loop()
+        workdir = os.path.dirname(os.path.abspath(output_xml))
+        test = os.path.relpath(os.path.abspath(robot_file), workdir)
         try:
-            completed = await asyncio.wait_for(
-                loop.run_in_executor(None, _run_sync),
-                timeout=timeout_sec + 10,
+            job = await asyncio.wait_for(
+                _run_robot_job(workdir, "robot", [test], ".", timeout_sec),
+                timeout=timeout_sec + 130,
             )
-            stderr_text = (completed.stderr or b"").decode("utf-8", errors="replace").strip()
         except asyncio.TimeoutError:
-            elapsed = int(time.time() * 1000) - start_ms
-            return {"status": "timeout", "elapsed_ms": elapsed, "failure_message": "Execution timed out"}
-        except subprocess.TimeoutExpired:
             elapsed = int(time.time() * 1000) - start_ms
             return {"status": "timeout", "elapsed_ms": elapsed, "failure_message": "Execution timed out"}
         except Exception as exc:
             elapsed = int(time.time() * 1000) - start_ms
             return {"status": "error", "elapsed_ms": elapsed, "failure_message": str(exc)}
+        if job["timed_out"]:
+            elapsed = int(time.time() * 1000) - start_ms
+            return {"status": "timeout", "elapsed_ms": elapsed, "failure_message": "Execution timed out"}
+        stderr_text = job["stderr"]
 
         elapsed = int(time.time() * 1000) - start_ms
 

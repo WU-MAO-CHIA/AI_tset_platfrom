@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     internal_api_url: str = "http://127.0.0.1:8000"
     # 設定後 robot / pabot 以這個系統使用者執行（需 sudoers 允許），讀不到後端的環境變數與資料庫
     robot_run_as_user: str = ""
+    # local：後端自己跑 robot（本機開發）；remote：交給獨立的 runner 容器（docker compose）
+    execution_runner: str = "local"
+    runner_url: str = "http://runner:9000"
+    runner_token: str = ""
 
     jwt_secret_key: str = "dev-secret-key-change-in-production"
     # 閒置逾時（分鐘）：每次通過驗證的請求都會換發新 token，閒置超過此時間才需重新登入
@@ -58,6 +62,13 @@ class Settings(BaseSettings):
             ZoneInfo(v)
         except (ZoneInfoNotFoundError, ValueError):
             raise ValueError(f"SCHEDULE_TIMEZONE is not a valid IANA time zone: {v}")
+        return v
+
+    @field_validator("execution_runner")
+    @classmethod
+    def _validate_runner(cls, v: str) -> str:
+        if v not in ("local", "remote"):
+            raise ValueError("EXECUTION_RUNNER must be local or remote")
         return v
 
     @field_validator("app_env")
