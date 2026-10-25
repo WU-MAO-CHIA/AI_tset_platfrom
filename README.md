@@ -1,7 +1,25 @@
-# 自動化測試平台 — 啟動指南
+# 自動化測試平台
+
+一站式的自動化測試平台：建立測試案例、組成測試清單、以 Robot Framework 執行，並查看報告。以下先介紹功能，再說明如何啟動。
+
+## 功能總覽
+
+| 功能 | 說明 |
+|------|------|
+| 測試案例與清單 | 建立案例（可用 AI 補齊步驟、上傳 RF 腳本），組成清單後一次執行；清單列表顯示每份清單最近 10 次的結果條 |
+| 執行佇列 | 執行請求存進資料庫排隊，重啟後端不會遺失；同時執行的數量由 `EXECUTION_MAX_CONCURRENT`（預設 1）控制，試跑優先於清單。執行中可取消，即時進度從資料庫讀取 |
+| 排程執行（`/schedules`） | 為清單設定每天、每週或固定間隔（至少 15 分鐘）自動執行。後端停機錯過的排程補跑一次；上一輪還在跑就跳過這一輪。時區由 `SCHEDULE_TIMEZONE`（預設 `Asia/Taipei`）設定，`SCHEDULE_ENABLED=false` 可關閉 |
+| 監控儀表板（`/dashboard`） | 僅管理員可見，顯示目前佇列、執行中的測試與排程狀態 |
+| 驗證碼辨識 | RF 腳本中的 CAPTCHA 關鍵字交給後端呼叫 LLM 辨識，執行測試的環境不需要 LLM 金鑰 |
+| 隔離執行（runner 容器） | Docker 部署時，測試腳本在獨立的 `runner` 容器以低權限使用者執行，碰不到後端的金鑰與資料庫 |
+| 帳號與權限 | admin / editor / viewer 三種角色；登入閒置 `JWT_EXPIRE_MINUTES`（預設 10 分鐘）未操作會自動登出，有操作就自動續期 |
+
+### 安全性設定
+
+- `APP_ENV=prod` 時，後端會拒絕以預設或不足 32 字元的 `JWT_SECRET_KEY`、預設的 `ADMIN_PASSWORD` 啟動，登入 cookie 也會加上 `Secure`。
+- 改密碼、改角色或停用帳號後，該帳號已發出的 token 會立即失效。
 
 ## 系統需求
-
 以 Docker 執行只需要 Docker Desktop；在本機直接開發才需要 Python、Node.js、npm。
 
 | 工具 | 版本 | 用途 |
@@ -86,7 +104,8 @@ $env:FRONTEND_PORT = "9090"; docker compose up -d
 | 服務 | 說明 |
 |------|------|
 | `frontend` | nginx 提供前端網頁，並把 `/api` 轉給後端；對外 port 預設 8080 |
-| `backend` | FastAPI + Robot Framework + Playwright，不對外開放 port。每次啟動會自動套用資料庫 migration，並在帳號不存在時建立初始 admin |
+| `backend` | FastAPI，不對外開放 port。每次啟動會自動套用資料庫 migration，並在帳號不存在時建立初始 admin；執行佇列與排程器也在這裡執行 |
+| `runner` | Robot Framework + Playwright，負責實際執行測試。只拿到 `RUNNER_TOKEN`，沒有 `backend/.env`、不掛資料 volume，並限制記憶體、CPU 與權限 |
 
 資料存放在 Docker volume，`docker compose down` 不會刪除：
 
@@ -99,7 +118,7 @@ $env:FRONTEND_PORT = "9090"; docker compose up -d
 
 - **使用 `APP_ENV=prod` 時**：登入 cookie 會帶 `Secure`。若用 `http://` 從 localhost 以外的位址連線，測試執行的即時進度無法顯示，需改用 HTTPS。
 - **容器內的 `localhost` 指的是容器本身**，不是你的電腦；要連主機上的服務請用 `host.docker.internal`。
-- **後端只能執行一個實例**：執行佇列存在記憶體中，請勿水平擴充 `backend` 服務。
+- **後端只能執行一個實例**：佇列存在資料庫裡，但取出執行的 worker 與排程器在後端程序內，SQLite 也只適合單一實例，請勿水平擴充 `backend` 服務。
 
 ### 部署到雲端主機
 
@@ -169,7 +188,8 @@ SCHEDULE_ENABLED=true
 ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=sk-...
 
-DEFAULT_LLM_MODEL=claude-sonnet-4-6
+# 後台「目前啟用模型」未設定時的 fallback
+DEFAULT_LLM_MODEL=claude-sonnet-5
 
 # 本地 Ollama 原生 API base URL（留空＝不啟用本地模型）
 OLLAMA_BASE_URL=http://localhost:11434
@@ -179,12 +199,15 @@ JWT_SECRET_KEY=change-me-to-a-strong-random-secret-key
 # 閒置逾時（分鐘）：有操作就自動續期，閒置超過才需重新登入
 JWT_EXPIRE_MINUTES=10
 
+# dev | prod | test；prod 拒絕預設的 secret／密碼並啟用 Secure cookie
+APP_ENV=dev
+
 # 初始管理員帳號（供 scripts/seed_admin.py 使用，見下方步驟 6）
 ADMIN_USERNAME=admin
-ADMIN_PASSWORD=change-me-strong-password
+ADMIN_PASSWORD=admin
 ```
 
-> **注意**：`.env.example` 內 `ADMIN_PASSWORD` 的預設值是 `change-me-strong-password`，而非 `admin`。若要沿用步驟 6 表格中的 `admin`/`admin` 測試帳密，請把這一行改回（或直接刪除該行以套用程式碼中的內建預設值）。
+本機開發時測試由後端自己執行（`EXECUTION_RUNNER` 預設為 `local`），不需要 runner 容器與 `RUNNER_TOKEN`。
 
 ### 5. 初始化資料庫
 
@@ -285,6 +308,8 @@ npm run test:e2e          # 需要後端已啟動；前端 dev server 會自動�
 
 ## 四、資料庫管理
 
+SQLite 連線一律開啟 WAL 模式（`busy_timeout=5000`、`synchronous=NORMAL`），讓執行中的寫入不會擋住網頁讀取。資料庫旁會多出 `autotest.db-wal`、`autotest.db-shm` 兩個檔案，屬正常現象；備份時請連同它們一起複製，或先停止後端。
+
 ```powershell
 cd backend
 
@@ -322,7 +347,7 @@ alembic revision --autogenerate -m "說明"
 │   │   ├── load/          # 負載測試
 │   │   └── performance/   # 效能測試
 │   ├── scripts/           # 維運腳本（seed_admin.py 等，需手動執行）
-│   ├── libs/              # Robot Framework 自訂 library（CaptchaSolverLibrary 等）
+│   ├── libs/              # Robot Framework 自訂 library（CaptchaSolverLibrary 等，驗證碼交給後端 API 辨識）
 │   ├── alembic/           # 資料庫 migration
 │   ├── data/              # SQLite DB + 媒體檔案（執行時建立）
 │   ├── robot_scripts/     # Robot Framework .robot 腳本（執行時產生）
@@ -343,7 +368,10 @@ alembic revision --autogenerate -m "說明"
 │   │   └── e2e/           # Playwright E2E 測試
 │   └── package.json
 │
-└── specs/                 # Spec Kit 規格文件（spec / plan / tasks）
+├── runner/                # runner 容器：接收後端派送的測試並執行（agent.py）
+├── docs/                  # 部署文件（deploy-oracle.md）
+├── docker-compose.yml     # frontend / backend / runner 三個服務
+└── specs/                 # Spec Kit 規格文件（001 平台、002 RF 上傳、003 執行佇列、004 排程執行）
 ```
 
 ---
