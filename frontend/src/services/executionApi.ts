@@ -10,6 +10,8 @@ export interface ExecutionRecord {
   passed_count: number
   failed_count: number
   total_count: number
+  schedule_id?: string | null
+  schedule_name?: string | null
 }
 
 export interface CaseResultItem {

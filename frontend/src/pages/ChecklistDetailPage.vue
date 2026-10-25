@@ -29,7 +29,7 @@
       <dl>
         <dt>清單名稱</dt><dd>{{ checklist.name }}</dd>
         <dt>建立人員</dt><dd>{{ checklist.created_by }}</dd>
-        <dt>建立時間</dt><dd>{{ (checklist as any).created_at ?? '-' }}</dd>
+        <dt>建立時間</dt><dd>{{ formatDateTime((checklist as any).created_at) }}</dd>
         <dt>案例數</dt><dd>{{ checklist.items.length }}</dd>
       </dl>
     </div>
@@ -40,7 +40,7 @@
       <div v-if="checklist.items.length === 0" class="empty">
         尚無案例，點擊「管理案例」新增
       </div>
-      <table v-else class="case-table">
+      <table v-else class="data-table case-table">
         <thead>
           <tr>
             <th class="col-expand"></th>
@@ -108,13 +108,19 @@
       </table>
     </div>
 
+    <!-- 排程區 -->
+    <div class="section" data-testid="schedules">
+      <h2>排程</h2>
+      <ScheduleList :checklist-id="checklist.id" />
+    </div>
+
     <!-- 執行歷史區 -->
     <div class="section" data-testid="execution-history">
       <h2>執行歷史</h2>
       <div v-if="executions.length === 0" class="empty">尚無執行紀錄</div>
-      <table v-else class="history-table">
+      <table v-else class="data-table history-table">
         <thead>
-          <tr><th>執行 ID</th><th>狀態</th><th>開始時間</th><th>通過</th><th>失敗</th></tr>
+          <tr><th>執行 ID</th><th>狀態</th><th>觸發</th><th>開始時間</th><th>通過</th><th>失敗</th></tr>
         </thead>
         <tbody>
           <tr
@@ -123,9 +129,10 @@
             class="clickable"
             @click="$router.push(`/results/${ex.id}`)"
           >
-            <td>{{ ex.id.slice(0, 8) }}...</td>
-            <td>{{ ex.status }}</td>
-            <td>{{ ex.started_at ?? '-' }}</td>
+            <td class="mono">{{ ex.id.slice(0, 8) }}</td>
+            <td><StatusBadge :status="ex.status" /></td>
+            <td>{{ triggerLabel(ex) }}</td>
+            <td>{{ formatDateTime(ex.started_at) }}</td>
             <td>{{ ex.passed_count }}</td>
             <td>{{ ex.failed_count }}</td>
           </tr>
@@ -177,6 +184,12 @@ import {
 } from '../services/checklistApi'
 import { executeChecklist } from '../services/executionApi'
 import { useAuthStore } from '../stores/authStore'
+import ScheduleList from '../components/ScheduleList/index.vue'
+import StatusBadge from '../components/StatusBadge/index.vue'
+import { confirmAction } from '../composables/useConfirm'
+import { triggerLabel } from '../utils/scheduleFormat'
+import { formatDateTime } from '../utils/format'
+
 
 const authStore = useAuthStore()
 
@@ -282,7 +295,8 @@ async function saveEdit() {
 
 async function handleDelete() {
   if (!checklist.value) return
-  if (!confirm(`確定要刪除清單「${checklist.value.name}」？此操作不可還原。`)) return
+  const ok = await confirmAction({ title: `刪除清單「${checklist.value.name}」？`, message: '此操作不可還原。', confirmLabel: '刪除', danger: true })
+  if (!ok) return
   errorMsg.value = ''
   try {
     await deleteChecklist(checklist.value.id)
@@ -319,93 +333,69 @@ onMounted(fetchChecklist)
 </script>
 
 <style scoped>
-.page { max-width: 1200px; margin: 0 auto; padding: 24px; }
-.page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }
-h1 { font-size: 22px; margin-bottom: 4px; }
-.subtitle { font-size: 13px; color: #6b7280; }
+.page-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 24px; }
+h1 { margin-bottom: 4px; }
+.subtitle { color: var(--ink-muted); }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 
 .section { margin-bottom: 32px; }
-.section h2 { font-size: 16px; font-weight: 600; margin-bottom: 12px; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; }
+.section h2 { margin-bottom: 12px; }
 
-dl { display: grid; grid-template-columns: 100px 1fr; gap: 6px 16px; font-size: 14px; }
-dt { font-weight: 600; color: #6b7280; }
+dl { display: grid; grid-template-columns: 100px 1fr; gap: 6px 16px; }
+dt { font-weight: 600; color: var(--ink-muted); }
 
-.case-table, .history-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-.case-table th, .case-table td,
-.history-table th, .history-table td {
-  padding: 10px 12px;
-  border-bottom: 1px solid #e5e7eb;
-  text-align: left;
-}
-.case-table th, .history-table th {
-  background: #f9fafb;
-  font-weight: 600;
-  color: #374151;
-}
 .col-expand { width: 36px; }
+.mono { font-family: var(--font-mono); font-size: var(--fs-12); }
 
 .expand-btn {
   background: none;
   border: none;
-  cursor: pointer;
-  font-size: 12px;
-  color: #6b7280;
+  min-height: 0;
+  font-size: var(--fs-12);
+  color: var(--ink-muted);
   padding: 2px 4px;
   border-radius: 3px;
-  transition: background 0.1s;
 }
-.expand-btn:hover { background: #e5e7eb; color: #374151; }
+.expand-btn:hover:not(:disabled) { background: var(--brand-soft); color: var(--ink); }
 
 .expanded-row > td.expanded-cell {
   padding: 0;
-  border-bottom: 2px solid #c7d2fe;
-  background: #f5f3ff;
+  background: var(--brand-soft);
 }
 
 .test-data-area { padding: 12px 16px 16px 48px; }
 
-.no-test-data { color: #9ca3af; font-size: 13px; padding: 8px 0; }
+.no-test-data { color: var(--ink-muted); font-size: var(--fs-12); padding: 8px 0; }
 
-.test-data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.test-data-table { width: 100%; border-collapse: collapse; font-size: var(--fs-12); }
 .test-data-table th {
-  background: #ede9fe;
   font-weight: 600;
-  color: #5b21b6;
+  color: var(--brand-ink-muted);
   padding: 6px 10px;
   text-align: left;
+  border-bottom: 1px solid var(--brand-line);
 }
-.test-data-table td { padding: 4px 8px; border-bottom: 1px solid #e9d5ff; }
-.td-readonly { color: #374151; }
+.test-data-table td { padding: 4px 8px; border-bottom: 1px solid var(--brand-line); }
+.td-readonly { color: var(--ink); }
 
-.actual-input {
-  width: 100%;
-  padding: 4px 8px;
-  border: 1px solid #d8b4fe;
-  border-radius: 4px;
-  font-size: 13px;
-  background: white;
-  box-sizing: border-box;
-}
-.actual-input:focus { outline: none; border-color: #7c3aed; }
+.actual-input { width: 100%; padding: 4px 8px; font-size: var(--fs-12); }
 
 .clickable { cursor: pointer; }
-.clickable:hover { background: #f0f4ff; }
+.clickable:hover { background: var(--brand-soft); }
 
-.empty { color: #9ca3af; font-size: 14px; padding: 16px 0; }
-.error-banner { background: #fee2e2; color: #991b1b; padding: 10px 16px; border-radius: 6px; margin-top: 16px; }
-.loading-page, .not-found { padding: 60px; text-align: center; color: #6b7280; }
+.empty { color: var(--ink-muted); padding: 16px 0; }
+.error-banner { background: var(--fail-bg); color: var(--fail); padding: 10px 16px; border-radius: var(--radius); margin-top: 16px; }
+.loading-page, .not-found { padding: 60px; text-align: center; color: var(--ink-muted); }
 
-.btn-primary { background: #4f46e5; color: white; padding: 8px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
-.btn-secondary { background: #e5e7eb; color: #374151; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
-.btn-danger { background: #fee2e2; color: #dc2626; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
-.btn-danger:hover { background: #fecaca; }
-
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-.modal { background: white; border-radius: 8px; padding: 24px; min-width: 360px; }
-.modal h3 { font-size: 18px; margin-bottom: 16px; }
-.modal label { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; font-size: 14px; color: #374151; }
-.modal-input { border: 1px solid #d1d5db; border-radius: 4px; padding: 8px 10px; font-size: 14px; }
-.modal-input:focus { outline: none; border-color: #6366f1; }
+.modal-overlay { position: fixed; inset: 0; background: rgba(14, 42, 68, 0.35); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+.modal { background: var(--paper); border-radius: var(--radius-lg); padding: 24px; min-width: 360px; }
+.modal h3 { font-size: var(--fs-20); font-weight: 600; margin-bottom: 16px; }
+.modal label { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; color: var(--ink-muted); }
 .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+
+@media (max-width: 767px) {
+  .page-header { flex-direction: column; }
+  .actions { justify-content: flex-start; }
+  .case-table, .history-table { display: block; overflow-x: auto; }
+}
 </style>

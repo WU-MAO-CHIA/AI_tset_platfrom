@@ -14,6 +14,10 @@ vi.mock('../../src/services/checklistApi', () => ({
   patchChecklistCaseItem: vi.fn(),
 }))
 
+vi.mock('../../src/services/scheduleApi', () => ({
+  listChecklistSchedules: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+}))
+
 vi.mock('../../src/components/ChecklistView/index.vue', () => ({
   default: { template: '<div class="checklist-view-stub" />' },
 }))
@@ -78,5 +82,21 @@ describe('ChecklistDetailPage', () => {
     await new Promise((r) => setTimeout(r, 0))
     await wrapper.vm.$nextTick()
     expect(wrapper.find('[data-testid="btn-execute"]').exists()).toBe(true)
+  })
+
+  it('renders schedules section and how each execution was triggered', async () => {
+    vi.mocked(checklistApiModule.getChecklistExecutions).mockResolvedValue({
+      items: [
+        { id: 'exec-sched-1', status: 'completed', passed_count: 1, failed_count: 0, total_count: 1, started_at: null, finished_at: null, schedule_id: 's-1', schedule_name: 'nightly' },
+        { id: 'exec-manual', status: 'completed', passed_count: 1, failed_count: 0, total_count: 1, started_at: null, finished_at: null },
+      ],
+    } as any)
+    const wrapper = mount(ChecklistDetailPage, { global: { plugins: [router] } })
+    await new Promise((r) => setTimeout(r, 0))
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-testid="schedules"]').exists()).toBe(true)
+    const history = wrapper.find('[data-testid="execution-history"]').text()
+    expect(history).toContain('排程：nightly')
+    expect(history).toContain('手動')
   })
 })
