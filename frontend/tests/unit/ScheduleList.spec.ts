@@ -6,6 +6,7 @@ import { useAuthStore } from '../../src/stores/authStore'
 import ScheduleList from '../../src/components/ScheduleList/index.vue'
 import ScheduleForm from '../../src/components/ScheduleForm/index.vue'
 import * as scheduleApi from '../../src/services/scheduleApi'
+import { confirmAction } from '../../src/composables/useConfirm'
 
 vi.mock('../../src/services/scheduleApi', () => ({
   listSchedules: vi.fn(),
@@ -14,6 +15,8 @@ vi.mock('../../src/services/scheduleApi', () => ({
   updateSchedule: vi.fn(),
   deleteSchedule: vi.fn(),
 }))
+
+vi.mock('../../src/composables/useConfirm', () => ({ confirmAction: vi.fn() }))
 
 const router = createRouter({
   history: createWebHashHistory(),
@@ -110,7 +113,7 @@ describe('ScheduleList', () => {
   })
 
   it('deletes after confirmation', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    vi.mocked(confirmAction).mockResolvedValue(true)
     vi.mocked(scheduleApi.deleteSchedule).mockResolvedValue()
     const wrapper = await mountAs('editor', { checklistId: 'cl-1' })
 
@@ -119,5 +122,16 @@ describe('ScheduleList', () => {
 
     expect(scheduleApi.deleteSchedule).toHaveBeenCalledWith('s-1')
     expect(wrapper.find('[data-testid="schedule-empty"]').exists()).toBe(true)
+  })
+
+  it('does not delete when the confirmation is cancelled', async () => {
+    vi.mocked(confirmAction).mockResolvedValue(false)
+    const wrapper = await mountAs('editor', { checklistId: 'cl-1' })
+
+    await wrapper.find('[data-testid="btn-delete-schedule"]').trigger('click')
+    await flushPromises()
+
+    expect(scheduleApi.deleteSchedule).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-testid="schedule-row-s-1"]').exists()).toBe(true)
   })
 })

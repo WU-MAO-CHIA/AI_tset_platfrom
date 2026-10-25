@@ -130,7 +130,7 @@
             @click="$router.push(`/results/${ex.id}`)"
           >
             <td class="mono">{{ ex.id.slice(0, 8) }}</td>
-            <td><span :class="['badge', statusBadge(ex.status)]">{{ statusLabel(ex.status) }}</span></td>
+            <td><StatusBadge :status="ex.status" /></td>
             <td>{{ triggerLabel(ex) }}</td>
             <td>{{ formatDateTime(ex.started_at) }}</td>
             <td>{{ ex.passed_count }}</td>
@@ -185,27 +185,11 @@ import {
 import { executeChecklist } from '../services/executionApi'
 import { useAuthStore } from '../stores/authStore'
 import ScheduleList from '../components/ScheduleList/index.vue'
+import StatusBadge from '../components/StatusBadge/index.vue'
+import { confirmAction } from '../composables/useConfirm'
 import { triggerLabel } from '../utils/scheduleFormat'
 import { formatDateTime } from '../utils/format'
 
-// 狀態色只用在測試結果：通過綠、失敗紅、執行中紫、排隊黃，其餘中性
-const STATUS_META: Record<string, { label: string; badge: string }> = {
-  pending: { label: '排隊中', badge: 'badge-queued' },
-  running: { label: '執行中', badge: 'badge-running' },
-  completed: { label: '完成', badge: 'badge-pass' },
-  failed: { label: '失敗', badge: 'badge-fail' },
-  error: { label: '錯誤', badge: 'badge-fail' },
-  interrupted: { label: '已中斷', badge: '' },
-  cancelled: { label: '已取消', badge: '' },
-}
-
-function statusLabel(status: string): string {
-  return STATUS_META[status]?.label ?? status
-}
-
-function statusBadge(status: string): string {
-  return STATUS_META[status]?.badge ?? ''
-}
 
 const authStore = useAuthStore()
 
@@ -311,7 +295,8 @@ async function saveEdit() {
 
 async function handleDelete() {
   if (!checklist.value) return
-  if (!confirm(`確定要刪除清單「${checklist.value.name}」？此操作不可還原。`)) return
+  const ok = await confirmAction({ title: `刪除清單「${checklist.value.name}」？`, message: '此操作不可還原。', confirmLabel: '刪除', danger: true })
+  if (!ok) return
   errorMsg.value = ''
   try {
     await deleteChecklist(checklist.value.id)

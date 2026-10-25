@@ -39,7 +39,7 @@
           <td>
             <span v-if="s.last_skip_reason" class="skip" :title="s.last_skip_reason">略過：{{ s.last_skip_reason }}</span>
             <RouterLink v-else-if="s.last_execution_id" :to="`/results/${s.last_execution_id}`" class="result-link">
-              <span :class="['badge', statusBadge(s.last_execution_status)]">{{ statusLabel(s.last_execution_status) }}</span>
+              <StatusBadge :status="s.last_execution_status" />
             </RouterLink>
             <span v-else>-</span>
           </td>
@@ -72,6 +72,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import ScheduleForm from '../ScheduleForm/index.vue'
+import StatusBadge from '../StatusBadge/index.vue'
+import { confirmAction } from '../../composables/useConfirm'
 import {
   createSchedule,
   deleteSchedule,
@@ -96,34 +98,6 @@ const editing = ref<Schedule | null>(null)
 const saving = ref(false)
 
 const timezone = computed(() => schedules.value[0]?.timezone ?? 'Asia/Taipei')
-
-const STATUS_LABELS: Record<string, string> = {
-  pending: '排隊中',
-  running: '執行中',
-  completed: '完成',
-  failed: '失敗',
-  error: '錯誤',
-  interrupted: '已中斷',
-  cancelled: '已取消',
-}
-
-// 狀態色只用在測試結果：通過綠、失敗紅、執行中紫、排隊黃，其餘中性
-const STATUS_BADGES: Record<string, string> = {
-  completed: 'badge-pass',
-  failed: 'badge-fail',
-  error: 'badge-fail',
-  running: 'badge-running',
-  pending: 'badge-queued',
-}
-
-function statusBadge(status: string | null): string {
-  return (status && STATUS_BADGES[status]) || ''
-}
-
-function statusLabel(status: string | null): string {
-  if (!status) return '-'
-  return STATUS_LABELS[status] ?? status
-}
 
 function apiError(err: any, fallback: string): string {
   return err?.response?.data?.message ?? fallback
@@ -183,7 +157,8 @@ async function toggle(s: Schedule) {
 }
 
 async function remove(s: Schedule) {
-  if (!confirm(`確定要刪除排程「${s.name}」？`)) return
+  const ok = await confirmAction({ title: `刪除排程「${s.name}」？`, message: '已產生的執行紀錄會保留。', confirmLabel: '刪除', danger: true })
+  if (!ok) return
   errorMsg.value = ''
   try {
     await deleteSchedule(s.id)
