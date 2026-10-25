@@ -17,10 +17,10 @@
     <section v-if="activeTab === 'users'" class="tab-content">
       <div class="section-toolbar">
         <h2>帳號管理</h2>
-        <button class="primary" @click="showCreateUser = true">+ 新增帳號</button>
+        <button class="btn-primary" @click="showCreateUser = true">新增帳號</button>
       </div>
 
-      <table class="data-table">
+      <table class="data-table responsive-table">
         <thead>
           <tr>
             <th>帳號</th><th>角色</th><th>狀態</th><th>建立時間</th><th>操作</th>
@@ -28,23 +28,23 @@
         </thead>
         <tbody>
           <tr v-for="u in users" :key="u.id">
-            <td>{{ u.username }}</td>
-            <td>
+            <td class="cell-title">{{ u.username }}</td>
+            <td data-label="角色">
               <select :value="u.role" @change="onRoleChange(u, ($event.target as HTMLSelectElement).value)">
                 <option>admin</option>
                 <option>editor</option>
                 <option>viewer</option>
               </select>
             </td>
-            <td>
-              <button class="small-btn" @click="toggleActive(u)">
+            <td data-label="狀態">
+              <button class="btn-secondary btn-sm" @click="toggleActive(u)">
                 {{ u.is_active ? '停用' : '啟用' }}
               </button>
             </td>
-            <td>{{ u.created_at.slice(0, 10) }}</td>
-            <td class="actions">
-              <button class="small-btn" @click="openResetPw(u)">重設密碼</button>
-              <button class="small-btn danger" @click="onDeleteUser(u)">刪除</button>
+            <td data-label="建立時間">{{ formatDate(u.created_at) }}</td>
+            <td class="actions cell-actions">
+              <button class="btn-secondary btn-sm" @click="openResetPw(u)">重設密碼</button>
+              <button class="btn-danger btn-sm" @click="onDeleteUser(u)">刪除</button>
             </td>
           </tr>
         </tbody>
@@ -65,7 +65,7 @@
           <p v-if="userError" class="error-msg">{{ userError }}</p>
           <div class="modal-actions">
             <button @click="showCreateUser = false">取消</button>
-            <button class="primary" @click="submitCreateUser">建立</button>
+            <button class="btn-primary" @click="submitCreateUser">建立</button>
           </div>
         </div>
       </div>
@@ -78,7 +78,7 @@
           <p v-if="userError" class="error-msg">{{ userError }}</p>
           <div class="modal-actions">
             <button @click="resetPwTarget = null">取消</button>
-            <button class="primary" @click="submitResetPw">確認</button>
+            <button class="btn-primary" @click="submitResetPw">確認</button>
           </div>
         </div>
       </div>
@@ -88,22 +88,22 @@
     <section v-if="activeTab === 'categories'" class="tab-content">
       <div class="section-toolbar">
         <h2>系統別管理</h2>
-        <button class="primary" @click="showCreateCat = true">+ 新增系統別</button>
+        <button class="btn-primary" @click="showCreateCat = true">新增系統別</button>
       </div>
 
-      <table class="data-table">
+      <table class="data-table responsive-table">
         <thead><tr><th>名稱</th><th>建立時間</th><th>操作</th></tr></thead>
         <tbody>
           <tr v-for="c in categories" :key="c.id">
-            <td>
+            <td class="cell-title">
               <span v-if="editingCatId !== c.id">{{ c.name }}</span>
               <input v-else v-model="editingCatName" @keyup.enter="submitRename(c)" />
             </td>
-            <td>{{ c.created_at.slice(0, 10) }}</td>
-            <td class="actions">
-              <button v-if="editingCatId !== c.id" class="small-btn" @click="startRename(c)">重新命名</button>
-              <button v-else class="small-btn" @click="submitRename(c)">儲存</button>
-              <button class="small-btn danger" @click="onDeleteCat(c)">刪除</button>
+            <td data-label="建立時間">{{ formatDate(c.created_at) }}</td>
+            <td class="actions cell-actions">
+              <button v-if="editingCatId !== c.id" class="btn-secondary btn-sm" @click="startRename(c)">重新命名</button>
+              <button v-else class="btn-secondary btn-sm" @click="submitRename(c)">儲存</button>
+              <button class="btn-danger btn-sm" @click="onDeleteCat(c)">刪除</button>
             </td>
           </tr>
         </tbody>
@@ -116,7 +116,7 @@
           <p v-if="catError" class="error-msg">{{ catError }}</p>
           <div class="modal-actions">
             <button @click="showCreateCat = false">取消</button>
-            <button class="primary" @click="submitCreateCat">建立</button>
+            <button class="btn-primary" @click="submitCreateCat">建立</button>
           </div>
         </div>
       </div>
@@ -168,6 +168,8 @@
 import { ref, computed, onMounted } from 'vue'
 import * as adminApi from '../services/adminApi'
 import type { UserRecord, SystemCategory, LlmModel } from '../services/adminApi'
+import { confirmAction } from '../composables/useConfirm'
+import { formatDate } from '../utils/format'
 
 const tabs = [
   { key: 'users', label: '帳號管理' },
@@ -227,7 +229,13 @@ async function submitResetPw() {
 }
 
 async function onDeleteUser(u: UserRecord) {
-  if (!confirm(`確定要刪除帳號「${u.username}」？`)) return
+  const ok = await confirmAction({
+    title: `刪除帳號「${u.username}」？`,
+    message: '刪除後這個帳號將無法登入，且無法復原。',
+    confirmLabel: '刪除',
+    danger: true,
+  })
+  if (!ok) return
   await adminApi.deleteUser(u.id)
   await loadUsers()
 }
@@ -270,7 +278,13 @@ async function submitRename(c: SystemCategory) {
 async function onDeleteCat(c: SystemCategory) {
   const res = await adminApi.deleteSystemCategory(c.id)
   if (res.affected_case_count > 0) {
-    if (!confirm(`刪除「${c.name}」將影響 ${res.affected_case_count} 個案例的系統別欄位，確定繼續？`)) {
+    const ok = await confirmAction({
+      title: `刪除系統別「${c.name}」？`,
+      message: `有 ${res.affected_case_count} 個案例使用這個系統別，刪除後這些案例的系統別會被清空。`,
+      confirmLabel: '刪除',
+      danger: true,
+    })
+    if (!ok) {
       await loadCategories()
       return
     }
@@ -339,7 +353,7 @@ onMounted(async () => {
 
 <style scoped>
 .admin-page {
-  padding: 24px;
+  padding: 32px 24px;
   max-width: 900px;
   margin: 0 auto;
 }
@@ -358,6 +372,7 @@ onMounted(async () => {
 }
 
 .tab-btn {
+  white-space: nowrap;
   padding: 8px 20px;
   border: none;
   background: none;
@@ -389,74 +404,19 @@ onMounted(async () => {
   margin: 0;
 }
 
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.875rem;
-}
 
-.data-table th, .data-table td {
-  padding: 8px 12px;
-  border: 1px solid #e5e7eb;
-  text-align: left;
-}
 
-.data-table th {
-  background: #f9fafb;
-  font-weight: 600;
-}
 
 .actions {
   display: flex;
   gap: 6px;
 }
 
-.small-btn {
-  padding: 3px 10px;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
-  background: #f9fafb;
-  cursor: pointer;
-  font-size: 0.8rem;
-}
 
-.small-btn.danger {
-  border-color: #fca5a5;
-  color: #dc2626;
-  background: #fff;
-}
 
-.primary {
-  background: var(--brand);
-  color: var(--brand-ink);
-  border: none;
-  border-radius: 4px;
-  padding: 6px 14px;
-  cursor: pointer;
-  font-size: 0.875rem;
-}
 
-.primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
 
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 999;
-}
 
-.modal {
-  background: white;
-  border-radius: 8px;
-  padding: 28px;
-  width: 380px;
-}
 
 .modal h3 {
   margin: 0 0 20px;
@@ -564,5 +524,11 @@ onMounted(async () => {
   border: 1px solid #d1d5db;
   border-radius: 4px;
   font-size: 0.875rem;
+}
+
+@media (max-width: 767px) {
+  .admin-page { padding: 20px 16px; }
+  .tab-btn { padding: 8px 12px; margin-bottom: 0; }
+  .tabs { overflow-x: auto; }
 }
 </style>

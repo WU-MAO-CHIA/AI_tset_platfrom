@@ -6,7 +6,7 @@
         <span class="subtitle" v-if="checklistName">{{ checklistName }}</span>
       </div>
       <div class="actions">
-        <button class="btn-secondary" @click="$router.push(`/checklists/${checklistId}`)">← 返回清單</button>
+        <button class="btn-secondary" @click="$router.push(`/checklists/${checklistId}`)">返回清單</button>
       </div>
     </div>
 
@@ -16,7 +16,7 @@
     <div class="section">
       <h2>已加入案例（{{ items.length }} 筆）</h2>
       <div v-if="items.length === 0" class="empty">尚無案例{{ authStore.isEditor ? '，請從下方搜尋加入' : '' }}</div>
-      <table v-else class="case-table">
+      <table v-else class="data-table responsive-table case-table">
         <thead>
           <tr>
             <th>#</th>
@@ -28,10 +28,10 @@
         </thead>
         <tbody>
           <tr v-for="(item, idx) in items" :key="item.item_id">
-            <td>{{ item.position + 1 }}</td>
-            <td>{{ item.case_number ?? '-' }}</td>
-            <td>{{ item.name ?? '-' }}</td>
-            <td>
+            <td data-label="順序" class="idx">{{ item.position + 1 }}</td>
+            <td data-label="案例編號" class="muted">{{ item.case_number ?? '-' }}</td>
+            <td class="cell-title">{{ item.name ?? '-' }}</td>
+            <td data-label="備註">
               <input
                 v-if="authStore.isEditor"
                 class="notes-input"
@@ -41,10 +41,10 @@
               />
               <span v-else>{{ item.notes || '-' }}</span>
             </td>
-            <td v-if="authStore.isEditor">
-              <button class="btn-up" @click="moveUp(idx)" :disabled="idx === 0">↑</button>
-              <button class="btn-down" @click="moveDown(idx)" :disabled="idx === items.length - 1">↓</button>
-              <button class="btn-danger-sm" @click="onRemove(item.test_case_id)">移除</button>
+            <td v-if="authStore.isEditor" class="cell-actions row-actions">
+              <button class="btn-secondary btn-sm btn-up" aria-label="上移" @click="moveUp(idx)" :disabled="idx === 0">↑</button>
+              <button class="btn-secondary btn-sm btn-down" aria-label="下移" @click="moveDown(idx)" :disabled="idx === items.length - 1">↓</button>
+              <button class="btn-danger btn-sm btn-danger-sm" @click="onRemove(item.test_case_id)">移除</button>
             </td>
           </tr>
         </tbody>
@@ -61,7 +61,7 @@
         <input v-model="searchKeyword" class="search-input" placeholder="輸入案例名稱或編號..." @input="onSearch" />
       </div>
       <div v-if="searchResults.length > 0" class="search-results">
-        <table class="case-table">
+        <table class="data-table responsive-table case-table">
           <thead>
             <tr>
               <th>案例編號</th>
@@ -72,23 +72,23 @@
           </thead>
           <tbody>
             <tr v-for="c in searchResults" :key="c.id">
-              <td>{{ c.case_number }}</td>
-              <td>{{ c.name }}</td>
-              <td>{{ c.system_category ?? '-' }}</td>
-              <td>
+              <td data-label="案例編號" class="muted">{{ c.case_number }}</td>
+              <td class="cell-title">{{ c.name }}</td>
+              <td data-label="系統別">{{ c.system_category ?? '-' }}</td>
+              <td class="cell-actions row-actions">
                 <button
-                  class="btn-add"
+                  class="btn-secondary btn-sm btn-add"
                   :disabled="isAlreadyAdded(c.id)"
                   @click="onAdd(c.id)"
                 >
-                  {{ isAlreadyAdded(c.id) ? '已加入' : '+ 加入' }}
+                  {{ isAlreadyAdded(c.id) ? '已加入' : '加入清單' }}
                 </button>
               </td>
             </tr>
           </tbody>
         </table>
       </div>
-      <div v-else-if="searchKeyword" class="empty">無符合結果</div>
+      <div v-else-if="searchKeyword" class="empty">沒有符合「{{ searchKeyword }}」的案例。</div>
     </div>
   </div>
 </template>
@@ -217,36 +217,23 @@ async function saveOrder() {
 </script>
 
 <style scoped>
-.page { max-width: 1200px; margin: 0 auto; padding: 24px; }
-.page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }
-h1 { font-size: 22px; margin-bottom: 4px; }
-.subtitle { font-size: 13px; color: #6b7280; }
+.page-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 24px; }
+.subtitle { color: var(--ink-muted); }
 .actions { display: flex; gap: 8px; }
 
 .section { margin-bottom: 32px; }
-.section h2 { font-size: 16px; font-weight: 600; margin-bottom: 12px; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; }
+.section h2 { margin-bottom: 12px; }
 
-.case-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-.case-table th, .case-table td { padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: left; }
-.case-table th { background: #f9fafb; font-weight: 600; color: #374151; }
-
-.notes-input { width: 100%; border: 1px solid #e5e7eb; border-radius: 4px; padding: 4px 8px; font-size: 13px; }
-.notes-input:focus { outline: none; border-color: var(--brand-strong); }
+.idx { color: var(--ink-faint); width: 48px; }
+.notes-input { width: 100%; min-width: 160px; padding: 5px 8px; }
+.row-actions { white-space: nowrap; text-align: right; }
+.row-actions button + button { margin-left: 6px; }
 
 .search-row { margin-bottom: 12px; }
-.search-input { width: 320px; border: 1px solid #d1d5db; border-radius: 6px; padding: 8px 12px; font-size: 14px; }
-.search-input:focus { outline: none; border-color: var(--brand-strong); }
+.search-input { width: 320px; max-width: 100%; }
 
-.empty { color: #9ca3af; font-size: 14px; padding: 16px 0; }
-.error-banner { background: #fee2e2; color: #991b1b; padding: 10px 16px; border-radius: 6px; margin-bottom: 16px; }
+.empty { color: var(--ink-muted); padding: 16px 0; }
+.error-banner { background: var(--fail-bg); color: var(--fail); padding: 10px 16px; border-radius: var(--radius); margin-bottom: 16px; }
 
-.btn-primary { background: var(--brand); color: var(--brand-ink); padding: 8px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
-.btn-secondary { background: #e5e7eb; color: #374151; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
-.btn-danger-sm { background: #fee2e2; color: #dc2626; padding: 4px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 4px; }
-.btn-danger-sm:hover { background: #fecaca; }
-.btn-add { background: #d1fae5; color: #065f46; padding: 4px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; }
-.btn-add:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-up, .btn-down { background: #f3f4f6; color: #374151; padding: 4px 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; margin-right: 2px; }
-.btn-up:disabled, .btn-down:disabled { opacity: 0.4; cursor: not-allowed; }
 .save-order-btn { margin-top: 12px; }
 </style>
