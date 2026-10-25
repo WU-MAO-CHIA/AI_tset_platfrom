@@ -88,13 +88,14 @@ nano backend/.env
 
 ```bash
 echo 'FRONTEND_PORT=127.0.0.1:8080' > .env
+echo "RUNNER_TOKEN=$(openssl rand -hex 32)" >> .env
 ```
 
-（專案根目錄的 `.env` 由 docker compose 讀取，和 `backend/.env` 是不同的檔案。）
+（專案根目錄的 `.env` 由 docker compose 讀取，和 `backend/.env` 是不同的檔案。`RUNNER_TOKEN` 是後端把測試交給 runner 容器用的密鑰，沒設定時 `docker compose` 會直接報錯。）
 
-> **帳號角色注意**：editor 可以上傳並執行 Robot Framework 腳本，而 RF 腳本能執行任意 Python。
-> 後端容器以另一個使用者 `runner` 執行測試，讀不到 JWT / LLM 金鑰與資料庫，也改不到其他人的腳本；
-> 但它仍在同一個容器、可以上網，所以 editor 還是只給信任的人，其他人用 viewer（只能看結果，不能執行或呼叫 AI）。
+> **測試在哪裡執行**：RF 腳本能執行任意 Python，所以測試一律在獨立的 `runner` 容器裡跑。
+> 那裡沒有 JWT / LLM 金鑰、沒有資料庫與其他人的腳本，記憶體最多 3 GB、CPU 2 核，腳本本身再以低權限使用者執行。
+> 它仍然可以上網（要測外部網站），所以 editor 還是只給信任的人，其他人用 viewer（只能看結果，不能執行或呼叫 AI）。
 
 ## 5. 建置並啟動
 
@@ -175,6 +176,8 @@ docker compose up -d --build
 ```
 
 每次啟動會自動套用資料庫 migration。
+
+> 從沒有 runner 容器的版本更新時，先在專案根目錄的 `.env` 加上 `RUNNER_TOKEN`（見第 4 步），否則 `docker compose` 會報錯。
 
 ## 常見問題
 

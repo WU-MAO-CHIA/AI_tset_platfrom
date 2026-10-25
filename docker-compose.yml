@@ -1,10 +1,12 @@
 # AutoTest Platform — 以 Docker 執行前後端
 #
 #   準備：cp backend/.env.example backend/.env，填入 LLM 金鑰、JWT_SECRET_KEY、ADMIN_PASSWORD
+#         echo "RUNNER_TOKEN=$(openssl rand -hex 32)" >> .env   （專案根目錄的 .env，給 backend 與 runner 共用）
 #   啟動：docker compose up -d --build
 #   開啟：http://localhost:8080（以環境變數 FRONTEND_PORT 變更）
 #
 # 後端不對外開放 port，只能經由 frontend 的 nginx（/api）存取。
+# 測試腳本在 runner 容器執行：那裡沒有後端的金鑰與資料庫（見 docs/deploy-oracle.md）。
 
 name: autotest
 
@@ -19,6 +21,14 @@ services:
       MEDIA_ROOT: ./data/media
       ROBOT_SCRIPTS_DIR: ./robot_scripts
       EXECUTION_REPORTS_DIR: ./data/execution_reports
+      # 測試交給 runner 容器執行；runner 解驗證碼時以 INTERNAL_API_URL 呼叫後端
+      EXECUTION_RUNNER: remote
+      RUNNER_URL: http://runner:9000
+      RUNNER_TOKEN: ${RUNNER_TOKEN:?請在專案根目錄的 .env 設定 RUNNER_TOKEN（openssl rand -hex 32）}
+      INTERNAL_API_URL: http://backend:8000
+    depends_on:
+      runner:
+        condition: service_healthy
     volumes:
       - backend-data:/app/data            # SQLite、附件、執行報告
       - robot-scripts:/app/robot_scripts  # 產生的 .robot 腳本
@@ -33,6 +43,24 @@ services:
       timeout: 5s
       retries: 6
       start_period: 30s
+    restart: unless-stopped
+
+  runner:
+    build: ./runner
+    # 唯一的設定是 RUNNER_TOKEN；不給 backend/.env，也不掛任何資料 volume
+    environment:
+      RUNNER_TOKEN: ${RUNNER_TOKEN:?請在專案根目錄的 .env 設定 RUNNER_TOKEN（openssl rand -hex 32）}
+    init: true
+    shm_size: 1gb
+    # 一個失控的腳本最多吃掉這些資源，不會拖垮後端
+    mem_limit: 3g
+    cpus: 2
+    pids_limit: 2048
+    # agent 只需要降權（SETUID/SETGID）、結束整組行程（KILL）與清理腳本產生的檔案（DAC_OVERRIDE）
+    cap_drop: [ALL]
+    cap_add: [SETUID, SETGID, KILL, DAC_OVERRIDE]
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
 
   frontend:
