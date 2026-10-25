@@ -17,6 +17,8 @@ jinja2==3.1.6
 pydantic-settings==2.14.1
 greenlet==3.1.1
 aiosqlite==0.22.1
+# 排程時區（zoneinfo）在 Windows 與 slim 映像上沒有系統時區資料庫
+tzdata==2026.5
 python-jose[cryptography]==3.3.0
 bcrypt==5.0.0
 cryptography==49.0.0

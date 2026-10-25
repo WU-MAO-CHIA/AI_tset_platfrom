@@ -153,6 +153,9 @@ ROBOT_SCRIPTS_DIR=./robot_scripts
 PARALLEL_MAX_WORKERS=5
 # 同時執行幾筆清單／試跑，其餘排隊（試跑優先）；單一清單內的平行度由 PARALLEL_MAX_WORKERS 限制
 EXECUTION_MAX_CONCURRENT=1
+# 排程時間的時區（IANA 名稱）；SCHEDULE_ENABLED=false 可關閉排程器
+SCHEDULE_TIMEZONE=Asia/Taipei
+SCHEDULE_ENABLED=true
 
 # 填入至少一組
 ANTHROPIC_API_KEY=sk-ant-...

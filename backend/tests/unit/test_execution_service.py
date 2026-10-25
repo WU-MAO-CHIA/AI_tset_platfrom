@@ -55,6 +55,7 @@ class TestParallelControl:
                 checklist_id="cl-001",
                 parallel_mode=False,
                 max_workers=1,
+                schedule_id=None,
             )
 
 

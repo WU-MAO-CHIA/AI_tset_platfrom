@@ -9,6 +9,7 @@ from .base import Base, TimestampMixin
 if TYPE_CHECKING:
     from .checklist_item import ChecklistItem
     from .execution_record import ExecutionRecord
+    from .execution_schedule import ExecutionSchedule
 
 
 class TestChecklist(Base, TimestampMixin):
@@ -24,4 +25,7 @@ class TestChecklist(Base, TimestampMixin):
     )
     executions: Mapped[list["ExecutionRecord"]] = relationship(
         "ExecutionRecord", back_populates="checklist", cascade="all, delete-orphan"
+    )
+    schedules: Mapped[list["ExecutionSchedule"]] = relationship(
+        "ExecutionSchedule", back_populates="checklist", cascade="all, delete-orphan"
     )

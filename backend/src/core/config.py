@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     parallel_max_workers: int = 5
     # 同時執行幾筆執行（清單或試跑，各自是一個 robot / pabot 子程序）；仍只有一個 uvicorn 行程
     execution_max_concurrent: int = 1
+    # 排程（spec 004）：排程時間以此時區解讀；SCHEDULE_ENABLED=false 可整個關閉排程器
+    schedule_timezone: str = "Asia/Taipei"
+    schedule_enabled: bool = True
 
     anthropic_api_key: str = ""
     openai_api_key: str = ""
@@ -36,6 +39,16 @@ class Settings(BaseSettings):
     def _validate_secret(cls, v: str) -> str:
         if len(v) < 32:
             raise ValueError("JWT_SECRET_KEY must be at least 32 characters")
+        return v
+
+    @field_validator("schedule_timezone")
+    @classmethod
+    def _validate_timezone(cls, v: str) -> str:
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+        try:
+            ZoneInfo(v)
+        except (ZoneInfoNotFoundError, ValueError):
+            raise ValueError(f"SCHEDULE_TIMEZONE is not a valid IANA time zone: {v}")
         return v
 
     @field_validator("app_env")

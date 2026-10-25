@@ -42,7 +42,7 @@ class ExecutionRepository(BaseRepository[ExecutionRecord]):
         return True
 
     async def create_for_checklist(
-        self, checklist_id: str, parallel_mode: bool, max_workers: int
+        self, checklist_id: str, parallel_mode: bool, max_workers: int, schedule_id: Optional[str] = None
     ) -> ExecutionRecord:
         return await self.create(
             checklist_id=checklist_id,
@@ -51,6 +51,7 @@ class ExecutionRepository(BaseRepository[ExecutionRecord]):
             status="pending",
             parallel_mode=parallel_mode,
             max_workers=max_workers,
+            schedule_id=schedule_id,
         )
 
     async def create_for_trial_run(self, source_case_id: str) -> ExecutionRecord:

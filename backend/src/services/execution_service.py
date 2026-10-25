@@ -96,6 +96,7 @@ class ExecutionService:
         checklist_id: str,
         parallel_mode: bool,
         max_workers: int,
+        schedule_id: Optional[str] = None,
     ) -> ExecutionRecord:
         from src.core.config import get_settings
         # 以 PARALLEL_MAX_WORKERS 為上限，避免請求直接決定 pabot --processes 數量
@@ -105,6 +106,7 @@ class ExecutionService:
             checklist_id=checklist_id,
             parallel_mode=parallel_mode,
             max_workers=max_workers,
+            schedule_id=schedule_id,
         )
         await self._session.flush()
 
