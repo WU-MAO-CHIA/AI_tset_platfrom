@@ -34,7 +34,7 @@ _NO_RENEW_PATHS = ("/api/v1/auth/login", "/api/v1/auth/logout")
 async def sliding_session_middleware(request: Request, call_next):
     """閒置逾時：通過驗證的 API 請求都換發新 token（X-Access-Token header + cookie），
     有操作就延長，閒置超過 JWT_EXPIRE_MINUTES 才過期。"""
-    from jose import JWTError
+    from src.core.security import JWTError
     from src.core.security import create_access_token, decode_token
     from src.services.auth_service import set_auth_cookie
 
@@ -52,7 +52,9 @@ async def sliding_session_middleware(request: Request, call_next):
         return response
     if not payload.get("sub"):
         return response
-    new_token = create_access_token(sub=payload["sub"], role=payload.get("role"))
+    new_token = create_access_token(
+        sub=payload["sub"], role=payload.get("role"), token_version=payload.get("tv", 0)
+    )
     response.headers["X-Access-Token"] = new_token
     set_auth_cookie(response, new_token)
     return response
@@ -120,12 +122,12 @@ async def startup_event() -> None:
     # 啟動期弱配置檢查：prod 直接拒絕啟動，dev/test 僅警告（避免誤傷本地開發）。
     if settings.app_env == "prod":
         if settings.is_default_secret():
-            raise RuntimeError("Refusing to start in prod with default JWT_SECRET_KEY")
+            raise RuntimeError("Refusing to start in prod with a default or example JWT_SECRET_KEY (generate one with: openssl rand -hex 32)")
         if settings.is_default_admin_password():
             raise RuntimeError("Refusing to start in prod with default ADMIN_PASSWORD")
     else:
         if settings.is_default_secret():
-            logger.warning("Using default JWT_SECRET_KEY — set a strong value via .env for any shared deployment")
+            logger.warning("Using a default or example JWT_SECRET_KEY — set a strong value via .env for any shared deployment")
         if settings.is_default_admin_password():
             logger.warning("Using default ADMIN_PASSWORD — change it via .env")
     await _recover_executions()

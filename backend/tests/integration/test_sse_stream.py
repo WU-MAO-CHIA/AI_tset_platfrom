@@ -349,6 +349,9 @@ class TestRfReportAuth:
         resp = await client.get("/api/v1/executions/exec-1/rf-report/report.html")
         assert resp.status_code == 200
         assert "rf report" in resp.text
+        # 報告可含腳本寫入的 HTML：必須跑在 sandbox 的 opaque origin，碰不到平台 token
+        assert resp.headers["content-security-policy"].startswith("sandbox allow-scripts")
+        assert "allow-same-origin" not in resp.headers["content-security-policy"]
 
     async def test_bearer_auth_serves_report(self, client, token, report_file):
         resp = await client.get(

@@ -2,7 +2,8 @@ from datetime import datetime, timedelta, timezone
 import uuid
 
 import bcrypt
-from jose import JWTError, jwt
+import jwt
+from jwt import PyJWTError as JWTError  # noqa: F401  呼叫端統一由此匯入
 from fastapi.security import OAuth2PasswordBearer
 
 from src.core.config import get_settings
@@ -15,10 +16,10 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 
 
-def create_access_token(sub: str, role: str) -> str:
+def create_access_token(sub: str, role: str, token_version: int = 0) -> str:
     now = datetime.now(timezone.utc)
     expire = now + timedelta(minutes=settings.jwt_expire_minutes)
-    payload = {"sub": sub, "role": role, "iat": now, "jti": uuid.uuid4().hex, "exp": expire}
+    payload = {"sub": sub, "role": role, "tv": token_version, "iat": now, "jti": uuid.uuid4().hex, "exp": expire}
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=ALGORITHM)
 
 

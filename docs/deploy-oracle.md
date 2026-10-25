@@ -68,7 +68,7 @@ nano backend/.env
 | 欄位 | 值 |
 |------|------|
 | `APP_ENV` | `prod` |
-| `JWT_SECRET_KEY` | 上面 `openssl` 產生的字串 |
+| `JWT_SECRET_KEY` | 上面 `openssl` 產生的字串（`prod` 拒絕範例檔的值） |
 | `ADMIN_PASSWORD` | 強密碼（`prod` 拒絕預設的 `admin`） |
 | `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` | 至少一組 |
 | `JWT_EXPIRE_MINUTES` | 閒置逾時（分鐘，整數）；範例檔為 `10`，有操作就自動續期，閒置超過才需重新登入 |
@@ -81,6 +81,10 @@ echo 'FRONTEND_PORT=127.0.0.1:8080' > .env
 ```
 
 （專案根目錄的 `.env` 由 docker compose 讀取，和 `backend/.env` 是不同的檔案。）
+
+> **帳號角色注意**：editor 可以上傳並執行 Robot Framework 腳本，而 RF 腳本能執行任意 Python，
+> 和後端跑在同一個容器裡。因此 editor 實際上能讀到伺服器上的金鑰與資料庫，等同系統管理員。
+> 只把 editor 給完全信任的人；其他人一律用 viewer（只能看結果，不能執行或呼叫 AI）。
 
 ## 5. 建置並啟動
 

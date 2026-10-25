@@ -8,6 +8,7 @@ Element refs (e0, e1, ...) are stable within the latest snapshot; click /
 fill / get_locators resolve refs through that snapshot's XPath cache.
 """
 
+import asyncio
 import ipaddress
 import os
 import socket
@@ -184,6 +185,7 @@ class PageExplorerService:
         self._browser = None
         self._page = None
         self._snapshot: list[dict] = []
+        self._host_allowed: dict[str, bool] = {}
 
     async def start(self) -> None:
         from playwright.async_api import async_playwright
@@ -191,6 +193,9 @@ class PageExplorerService:
         self._pw = await async_playwright().start()
         self._browser = await self._pw.chromium.launch(headless=True)
         context = await self._browser.new_context(viewport=self.viewport)
+        # 起始網址只檢查一次不夠：重導向、AI 點擊的連結、頁面內的 fetch 都可能連到內網，
+        # 因此每個請求都重新檢查主機（含雲端 metadata 169.254.169.254）。
+        await context.route("**/*", self._guard_request)
         self._page = await context.new_page()
         self._page.set_default_timeout(self.action_timeout_ms)
 
@@ -205,6 +210,26 @@ class PageExplorerService:
             self._browser = None
             self._page = None
             self._snapshot = []
+
+    async def _guard_request(self, route) -> None:
+        url = route.request.url
+        scheme = urlparse(url).scheme
+        if scheme in ("data", "blob", "about"):
+            await route.continue_()
+            return
+        host = urlparse(url).hostname or ""
+        allowed = self._host_allowed.get(host)
+        if allowed is None:
+            try:
+                await asyncio.to_thread(validate_explore_url, url)
+                allowed = True
+            except ValueError:
+                allowed = False
+            self._host_allowed[host] = allowed
+        if allowed:
+            await route.continue_()
+        else:
+            await route.abort("blockedbyclient")
 
     def _require_page(self):
         if not self._page:
