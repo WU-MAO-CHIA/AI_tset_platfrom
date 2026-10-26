@@ -159,6 +159,21 @@ class TestManage:
         r = await client.post(f"/api/v1/runner-environments/{good['id']}/check")
         assert r.status_code == 200 and r.json()["status"] == "online"
 
+    async def test_health_check_reports_locked_windows_desktop(self, client, monkeypatch):
+        spec = importlib.util.spec_from_file_location("runner_agent_windows", AGENT_PATH)
+        agent = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(agent)
+        monkeypatch.setattr(agent, "IS_WINDOWS", True)
+        monkeypatch.setattr(agent, "desktop_state", lambda: "locked")
+        agent.Handler.token = TOKEN
+        server = ThreadingHTTPServer(("127.0.0.1", 0), agent.Handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            env = await _create_env(client, kind="windows", url=f"http://127.0.0.1:{server.server_address[1]}")
+            assert env["status"] == "desktop_locked"
+        finally:
+            server.shutdown()
+
 
 class TestSelection:
     async def test_case_default_environment(self, client):

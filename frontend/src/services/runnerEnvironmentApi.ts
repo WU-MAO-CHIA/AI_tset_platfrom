@@ -2,7 +2,7 @@ import apiClient from './apiClient'
 
 // spec 005：執行環境。linux = 網頁測試、windows = Windows 桌面應用程式測試
 export type EnvironmentKind = 'linux' | 'windows'
-export type EnvironmentStatus = 'online' | 'busy' | 'offline' | 'unauthorized' | 'local' | 'unknown'
+export type EnvironmentStatus = 'online' | 'busy' | 'offline' | 'unauthorized' | 'local' | 'unknown' | 'desktop_locked'
 
 export const BUILTIN_ENVIRONMENT_ID = 'builtin-linux'
 
@@ -38,6 +38,7 @@ export const STATUS_LABEL: Record<EnvironmentStatus, string> = {
   unauthorized: 'token 錯誤',
   local: '後端本機執行',
   unknown: '尚未檢查',
+  desktop_locked: '桌面已鎖定',
 }
 
 export async function listEnvironments(): Promise<RunnerEnvironment[]> {

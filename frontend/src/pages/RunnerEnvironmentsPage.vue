@@ -226,6 +226,7 @@ code { font-family: var(--font-mono); font-size: var(--fs-12); }
 .status { font-weight: 600; }
 .status-online, .status-local { color: var(--pass); }
 .status-busy { color: var(--running); }
+.status-desktop_locked { color: var(--queued); }
 .status-offline, .status-unauthorized { color: var(--fail); }
 .status-unknown, .status-disabled { color: var(--ink-faint); }
 .error-text { color: var(--fail); margin-bottom: 12px; }

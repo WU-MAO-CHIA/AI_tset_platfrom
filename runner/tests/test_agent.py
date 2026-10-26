@@ -119,4 +119,36 @@ def _health(url, token=None):
 def test_health_reports_token_check(server):
     assert _health(server) == {"status": "ok"}
     assert _health(server, "wrong") == {"status": "ok", "authorized": False}
-    assert _health(server, TOKEN) == {"status": "ok", "authorized": True, "active_jobs": 0}
+    body = _health(server, TOKEN)
+    assert body["authorized"] is True and body["active_jobs"] == 0
+    assert body["platform"] == ("windows" if agent.IS_WINDOWS else "linux")
+    assert ("desktop" in body) == agent.IS_WINDOWS
+
+
+def test_exclusive_runner_rejects_second_job(server, monkeypatch):
+    monkeypatch.setattr(agent.Handler, "exclusive", True)
+    monkeypatch.setattr(agent, "_active_jobs", 1)
+    with pytest.raises(urllib.error.HTTPError) as exc:
+        _post(server, TOKEN, {"tool": "robot", "tests": ["t.robot"]}, _zip({"t.robot": PASS_ROBOT}))
+    assert exc.value.code == 409
+    assert agent._active_jobs == 1
+
+
+class TestWindowsRules:
+    """Windows 分支的規則不需要真的 Windows 也能驗證；實際行程控制由 CI 的 windows job 跑上面的測試。"""
+
+    def test_windows_rejects_pabot(self):
+        with pytest.raises(agent.JobError):
+            agent.build_argv({"tool": "pabot", "tests": ["a.robot"]}, "py", windows=True)
+        argv, _ = agent.build_argv({"tool": "robot", "tests": ["a.robot"]}, "py", windows=True)
+        assert argv[:3] == ["py", "-m", "robot"]
+
+    def test_windows_env_passes_system_vars_but_job_cannot_override(self, monkeypatch):
+        monkeypatch.setenv("SystemRoot", r"C:\Windows")
+        monkeypatch.setenv("LOCALAPPDATA", r"C:\Users\qa\AppData\Local")
+        monkeypatch.setenv("SECRET_ON_HOST", "x")
+        env = agent.build_env({"SYSTEMROOT": r"D:\evil", "comspec": "evil.exe", "APP_URL": "u"},
+                              r"C:\Users\qa", windows=True)
+        assert env["SYSTEMROOT"] == r"C:\Windows" and env["LOCALAPPDATA"].endswith("Local")
+        assert "comspec" not in env and "SECRET_ON_HOST" not in env and env["APP_URL"] == "u"
+
