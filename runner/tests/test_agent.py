@@ -35,7 +35,7 @@ class TestBuildArgv:
 
     def test_pabot_caps_processes_and_timeout(self):
         argv, timeout = agent.build_argv({"tool": "pabot", "tests": ["a.robot"], "outputdir": "results",
-                                          "processes": 999, "timeout": 99999}, "py")
+                                          "processes": 999, "timeout": 99999}, "py", windows=False)
         assert argv[:5] == ["py", "-m", "pabot.pabot", "--processes", str(agent.MAX_PROCESSES)]
         assert argv[5:7] == ["--outputdir", "results"]
         assert timeout == agent.MAX_TIMEOUT_SEC
