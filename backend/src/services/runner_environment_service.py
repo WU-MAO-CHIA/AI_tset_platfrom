@@ -37,6 +37,7 @@ STATUS_OFFLINE = "offline"
 STATUS_UNAUTHORIZED = "unauthorized"
 STATUS_LOCAL = "local"  # EXECUTION_RUNNER=local：後端自己執行
 STATUS_UNKNOWN = "unknown"
+STATUS_DESKTOP_LOCKED = "desktop_locked"  # Windows runner 的桌面鎖定或 RDP 斷線，UI 自動化會失敗
 
 _HEALTH_TIMEOUT_SEC = 5.0
 _health: dict[str, dict] = {}
@@ -117,6 +118,8 @@ async def check_health(target: RunnerTarget) -> dict:
         status = STATUS_OFFLINE
     elif body.get("authorized") is False or not token:
         status = STATUS_UNAUTHORIZED
+    elif body.get("desktop") == "locked":
+        status = STATUS_DESKTOP_LOCKED
     elif body.get("active_jobs"):
         status = STATUS_BUSY
     else:

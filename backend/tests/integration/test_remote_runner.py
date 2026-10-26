@@ -84,3 +84,28 @@ def test_extract_ignores_paths_outside_workdir(tmp_path):
     assert (work / "ok" / "output.xml").exists()
     assert not (tmp_path / "escape.txt").exists()
     assert not os.path.exists("/abs.txt")
+
+
+async def test_busy_runner_is_retried_until_free(runner, tmp_path, monkeypatch):
+    # Windows runner 一次只跑一個工作：忙碌時回 409，後端稍後重送
+    monkeypatch.setattr(runner_client, "BUSY_RETRY_SEC", 0.1)
+    monkeypatch.setattr(runner.Handler, "exclusive", True)
+    runner._active_jobs = 1
+
+    def _free():
+        runner._active_jobs = 0
+
+    threading.Timer(0.5, _free).start()
+    result = await ExecutionService._run_single_case_with_timeout("case-1", "*** Test Cases ***\nT\n    Log    x\n", 60)
+    assert result["status"] == "passed", result
+
+
+async def test_busy_runner_gives_up_after_wait(runner, monkeypatch):
+    monkeypatch.setattr(runner_client, "BUSY_RETRY_SEC", 0.1)
+    monkeypatch.setattr(runner_client, "BUSY_WAIT_SEC", 0.3)
+    monkeypatch.setattr(runner.Handler, "exclusive", True)
+    runner._active_jobs = 1
+    result = await ExecutionService._run_single_case_with_timeout("case-1", "*** Test Cases ***\nT\n    Log    x\n", 30)
+    runner._active_jobs = 0
+    assert result["status"] == "error"
+    assert "忙碌" in result["failure_message"]

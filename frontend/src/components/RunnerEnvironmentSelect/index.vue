@@ -58,5 +58,6 @@ function onChange(value: string) {
 .status { font-size: var(--fs-12); color: var(--ink-muted); }
 .status-online, .status-local { color: var(--pass); }
 .status-busy { color: var(--running); }
+.status-desktop_locked { color: var(--queued); }
 .status-offline, .status-unauthorized { color: var(--fail); }
 </style>

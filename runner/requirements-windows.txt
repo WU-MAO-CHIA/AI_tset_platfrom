@@ -1,0 +1,4 @@
+# Windows runner（桌面應用程式測試）：見 docs/windows-runner.md
+# robot 版本與 backend/requirements.txt 一致；桌面只能一次跑一個，不裝 pabot / Browser
+robotframework==7.4.2
+robotframework-flaui==6.0.0

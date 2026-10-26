@@ -179,6 +179,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.database import AsyncSessionLocal
 from src.execution.events import EventSink
 from src.execution.worker import PRIORITY_CHECKLIST, PRIORITY_TRIAL_RUN
+from src.execution.runner_client import BUSY_WAIT_SEC as _RUNNER_BUSY_WAIT_SEC
 from src.models.execution_record import ExecutionRecord
 from src.repositories.checklist_repo import ChecklistRepository
 from src.repositories.execution_repo import ExecutionRepository
@@ -850,7 +851,8 @@ class ExecutionService:
             try:
                 result = await asyncio.wait_for(
                     ExecutionService._execute_robot_subprocess(robot_file, output_xml, timeout_sec, target=target),
-                    timeout=timeout_sec + 140,  # 內層自己會在逾時後回報；這裡只是最後防線（含 runner 傳輸）
+                    # 內層自己會在逾時後回報；這裡只是最後防線（含 runner 傳輸與等待忙碌的 Windows runner）
+                    timeout=timeout_sec + 140 + _RUNNER_BUSY_WAIT_SEC,
                 )
             except asyncio.TimeoutError:
                 return {"status": "timeout", "elapsed_ms": int(timeout_sec * 1000), "failure_message": "Execution timed out"}
@@ -876,7 +878,7 @@ class ExecutionService:
         try:
             job = await asyncio.wait_for(
                 _run_robot_job(workdir, "robot", [test], ".", timeout_sec, target=target),
-                timeout=timeout_sec + 130,
+                timeout=timeout_sec + 130 + _RUNNER_BUSY_WAIT_SEC,
             )
         except asyncio.TimeoutError:
             elapsed = int(time.time() * 1000) - start_ms

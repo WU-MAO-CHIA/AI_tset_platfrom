@@ -12,7 +12,7 @@
 | 監控儀表板（`/dashboard`） | 僅管理員可見，顯示目前佇列、執行中的測試與排程狀態 |
 | 驗證碼辨識 | RF 腳本中的 CAPTCHA 關鍵字交給後端呼叫 LLM 辨識，執行測試的環境不需要 LLM 金鑰 |
 | 隔離執行（runner 容器） | Docker 部署時，測試腳本在獨立的 `runner` 容器以低權限使用者執行，碰不到後端的金鑰與資料庫 |
-| 執行環境（`/runner-environments`） | 管理員登記多台 runner（Linux 容器或 Windows 主機，token 加密保存），內建的 `runner` 容器顯示為「預設容器」。案例選擇預設環境，試跑、清單執行與排程可改選同類型的其他環境；清單中不同環境的案例會同時在各自的環境執行 |
+| 執行環境（`/runner-environments`） | 管理員登記多台 runner（Linux 容器或 Windows 主機，token 加密保存），內建的 `runner` 容器顯示為「預設容器」。案例選擇預設環境，試跑、清單執行與排程可改選同類型的其他環境；清單中不同環境的案例會同時在各自的環境執行。Windows 主機安裝見 [docs/windows-runner.md](docs/windows-runner.md) |
 | 帳號與權限 | admin / editor / viewer 三種角色；登入閒置 `JWT_EXPIRE_MINUTES`（預設 10 分鐘）未操作會自動登出，有操作就自動續期 |
 
 ### 安全性設定
@@ -124,6 +124,8 @@ $env:FRONTEND_PORT = "9090"; docker compose up -d
 ### 部署到雲端主機
 
 免費部署到 Oracle Cloud Always Free 的 ARM VM（含 HTTPS 與備份），見 [docs/deploy-oracle.md](docs/deploy-oracle.md)。
+
+要測只能在 Windows 執行的桌面程式，另外準備一台 Windows 電腦當 runner，見 [docs/windows-runner.md](docs/windows-runner.md)。
 
 ### 常見問題
 
@@ -369,8 +371,8 @@ alembic revision --autogenerate -m "說明"
 │   │   └── e2e/           # Playwright E2E 測試
 │   └── package.json
 │
-├── runner/                # runner 容器：接收後端派送的測試並執行（agent.py）
-├── docs/                  # 部署文件（deploy-oracle.md）
+├── runner/                # runner：接收後端派送的測試並執行（agent.py，Linux 容器與 Windows 主機共用）
+├── docs/                  # 部署文件（deploy-oracle.md、windows-runner.md）
 ├── docker-compose.yml     # frontend / backend / runner 三個服務
 └── specs/                 # Spec Kit 規格文件（001 平台、002 RF 上傳、003 執行佇列、004 排程執行）
 ```

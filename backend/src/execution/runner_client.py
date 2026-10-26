@@ -4,9 +4,11 @@
 打包回傳，解回原本的工作目錄。之後的解析、報告複製與本機執行完全相同。
 runner 端見 runner/agent.py。
 """
+import asyncio
 import io
 import json
 import os
+import time
 import zipfile
 from pathlib import PurePosixPath
 
@@ -15,6 +17,9 @@ import httpx
 from src.core.config import get_settings
 
 MAX_RESULT_BYTES = 300 * 1024 * 1024
+# Windows runner 一次只跑一個工作，忙碌時回 409：每隔 BUSY_RETRY_SEC 重送，最多等 BUSY_WAIT_SEC
+BUSY_WAIT_SEC = 600
+BUSY_RETRY_SEC = 5
 
 
 class RunnerError(RuntimeError):
@@ -70,9 +75,16 @@ async def run_remote(workdir: str, spec: dict, env: dict, *, url: str | None = N
     }
     # runner 端會在 spec.timeout 秒時結束整組行程，這裡多留時間給打包與傳輸
     timeout = httpx.Timeout(float(spec.get("timeout", 60)) + 120, connect=10)
+    deadline = time.monotonic() + BUSY_WAIT_SEC
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.post(f"{url.rstrip('/')}/run", content=body, headers=headers)
+            while True:
+                resp = await client.post(f"{url.rstrip('/')}/run", content=body, headers=headers)
+                if resp.status_code != 409:
+                    break
+                if time.monotonic() + BUSY_RETRY_SEC > deadline:
+                    raise RunnerError(f"測試執行器（runner）持續忙碌超過 {BUSY_WAIT_SEC // 60} 分鐘，請稍後再試")
+                await asyncio.sleep(BUSY_RETRY_SEC)
     except httpx.HTTPError as exc:
         raise RunnerError(f"無法連線到測試執行器（runner）：{exc.__class__.__name__}") from exc
     if resp.status_code != 200:
